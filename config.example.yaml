@@ -1,0 +1,145 @@
+# =============================================================================
+# SSUBB - 异地分布式字幕转写翻译系统 配置示例
+# =============================================================================
+#
+# 使用方法:
+#   1. 复制本文件为 config.yaml
+#   2. 填写标记为 [必填] 的字段
+#   3. 其余字段使用默认值即可运行
+#
+# 环境变量覆盖:
+#   所有关键配置均支持 SSUBB_* 环境变量覆盖，优先级高于本文件。
+#   详见 docs/configuration.md
+#
+# =============================================================================
+
+# ============================================================
+# Coordinator 配置 (NAS 端)
+# ============================================================
+coordinator:
+  host: "0.0.0.0"
+  port: 8787
+
+  # SQLite 数据库路径
+  db_path: "./data/ssubb.db"
+
+  # ---- 音频提取 ----
+  audio:
+    format: "flac"          # flac / wav (flac 体积更小，推荐)
+    sample_rate: 16000      # 16kHz (Whisper 标准采样率)
+    channels: 1             # 单声道 (Whisper 要求)
+    temp_dir: "./data/audio_temp"
+
+  # ---- Worker 连接 [必填] ----
+  worker:
+    url: ""                          # GPU Worker 地址，如 http://192.168.1.50:8788
+                                     # 环境变量: SSUBB_WORKER_URL
+    heartbeat_interval: 30           # 心跳检查间隔 (秒)
+    heartbeat_timeout: 300           # 心跳超时 (秒)
+
+  # ---- Emby 集成 (可选) ----
+  emby:
+    server: ""              # Emby 地址，如 http://192.168.1.100:8096
+                            # 环境变量: SSUBB_EMBY_SERVER
+    api_key: ""             # Emby API Key
+                            # 环境变量: SSUBB_EMBY_API_KEY
+
+  # ---- 字幕输出 (V0.4 增强) ----
+  subtitle:
+    target_language: "zh"
+    naming_format: "{video_name}.{lang}.srt"   # 命名格式
+    backup_existing: true   # 覆盖前备份已有字幕
+    output_mode: "single"   # single (仅翻译) / bilingual (中英双语)
+    output_format: "srt"    # srt / ass (ASS 支持更丰富样式)
+
+  # ---- 字幕质量验证 ----
+  checker:
+    min_coverage: 0.7       # 最低时长覆盖率 (0-1)
+    min_density: 2.0        # 最低密度 (条/分钟)
+    check_language: true    # 是否检测字幕语言匹配
+
+  # ---- 重试配置 ----
+  retry:
+    max_retries: 3          # 最大自动重试次数
+    backoff_base: 60        # 基础退避时间 (秒)
+    backoff_multiplier: 2   # 退避倍数
+
+  # ---- 阶段超时 (秒) ----
+  stage_timeout:
+    extracting: 600         # 音频提取超时 (10分钟)
+    uploading: 600          # 上传超时 (10分钟)
+    transcribing: 3600      # 转写超时 (60分钟)
+    translating: 1800       # 翻译超时 (30分钟)
+    default: 1800           # 默认超时 (30分钟)
+
+  # ---- 自动化扫描 (V0.3) ----
+  automation:
+    enabled: false                     # 总开关 (首次建议手动确认链路跑通后再开)
+    scan_paths:                        # [必填] 媒体库扫描目录
+      # - "/volume1/media/movies"      # 电影目录
+      # - "/volume1/media/tv"          # 电视剧目录
+    scan_recursive: true               # 递归扫描子目录
+    scan_recent_days: 7                # 只扫描最近 N 天新增的文件 (0=不限)
+    schedule_start: "02:00"            # 定时扫描开始时间 (HH:MM)
+    schedule_end: "06:00"              # 定时扫描结束时间 (HH:MM)
+    scan_interval: 30                  # 窗口内扫描间隔 (分钟)
+    max_tasks_per_scan: 5              # 单次扫描最多提交任务数
+    require_worker_idle: true          # 仅在 Worker 空闲时提交扫描任务
+    preheat_next_episode: true         # 任务完成后自动预热下一集
+
+# ============================================================
+# Worker 配置 (公司 GPU 端)
+# ============================================================
+worker:
+  host: "0.0.0.0"
+  port: 8788
+  worker_id: "office-gpu"              # Worker 节点标识，自定义
+                                       # 环境变量: SSUBB_WORKER_ID
+
+  # ---- Coordinator 回调 [必填] ----
+  coordinator_url: ""                  # NAS 端地址，如 http://192.168.1.10:8787
+                                       # 环境变量: SSUBB_COORDINATOR_URL
+
+  # ---- 转写配置 ----
+  transcribe:
+    model: "large-v3-turbo"            # Whisper 模型名称
+    device: "cuda"                     # cuda / cpu
+    compute_type: "float16"            # float16 / int8 / float32
+    concurrent_transcriptions: 1       # 并发转写数 (建议 1)
+    vad_filter: true                   # 启用 VAD 过滤静音
+    vad_method: "silero_v4_fw"         # VAD 方法
+    vad_threshold: 0.5
+    custom_regroup: "cm_sl=84_sl=42++++++1"  # stable-ts 重分组规则
+    detect_language_length: 30         # 语言检测采样长度 (秒)
+    model_dir: "./models"              # 模型缓存目录
+
+  # ---- LLM 配置 (断句优化 + 翻译) [必填] ----
+  llm:
+    api_base: ""                       # OpenAI 兼容 API 地址
+                                       # 环境变量: SSUBB_LLM_API_BASE
+    api_key: ""                        # API Key
+                                       # 环境变量: SSUBB_LLM_API_KEY
+    model: ""                          # 模型名称，如 deepseek-chat / gpt-4o-mini
+                                       # 环境变量: SSUBB_LLM_MODEL
+
+  # ---- 翻译配置 ----
+  translate:
+    service: "llm"          # llm / bing / google (当前仅支持 llm)
+    target_language: "zh"
+    thread_num: 5           # 翻译并发数
+    batch_size: 10          # 每批翻译条数
+    need_reflect: false     # 反思翻译 (更高质量, 更慢, 消耗更多 token)
+
+  # ---- 字幕优化 ----
+  optimize:
+    enabled: true           # 启用 LLM 断句优化
+    max_word_count_cjk: 12
+    max_word_count_english: 18
+
+  # ---- VRAM 管理 ----
+  vram:
+    clear_on_complete: true # 任务完成后释放显存
+    cleanup_delay: 30       # 清理延迟 (秒)
+
+  # ---- 临时文件 ----
+  temp_dir: "./data/worker_temp"

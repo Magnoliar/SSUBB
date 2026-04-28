@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSUBB - 分布式字幕总控节点</title>
+    <meta name="description" content="SSUBB 异地分布式字幕转写翻译系统 - Coordinator 控制台">
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;800&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #0d0f12;
+            color: #eceff4;
+            min-height: 100vh;
+        }
+
+        [v-cloak] { display: none; }
+
+        .glass-panel {
+            background: rgba(25, 30, 36, 0.6);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .glow-text {
+            text-shadow: 0 0 16px rgba(56, 189, 248, 0.5);
+        }
+
+        .gradient-text {
+            background: linear-gradient(135deg, #38bdf8 0%, #818cf8 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* 状态指示灯动画 */
+        .status-dot {
+            height: 10px;
+            width: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .status-dot.online {
+            background-color: #10b981;
+            box-shadow: 0 0 8px #10b981;
+            animation: pulse-green 2s infinite;
+        }
+        .status-dot.offline {
+            background-color: #ef4444;
+            box-shadow: 0 0 8px #ef4444;
+        }
+
+        @keyframes pulse-green {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+
+        /* 进度条动画 */
+        .progress-bar-fill {
+            transition: width 0.5s ease-out;
+            background: linear-gradient(90deg, #38bdf8, #818cf8);
+            position: relative;
+            overflow: hidden;
+        }
+        .progress-bar-fill::after {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.2) 50%, rgba(255,255,255,0) 100%);
+            transform: translateX(-100%);
+            animation: shimmer 2s infinite;
+        }
+        @keyframes shimmer {
+            100% { transform: translateX(100%); }
+        }
+
+        /* 表格微动画 */
+        tr { transition: background-color 0.2s; }
+        tr:hover { background-color: rgba(255, 255, 255, 0.03); }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
+            transition: all 0.3s;
+        }
+        .btn-primary:hover {
+            box-shadow: 0 0 15px rgba(79, 70, 229, 0.5);
+            transform: translateY(-1px);
+        }
+
+        .btn-retry {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            transition: all 0.3s;
+        }
+        .btn-retry:hover {
+            box-shadow: 0 0 12px rgba(245, 158, 11, 0.5);
+            transform: translateY(-1px);
+        }
+
+        /* 任务详情滑出 */
+        .detail-panel {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s ease-out, opacity 0.3s;
+            opacity: 0;
+        }
+        .detail-panel.open {
+            max-height: 600px;
+            opacity: 1;
+        }
+
+        /* 阶段流水线 */
+        .stage-pipeline {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            flex-wrap: wrap;
+        }
+        .stage-node {
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: 500;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
+        .stage-node.done { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+        .stage-node.active { background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.5); animation: pulse-blue 1.5s infinite; }
+        .stage-node.pending { background: rgba(100, 116, 139, 0.15); color: #64748b; border: 1px solid rgba(100, 116, 139, 0.2); }
+        .stage-node.failed { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+        .stage-arrow { color: #475569; font-size: 10px; }
+
+        @keyframes pulse-blue {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.4); }
+            50% { box-shadow: 0 0 0 4px rgba(56, 189, 248, 0); }
+        }
+        
+        /* 滚动条美化 */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+<div id="app" class="max-w-7xl mx-auto" v-cloak>
+    <!-- Header -->
+    <header class="flex flex-col md:flex-row justify-between items-center mb-8 glass-panel p-6">
+        <div class="flex items-center space-x-4 mb-4 md:mb-0">
+            <div class="p-3 bg-gray-800 rounded-xl shadow-inner border border-gray-700">
+                <i class="fa-solid fa-closed-captioning text-3xl gradient-text"></i>
+            </div>
+            <div>
+                <h1 class="text-2xl font-bold tracking-wider">SSUBB <span class="font-light text-gray-400 text-base">v{{ sysInfo.version || '0.1.0' }}</span></h1>
+                <p class="text-sm text-gray-400">分布式人工智能字幕处理大观</p>
+            </div>
+        </div>
+        
+        <div class="flex space-x-6">
+            <div class="text-center">
+                <div class="text-xs text-gray-400 uppercase tracking-wider mb-1">Coordinator (NAS)</div>
+                <div class="flex items-center space-x-2 font-medium">
+                    <span class="status-dot online"></span>
+                    <span class="glow-text text-green-400">ONLINE</span>
+                </div>
+            </div>
+            <div class="w-px bg-gray-700"></div>
+            <div class="text-center flex-1">
+                <div class="text-xs text-gray-400 uppercase tracking-wider mb-1">Worker (GPU)</div>
+                <div class="flex items-center space-x-2 font-medium" v-if="sysInfo.worker?.online">
+                    <span class="status-dot online"></span>
+                    <span class="glow-text text-green-400">{{ sysInfo.worker?.heartbeat?.gpu_name || 'NVIDIA GPU' }}</span>
+                </div>
+                <div class="flex items-center space-x-2 font-medium text-red-400" v-else>
+                    <span class="status-dot offline"></span>
+                    <span>OFFLINE</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Stats Row -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div class="glass-panel p-5 relative overflow-hidden group">
+            <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><i class="fa-solid fa-hourglass-half text-5xl"></i></div>
+            <div class="text-sm text-gray-400 mb-1">排队中 (Pending)</div>
+            <div class="text-3xl font-bold text-yellow-400">{{ sysInfo.tasks_pending }}</div>
+        </div>
+        <div class="glass-panel p-5 relative overflow-hidden group">
+            <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><i class="fa-solid fa-microchip text-5xl"></i></div>
+            <div class="text-sm text-gray-400 mb-1">计算中 (Active)</div>
+            <div class="text-3xl font-bold text-blue-400 glow-text">{{ sysInfo.tasks_active }}</div>
+        </div>
+        <div class="glass-panel p-5 relative overflow-hidden group">
+            <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><i class="fa-solid fa-check-double text-5xl"></i></div>
+            <div class="text-sm text-gray-400 mb-1">已完成 (Completed)</div>
+            <div class="text-3xl font-bold text-green-400">{{ sysInfo.tasks_completed }}</div>
+        </div>
+        <div class="glass-panel p-5 relative overflow-hidden group">
+            <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><i class="fa-solid fa-triangle-exclamation text-5xl"></i></div>
+            <div class="text-sm text-gray-400 mb-1">处理失败 (Failed)</div>
+            <div class="text-3xl font-bold text-red-400">{{ sysInfo.tasks_failed }}</div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        <!-- Task List -->
+        <div class="lg:col-span-2 glass-panel flex flex-col h-[640px] overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-700/50 flex justify-between items-center bg-gray-800/30">
+                <h2 class="font-semibold text-lg"><i class="fa-solid fa-list-ul mr-2 text-blue-400"></i>近况队列看板</h2>
+                <div class="flex items-center space-x-3">
+                    <!-- 状态筛选 -->
+                    <select v-model="filterStatus" class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-blue-500">
+                        <option value="">全部状态</option>
+                        <option value="pending">排队中</option>
+                        <option value="extracting">提取音频</option>
+                        <option value="uploading">推流传输</option>
+                        <option value="transcribing">ASR 转写</option>
+                        <option value="optimizing">LLM 优化</option>
+                        <option value="translating">LLM 翻译</option>
+                        <option value="completed">已完成</option>
+                        <option value="failed">已失败</option>
+                        <option value="skipped">已跳过</option>
+                    </select>
+                    <button @click="fetchData" class="text-gray-400 hover:text-white transition-colors" title="刷新">
+                        <i class="fa-solid fa-rotate-right" :class="{'fa-spin': loading}"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto w-full p-0 relative">
+                <div v-if="tasks.length === 0 && !loading" class="absolute inset-0 flex flex-col items-center justify-center text-gray-500">
+                    <i class="fa-solid fa-box-open text-4xl mb-3"></i>
+                    <p>当前没有任何任务</p>
+                </div>
+                
+                <table class="w-full text-left border-collapse" v-if="tasks.length > 0">
+                    <thead class="sticky top-0 bg-gray-800/90 backdrop-blur z-10 text-xs text-gray-400 uppercase">
+                        <tr>
+                            <th class="px-6 py-3 font-medium">影片名称</th>
+                            <th class="px-6 py-3 font-medium">状态 / 进度</th>
+                            <th class="px-6 py-3 font-medium">时间</th>
+                            <th class="px-4 py-3 font-medium w-10"></th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-sm">
+                        <template v-for="task in tasks" :key="task.id">
+                            <tr class="border-b border-gray-700/30 cursor-pointer" @click="toggleDetail(task.id)">
+                                <td class="px-6 py-4 w-4/12">
+                                    <div class="font-medium text-white truncate w-48 lg:w-64" :title="task.media_title || getFileName(task.media_path)">
+                                        {{ task.media_title || getFileName(task.media_path) }}
+                                    </div>
+                                    <div class="text-xs text-gray-500 mt-1 truncate max-w-xs font-mono">{{ task.id }}</div>
+                                </td>
+                                <td class="px-6 py-4 w-4/12">
+                                    <div class="flex justify-between text-xs mb-1">
+                                        <span :class="getStatusColor(task.status)">{{ getStatusLabel(task.status) }}</span>
+                                        <span class="text-gray-400 text-[10px]"><span v-if="task.target_lang">{{ task.source_lang }}→{{ task.target_lang }}</span></span>
+                                    </div>
+                                    <div class="w-full bg-gray-700 rounded-full h-1.5 mb-1 overflow-hidden">
+                                        <div class="h-1.5 rounded-full progress-bar-fill" :style="`width: ${task.progress || 0}%`" :class="getBarColor(task.status)"></div>
+                                    </div>
+                                    <div class="text-[10px] text-gray-400 truncate" :title="task.error_msg" v-if="task.error_msg">
+                                        <span v-if="task.error_code" class="bg-red-900/30 text-red-400 px-1 rounded mr-1">{{ task.error_code }}</span>
+                                        {{ task.error_msg }}
+                                    </div>
+                                </td>
+                                <td class="px-6 py-4 w-3/12 whitespace-nowrap">
+                                    <div class="text-gray-300">{{ formatDate(task.updated_at || task.created_at) }}</div>
+                                </td>
+                                <td class="px-4 py-4 w-1/12 text-center">
+                                    <i class="fa-solid fa-chevron-down text-gray-500 transition-transform duration-300" :class="{'rotate-180': expandedTask === task.id}"></i>
+                                </td>
+                            </tr>
+                            <!-- Detail Panel -->
+                            <tr v-if="expandedTask === task.id">
+                                <td colspan="4" class="px-6 pb-4 bg-gray-900/40">
+                                    <div class="pt-3 space-y-4">
+                                        <!-- 阶段流水线 -->
+                                        <div>
+                                            <div class="text-xs text-gray-400 font-medium mb-2"><i class="fa-solid fa-timeline mr-1"></i>处理流水线</div>
+                                            <div class="stage-pipeline">
+                                                <template v-for="(stage, idx) in pipelineStages" :key="stage.key">
+                                                    <div class="stage-node" :class="getStageClass(task, stage.key)">
+                                                        {{ stage.label }}
+                                                        <span v-if="task.stage_times && task.stage_times[stage.key]" class="ml-1 opacity-70">{{ task.stage_times[stage.key].toFixed(1) }}s</span>
+                                                    </div>
+                                                    <span class="stage-arrow" v-if="idx < pipelineStages.length - 1">→</span>
+                                                </template>
+                                            </div>
+                                        </div>
+
+                                        <!-- 详情信息 -->
+                                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                                            <div class="bg-gray-800/50 rounded-lg p-3">
+                                                <div class="text-gray-500 mb-1">任务 ID</div>
+                                                <div class="text-gray-300 font-mono">{{ task.id }}</div>
+                                            </div>
+                                            <div class="bg-gray-800/50 rounded-lg p-3">
+                                                <div class="text-gray-500 mb-1">重试次数</div>
+                                                <div class="text-gray-300">{{ task.retry_count }} 次</div>
+                                            </div>
+                                            <div class="bg-gray-800/50 rounded-lg p-3" v-if="task.result_summary?.detected_language">
+                                                <div class="text-gray-500 mb-1">检测语言</div>
+                                                <div class="text-gray-300">{{ task.result_summary.detected_language }}</div>
+                                            </div>
+                                            <div class="bg-gray-800/50 rounded-lg p-3" v-if="task.result_summary?.segment_count">
+                                                <div class="text-gray-500 mb-1">字幕条数</div>
+                                                <div class="text-gray-300">{{ task.result_summary.segment_count }} 条</div>
+                                            </div>
+                                            <div class="bg-gray-800/50 rounded-lg p-3" v-if="task.result_summary?.total_duration">
+                                                <div class="text-gray-500 mb-1">总耗时</div>
+                                                <div class="text-gray-300">{{ task.result_summary.total_duration.toFixed(1) }}s</div>
+                                            </div>
+                                            <div class="bg-gray-800/50 rounded-lg p-3" v-if="task.failed_stage">
+                                                <div class="text-gray-500 mb-1">失败阶段</div>
+                                                <div class="text-red-400">{{ getStatusLabel(task.failed_stage) }}</div>
+                                            </div>
+                                        </div>
+
+                                        <!-- 错误详情 -->
+                                        <div v-if="task.error_msg" class="bg-red-900/20 border border-red-800/30 rounded-lg p-3">
+                                            <div class="text-xs font-medium text-red-400 mb-1"><i class="fa-solid fa-circle-exclamation mr-1"></i>错误详情</div>
+                                            <div class="text-xs text-red-300/80">
+                                                <span v-if="task.error_code" class="font-mono bg-red-900/40 px-1.5 py-0.5 rounded mr-2">{{ task.error_code }}</span>
+                                                {{ task.error_msg }}
+                                            </div>
+                                        </div>
+
+                                        <!-- 文件路径 -->
+                                        <div class="text-xs text-gray-500 bg-gray-800/30 rounded-lg p-3">
+                                            <div class="mb-1 font-medium text-gray-400">媒体路径</div>
+                                            <div class="font-mono break-all">{{ task.media_path }}</div>
+                                        </div>
+
+                                        <!-- 重试按钮 -->
+                                        <div v-if="task.status === 'failed' || task.status === 'cancelled'" class="flex space-x-3">
+                                            <button @click.stop="retryTask(task.id)" class="btn-retry text-white text-xs font-medium py-2 px-4 rounded-lg flex items-center">
+                                                <i class="fa-solid fa-rotate-right mr-1.5"></i>重试任务
+                                            </button>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Right Panel -->
+        <div class="flex flex-col space-y-8">
+            <!-- Manual Intervention -->
+            <div class="glass-panel flex flex-col">
+                <div class="px-6 py-4 border-b border-gray-700/50 bg-gray-800/30">
+                    <h2 class="font-semibold text-lg"><i class="fa-solid fa-terminal mr-2 text-indigo-400"></i>控制指令区</h2>
+                    <p class="text-xs text-gray-400 mt-1">手动下发或强制重生影片字幕</p>
+                </div>
+                
+                <div class="p-6 flex-1 flex flex-col justify-between">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-400 mb-1">媒体绝对路径 / Media Path</label>
+                            <div class="flex space-x-2">
+                                <input v-model="form.media_path" type="text" placeholder="/vol1/media/movies/Avatar.mp4" 
+                                    class="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all">
+                                <button @click.prevent="openBrowser" class="bg-gray-700 hover:bg-gray-600 px-4 rounded-lg text-sm transition-colors border border-gray-600 whitespace-nowrap">
+                                    <i class="fa-solid fa-folder-open"></i> 浏览
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-xs font-medium text-gray-400 mb-1">目标语言 / Target Language</label>
+                            <select v-model="form.target_lang" 
+                                class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
+                                <option value="zh">简体中文 (zh)</option>
+                                <option value="en">English (en)</option>
+                                <option value="ja">日本語 (ja)</option>
+                            </select>
+                        </div>
+
+                        <label class="flex items-center space-x-3 cursor-pointer mt-4">
+                            <input type="checkbox" v-model="form.force" class="form-checkbox h-4 w-4 text-blue-600 bg-gray-900 border-gray-600 rounded">
+                            <div class="flex flex-col">
+                                <span class="text-sm font-medium text-red-400">强制覆写 (Force Rewrite)</span>
+                                <span class="text-[10px] text-gray-500">勾选此项目将无视已存在的字幕</span>
+                            </div>
+                        </label>
+                    </div>
+                    
+                    <div class="mt-6">
+                        <button @click="submitTask" :disabled="submitting || !form.media_path" 
+                            class="w-full btn-primary text-white font-medium py-3 px-4 rounded-lg shadow-lg flex justify-center items-center opacity-90 disabled:opacity-50 disabled:cursor-not-allowed">
+                            <i class="fa-solid fa-paper-plane mr-2" v-if="!submitting"></i>
+                            <i class="fa-solid fa-circle-notch fa-spin mr-2" v-else></i>
+                            {{ submitting ? '指令广播中...' : '提交指令' }}
+                        </button>
+                        
+                        <div v-if="submitResult" class="mt-3 text-xs p-3 rounded-md bg-gray-800 border" :class="submitResult.success ? 'border-green-800 text-green-300' : 'border-red-800 text-red-300'">
+                            {{ submitResult.message }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Worker Status Card -->
+            <div class="glass-panel" v-if="sysInfo.worker">
+                <div class="px-6 py-4 border-b border-gray-700/50 bg-gray-800/30">
+                    <h2 class="font-semibold text-base"><i class="fa-solid fa-server mr-2 text-purple-400"></i>Worker 节点状态</h2>
+                </div>
+                <div class="p-5 space-y-3">
+                    <!-- 在线状态 -->
+                    <div class="flex justify-between items-center text-sm">
+                        <span class="text-gray-400">连接状态</span>
+                        <span v-if="sysInfo.worker.online" class="text-green-400 font-medium"><span class="status-dot online mr-1.5" style="height:8px;width:8px"></span>在线</span>
+                        <span v-else class="text-red-400 font-medium"><span class="status-dot offline mr-1.5" style="height:8px;width:8px"></span>离线</span>
+                    </div>
+
+                    <template v-if="sysInfo.worker.online && sysInfo.worker.heartbeat">
+                        <!-- GPU 信息 -->
+                        <div class="flex justify-between items-center text-sm">
+                            <span class="text-gray-400">GPU</span>
+                            <span class="text-gray-200 font-medium">{{ sysInfo.worker.heartbeat.gpu_name }}</span>
+                        </div>
+
+                        <!-- GPU 使用率 -->
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-gray-400"><i class="fa-solid fa-gauge mr-1"></i>GPU 使用率</span>
+                                <span class="font-medium text-gray-300">{{ sysInfo.worker.heartbeat.gpu_utilization }}%</span>
+                            </div>
+                            <div class="w-full bg-gray-800 rounded-full h-1.5">
+                                <div class="bg-cyan-500 h-1.5 rounded-full transition-all duration-500" :style="`width: ${sysInfo.worker.heartbeat.gpu_utilization}%`"></div>
+                            </div>
+                        </div>
+
+                        <!-- VRAM -->
+                        <div v-if="sysInfo.worker.heartbeat.vram_total_mb">
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-gray-400"><i class="fa-solid fa-memory mr-1"></i>VRAM</span>
+                                <span class="font-medium text-gray-300">{{ sysInfo.worker.heartbeat.vram_used_mb }}M / {{ sysInfo.worker.heartbeat.vram_total_mb }}M</span>
+                            </div>
+                            <div class="w-full bg-gray-800 rounded-full h-1.5">
+                                <div class="bg-purple-500 h-1.5 rounded-full transition-all duration-500" :style="`width: ${(sysInfo.worker.heartbeat.vram_used_mb / sysInfo.worker.heartbeat.vram_total_mb) * 100}%`"></div>
+                            </div>
+                        </div>
+
+                        <!-- 当前任务 -->
+                        <div class="flex justify-between items-center text-sm" v-if="sysInfo.worker.heartbeat.current_task_id">
+                            <span class="text-gray-400">当前任务</span>
+                            <span class="text-blue-400 font-mono text-xs">{{ sysInfo.worker.heartbeat.current_task_id }}</span>
+                        </div>
+
+                        <!-- Worker 版本/运行时间 -->
+                        <div class="flex justify-between items-center text-xs text-gray-500 pt-2 border-t border-gray-800">
+                            <span>v{{ sysInfo.worker.heartbeat.version }} · {{ sysInfo.worker.heartbeat.worker_id }}</span>
+                            <span>运行 {{ formatUptime(sysInfo.worker.heartbeat.uptime_seconds) }}</span>
+                        </div>
+                    </template>
+
+                    <div v-else class="text-xs text-gray-500 text-center py-3">
+                        <i class="fa-solid fa-wifi-slash mr-1"></i>无法获取 Worker 状态信息
+                    </div>
+                </div>
+            </div>
+
+            <!-- Automation Status -->
+            <div class="glass-panel">
+                <div class="px-6 py-4 border-b border-gray-700/50 bg-gray-800/30 flex justify-between items-center">
+                    <h2 class="font-semibold text-base"><i class="fa-solid fa-robot mr-2 text-amber-400"></i>自动化调度</h2>
+                    <button @click="toggleAutomation" class="text-xs px-3 py-1 rounded-full border transition-all"
+                        :class="autoStatus.enabled ? 'border-green-600 text-green-400 hover:bg-green-900/30' : 'border-gray-600 text-gray-400 hover:bg-gray-700'">
+                        {{ autoStatus.enabled ? '运行中' : '已关闭' }}
+                    </button>
+                </div>
+                <div class="p-5 space-y-3 text-sm">
+                    <!-- 时间窗口 -->
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-400"><i class="fa-regular fa-clock mr-1"></i>扫描窗口</span>
+                        <span class="text-gray-200 font-mono text-xs">{{ autoStatus.schedule_start || '--:--' }} ~ {{ autoStatus.schedule_end || '--:--' }}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-400"><i class="fa-solid fa-arrows-rotate mr-1"></i>扫描间隔</span>
+                        <span class="text-gray-200">{{ autoStatus.scan_interval_minutes || '-' }} 分钟</span>
+                    </div>
+                    <!-- 窗口状态 -->
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-400">当前窗口</span>
+                        <span :class="autoStatus.in_window ? 'text-green-400' : 'text-gray-500'">
+                            {{ autoStatus.in_window ? '🟢 窗口内' : '🔘 窗口外' }}
+                        </span>
+                    </div>
+
+                    <!-- 上次扫描 -->
+                    <div v-if="autoStatus.last_report" class="bg-gray-800/50 rounded-lg p-3 space-y-1.5">
+                        <div class="text-xs text-gray-400 font-medium"><i class="fa-solid fa-chart-bar mr-1"></i>上次扫描结果</div>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div><span class="text-gray-500">视频总数:</span> <span class="text-gray-300">{{ autoStatus.last_report.total_videos }}</span></div>
+                            <div><span class="text-gray-500">缺字幕:</span> <span class="text-amber-400 font-medium">{{ autoStatus.last_report.missing_subtitle }}</span></div>
+                            <div><span class="text-gray-500">已有任务:</span> <span class="text-gray-300">{{ autoStatus.last_report.already_active }}</span></div>
+                            <div><span class="text-gray-500">新建任务:</span> <span class="text-green-400 font-medium">{{ autoStatus.last_report.new_tasks_created }}</span></div>
+                        </div>
+                        <div class="text-[10px] text-gray-500 mt-1">{{ autoStatus.last_report.time ? formatDate(autoStatus.last_report.time) : '' }} · {{ autoStatus.last_report.duration_seconds }}s</div>
+                    </div>
+                    <div v-else class="text-xs text-gray-500 text-center py-2">尚无扫描记录</div>
+
+                    <!-- 手动扫描 -->
+                    <button @click="triggerScan" :disabled="scanning" class="w-full mt-2 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-700/50 text-amber-300 text-xs font-medium py-2 rounded-lg transition-all flex justify-center items-center disabled:opacity-50">
+                        <i class="fa-solid fa-magnifying-glass mr-1.5" v-if="!scanning"></i>
+                        <i class="fa-solid fa-circle-notch fa-spin mr-1.5" v-else></i>
+                        {{ scanning ? '扫描中...' : '立即扫描' }}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Live Logs Terminal -->
+    <div class="glass-panel mt-8 flex flex-col mb-8 overflow-hidden">
+        <div class="px-6 py-3 border-b border-gray-700/50 bg-gray-800/50 flex justify-between items-center cursor-pointer" @click="toggleLogs">
+            <h2 class="font-semibold text-sm font-mono"><i class="fa-solid fa-terminal mr-2 text-green-400"></i>系统实时日志 / TTY0</h2>
+            <div class="flex items-center space-x-3">
+                <span class="flex h-2 w-2 relative">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                </span>
+                <button class="text-gray-400 hover:text-white transition-transform duration-300" :class="{'rotate-180': !showLogs}">
+                    <i class="fa-solid fa-chevron-up"></i>
+                </button>
+            </div>
+        </div>
+        
+        <div v-show="showLogs" class="bg-black/90 p-4 h-64 overflow-y-auto text-[11px] font-mono leading-relaxed" ref="logContainer">
+            <template v-if="sysLogs.length">
+                <div v-for="(line, idx) in sysLogs" :key="idx" class="whitespace-pre-wrap break-all" :class="getLogColor(line)">
+                    {{ line.trim() }}
+                </div>
+            </template>
+            <div v-else class="text-gray-600 italic">读取信号中...</div>
+        </div>
+    </div>
+
+    <!-- File Browser Modal -->
+    <div v-if="showBrowser" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="glass-panel w-full max-w-4xl flex flex-col h-[80vh] border border-gray-700">
+            <!-- Modal Header -->
+            <div class="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-800/80 rounded-t-2xl">
+                <h3 class="font-bold text-lg"><i class="fa-solid fa-server mr-2 text-blue-400"></i>服务器文件系统</h3>
+                <button @click="showBrowser = false" class="text-gray-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            
+            <!-- Address Bar -->
+            <div class="p-3 bg-gray-900/50 border-b border-gray-800 flex items-center space-x-2">
+                <button @click="loadPath(browserData.parent_path)" :disabled="!browserData.parent_path" class="p-2 bg-gray-800 rounded hover:bg-gray-700 disabled:opacity-50">
+                    <i class="fa-solid fa-arrow-up"></i>
+                </button>
+                <div class="flex-1 bg-black/30 px-3 py-2 rounded text-sm text-gray-300 overflow-x-auto whitespace-nowrap border border-gray-800 font-mono">
+                    {{ browserData.current_path || '根目录' }}
+                </div>
+                <button @click="loadPath(browserData.current_path)" class="p-2 bg-gray-800 rounded hover:bg-gray-700 text-blue-400">
+                    <i class="fa-solid fa-rotate-right" :class="{'fa-spin': browsing}"></i>
+                </button>
+            </div>
+
+            <!-- File List -->
+            <div class="flex-1 overflow-y-auto p-2 bg-black/20">
+                <div v-if="browsing" class="flex justify-center items-center h-full text-indigo-400 text-2xl">
+                    <i class="fa-solid fa-circle-notch fa-spin"></i>
+                </div>
+                <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                    <!-- Directories -->
+                    <div v-for="d in browserData.dirs" :key="'d-'+d" @click="loadPath((browserData.current_path ? browserData.current_path + '\\' : '') + d)" 
+                        class="flex items-center p-3 rounded hover:bg-white/5 cursor-pointer transition-colors border border-transparent hover:border-gray-700">
+                        <i class="fa-solid fa-folder text-yellow-500 text-xl mr-3 w-6 text-center"></i>
+                        <span class="truncate text-sm font-medium">{{ d }}</span>
+                    </div>
+                    <!-- Files -->
+                    <div v-for="f in browserData.files" :key="'f-'+f.name" @click="selectFile((browserData.current_path ? browserData.current_path + '\\' : '') + f.name)"
+                        class="flex items-center p-3 rounded hover:bg-blue-900/40 cursor-pointer transition-colors border border-transparent hover:border-blue-700/50 group">
+                        <i class="fa-solid fa-file-video text-blue-400 text-xl mr-3 w-6 text-center group-hover:text-blue-300"></i>
+                        <div class="flex-1 min-w-0">
+                            <div class="truncate text-sm font-light text-gray-300 group-hover:text-white">{{ f.name }}</div>
+                            <div class="text-[10px] text-gray-500 mt-0.5">{{ f.size_mb }} MB</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Empty State -->
+                    <div v-if="browserData.dirs?.length === 0 && browserData.files?.length === 0" class="col-span-full py-12 text-center text-gray-500">
+                        <i class="fa-regular fa-folder-open text-4xl mb-3 opacity-50"></i>
+                        <p>该文件夹为空或没有可处理的视频</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const { createApp, ref, computed, onMounted, onUnmounted, watch } = Vue;
+
+    createApp({
+        setup() {
+            const sysInfo = ref({});
+            const tasks = ref([]);
+            const loading = ref(true);
+            const submitting = ref(false);
+            const submitResult = ref(null);
+            const filterStatus = ref('');
+            const expandedTask = ref(null);
+            
+            // System Logs State
+            const showLogs = ref(true);
+            const sysLogs = ref([]);
+            const logContainer = ref(null);
+            
+            // File Browser State
+            const showBrowser = ref(false);
+            const browsing = ref(false);
+            const browserData = ref({ current_path: '', parent_path: '', dirs: [], files: [] });
+
+            // Automation State
+            const autoStatus = ref({});
+            const scanning = ref(false);
+
+            const form = ref({
+                media_path: '',
+                target_lang: 'zh',
+                force: false
+            });
+
+            // 阶段流水线配置
+            const pipelineStages = [
+                { key: 'subtitle_checking', label: '字幕检查' },
+                { key: 'extracting', label: '音频提取' },
+                { key: 'uploading', label: '上传' },
+                { key: 'transcribing', label: 'ASR 转写' },
+                { key: 'optimizing', label: 'LLM 优化' },
+                { key: 'translating', label: 'LLM 翻译' },
+                { key: 'writing_subtitle', label: '写回字幕' },
+                { key: 'refreshing_emby', label: '刷新 Emby' },
+            ];
+
+            // 阶段状态序号
+            const stageOrder = {};
+            pipelineStages.forEach((s, i) => { stageOrder[s.key] = i; });
+
+            const getStageClass = (task, stageKey) => {
+                if (task.status === 'failed' && task.failed_stage === stageKey) return 'failed';
+                if (task.status === 'completed') return 'done';
+                if (task.status === 'skipped') return 'pending';
+                
+                const currentIdx = stageOrder[task.status];
+                const thisIdx = stageOrder[stageKey];
+                
+                if (currentIdx === undefined) {
+                    // pending 或其他非阶段状态
+                    return 'pending';
+                }
+                if (thisIdx < currentIdx) return 'done';
+                if (thisIdx === currentIdx) return 'active';
+                return 'pending';
+            };
+
+            // 格式化功能
+            const getFileName = (path) => {
+                if (!path) return 'Unknown';
+                return path.split(/[\\/]/).pop();
+            };
+
+            const formatDate = (dateStr) => {
+                if (!dateStr) return '-';
+                const d = new Date(dateStr);
+                return `${d.getMonth()+1}-${d.getDate()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+            };
+
+            const formatUptime = (seconds) => {
+                if (!seconds) return '-';
+                const h = Math.floor(seconds / 3600);
+                const m = Math.floor((seconds % 3600) / 60);
+                if (h > 24) {
+                    const d = Math.floor(h / 24);
+                    return `${d}天${h%24}时`;
+                }
+                return h > 0 ? `${h}时${m}分` : `${m}分`;
+            };
+            
+            const getStatusLabel = (status) => {
+                const map = {
+                    'pending': '排队等待...',
+                    'subtitle_checking': '字幕检查',
+                    'extracting': '抽取音轨',
+                    'uploading': '推流传输',
+                    'worker_queued': 'Worker 排队',
+                    'transcribing': 'ASR 转写',
+                    'optimizing': 'LLM 优化',
+                    'translating': 'LLM 翻译',
+                    'aligning': '对轴处理',
+                    'writing_subtitle': '写回字幕',
+                    'refreshing_emby': '刷新 Emby',
+                    'completed': '圆满完成',
+                    'failed': '作业失败',
+                    'skipped': '跳过处理',
+                    'cancelled': '已取消',
+                };
+                return map[status] || status;
+            };
+
+            const getStatusColor = (status) => {
+                const map = {
+                    'pending': 'text-yellow-400',
+                    'completed': 'text-green-400',
+                    'failed': 'text-red-400 font-bold',
+                    'skipped': 'text-gray-400',
+                    'cancelled': 'text-gray-500',
+                };
+                return map[status] || 'text-blue-400 font-bold';
+            };
+
+            const getBarColor = (status) => {
+                if(status === 'failed') return 'bg-red-500 !bg-none';
+                if(status === 'completed') return 'bg-green-500 !bg-none';
+                if(status === 'skipped') return 'bg-gray-500 !bg-none';
+                return ''; // default blue gradient
+            };
+
+            const toggleDetail = (taskId) => {
+                expandedTask.value = expandedTask.value === taskId ? null : taskId;
+            };
+
+            // 数据交互
+            const fetchStatus = async () => {
+                try {
+                    const res = await fetch('/api/status');
+                    sysInfo.value = await res.json();
+                } catch (e) {
+                    console.error("status error", e);
+                }
+            };
+
+            const fetchTasks = async () => {
+                try {
+                    loading.value = true;
+                    const params = new URLSearchParams();
+                    if (filterStatus.value) params.set('status', filterStatus.value);
+                    params.set('limit', '50');
+                    const res = await fetch(`/api/tasks?${params}`);
+                    const data = await res.json();
+                    tasks.value = data.tasks || [];
+                } catch (e) {
+                    console.error("tasks error", e);
+                } finally {
+                    loading.value = false;
+                }
+            };
+
+            const fetchData = async () => {
+                await Promise.all([fetchStatus(), fetchTasks()]);
+            };
+
+            // Watch filter change
+            watch(filterStatus, () => { fetchTasks(); });
+
+            // Retry task
+            const retryTask = async (taskId) => {
+                try {
+                    const res = await fetch(`/api/task/${taskId}/retry`, { method: 'POST' });
+                    if (res.ok) {
+                        expandedTask.value = null;
+                        setTimeout(fetchData, 500);
+                    }
+                } catch (e) {
+                    console.error("retry error", e);
+                }
+            };
+
+            // Logs Logic
+            const toggleLogs = () => { showLogs.value = !showLogs.value; };
+            const fetchLogs = async () => {
+                if (!showLogs.value) return;
+                try {
+                    const res = await fetch('/api/logs?lines=50');
+                    if (res.ok) {
+                        const data = await res.json();
+                        const isAtBottom = logContainer.value ? 
+                            (logContainer.value.scrollHeight - logContainer.value.scrollTop <= logContainer.value.clientHeight + 20) : true;
+                            
+                        sysLogs.value = data.logs;
+                        
+                        if (isAtBottom) {
+                            setTimeout(() => {
+                                if(logContainer.value) logContainer.value.scrollTop = logContainer.value.scrollHeight;
+                            }, 50);
+                        }
+                    }
+                } catch(e) {}
+            };
+            const getLogColor = (line) => {
+                if (line.includes(' ERROR: ')) return 'text-red-400';
+                if (line.includes(' WARNING: ')) return 'text-yellow-400';
+                if (line.includes(' INFO: ')) return 'text-green-300';
+                if (line.includes(' DEBUG: ')) return 'text-gray-500';
+                return 'text-gray-300';
+            };
+
+            // File Browser API Methods
+            const loadPath = async (path = '') => {
+                browsing.value = true;
+                try {
+                    const url = path ? `/api/fs?path=${encodeURIComponent(path)}` : '/api/fs';
+                    const res = await fetch(url);
+                    if (res.ok) {
+                        browserData.value = await res.json();
+                    }
+                } catch (e) {
+                    console.error("Failed to load fs", e);
+                } finally {
+                    browsing.value = false;
+                }
+            };
+            
+            const openBrowser = () => {
+                showBrowser.value = true;
+                let defaultPath = '';
+                if (form.value.media_path) {
+                    const parts = form.value.media_path.split(/[\\/]/);
+                    parts.pop();
+                    defaultPath = parts.join('\\');
+                }
+                loadPath(defaultPath);
+            };
+            
+            const selectFile = (fullPath) => {
+                form.value.media_path = fullPath.replace(/\\\\/g, '\\');
+                showBrowser.value = false;
+            };
+
+            const submitTask = async () => {
+                if(!form.value.media_path) return;
+                submitting.value = true;
+                submitResult.value = null;
+                
+                try {
+                    const params = new URLSearchParams({
+                        media_path: form.value.media_path,
+                        target_lang: form.value.target_lang
+                    });
+                    
+                    const url = form.value.force ? `/api/task/force?${params}` : '/api/task';
+                    
+                    const options = { method: 'POST', headers: {'Content-Type': 'application/json'} };
+                    if(!form.value.force) {
+                        options.body = JSON.stringify({
+                            media_path: form.value.media_path,
+                            target_lang: form.value.target_lang,
+                            force: false
+                        });
+                    }
+
+                    const res = await fetch(url, options);
+                    if(res.ok) {
+                        submitResult.value = { success: true, message: '指令提交成功，列入总线。' };
+                        form.value.media_path = '';
+                        setTimeout(fetchData, 500);
+                    } else {
+                        const err = await res.json();
+                        submitResult.value = { success: false, message: `提交被拒: ${err.detail || res.statusText}` };
+                    }
+                } catch (e) {
+                    submitResult.value = { success: false, message: `网络连接迷失: ${e.message}` };
+                } finally {
+                    submitting.value = false;
+                    setTimeout(() => { submitResult.value = null; }, 5000);
+                }
+            };
+
+            // Automation Methods
+            const fetchAutoStatus = async () => {
+                try {
+                    const res = await fetch('/api/automation/status');
+                    if (res.ok) autoStatus.value = await res.json();
+                } catch(e) {}
+            };
+            const triggerScan = async () => {
+                scanning.value = true;
+                try {
+                    const res = await fetch('/api/automation/scan', { method: 'POST' });
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.data) autoStatus.value.last_report = data.data;
+                    }
+                    await fetchAutoStatus();
+                    setTimeout(fetchData, 1000);
+                } catch(e) { console.error('scan error', e); }
+                finally { scanning.value = false; }
+            };
+            const toggleAutomation = async () => {
+                const newState = !autoStatus.value.enabled;
+                try {
+                    await fetch(`/api/automation/toggle?enabled=${newState}`, { method: 'POST' });
+                    await fetchAutoStatus();
+                } catch(e) { console.error('toggle error', e); }
+            };
+
+            let pollInterval;
+            let logInterval;
+            let autoInterval;
+            onMounted(() => {
+                fetchData();
+                fetchLogs();
+                fetchAutoStatus();
+                pollInterval = setInterval(fetchData, 3000);
+                logInterval = setInterval(fetchLogs, 2000);
+                autoInterval = setInterval(fetchAutoStatus, 10000);
+            });
+
+            onUnmounted(() => {
+                if(pollInterval) clearInterval(pollInterval);
+                if(logInterval) clearInterval(logInterval);
+                if(autoInterval) clearInterval(autoInterval);
+            });
+
+            return {
+                sysInfo, tasks, loading, form, submitting, submitResult,
+                showBrowser, browsing, browserData, openBrowser, loadPath, selectFile,
+                showLogs, sysLogs, logContainer, toggleLogs, getLogColor,
+                autoStatus, scanning, triggerScan, toggleAutomation,
+                filterStatus, expandedTask, pipelineStages,
+                getFileName, formatDate, formatUptime, getStatusLabel, getStatusColor, getBarColor,
+                getStageClass, toggleDetail, retryTask,
+                fetchData, submitTask
+            };
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>

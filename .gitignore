@@ -1,0 +1,47 @@
+# =============================================================================
+# SSUBB .gitignore
+# =============================================================================
+
+# 归档参考代码 (不上传)
+_archive_ref/
+
+# 私人配置
+config.yaml
+config.coordinator.yaml
+config.worker.yaml
+.env
+
+# 数据与模型 (体积大/有隐私)
+data/
+models/
+*.db
+*.db-journal
+*.log
+
+# 临时文件
+temp/
+tmp/
+*.tmp
+audio_temp/
+worker_temp/
+
+# Python / 虚拟环境
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE 与系统文件
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db

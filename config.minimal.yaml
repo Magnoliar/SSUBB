@@ -1,0 +1,32 @@
+# =============================================================================
+# SSUBB 最简配置 — 只改标了 ← 的地方就能跑
+# =============================================================================
+# 完整配置项见 config.example.yaml
+
+# ---- NAS 端 ----
+coordinator:
+  port: 8787
+
+  worker:
+    url: "http://192.168.1.50:8788"    # ← 改成你的 GPU 机器 IP
+
+  # 如果用 Emby，填上这两项（不用就留空）
+  emby:
+    server: ""                          # ← 如 http://192.168.1.100:8096
+    api_key: ""                         # ← Emby 设置里生成的 API Key
+
+# ---- GPU 端 ----
+worker:
+  port: 8788
+  worker_id: "my-gpu"
+
+  coordinator_url: "http://192.168.1.10:8787"  # ← 改成你的 NAS IP
+
+  transcribe:
+    model: "large-v3-turbo"             # 模型名，首次启动会自动下载
+    device: "cuda"                      # 没有 GPU 改成 "cpu"
+
+  llm:
+    api_base: "https://api.deepseek.com/v1"  # ← LLM API 地址
+    api_key: "sk-xxxxxxxx"                    # ← 你的 API Key
+    model: "deepseek-chat"                    # ← 模型名称

@@ -1,0 +1,31 @@
+services:
+  ssubb-coordinator:
+    build:
+      context: .
+      dockerfile: coordinator/Dockerfile
+    container_name: ssubb-coordinator
+    restart: unless-stopped
+    working_dir: /app
+    ports:
+      - "8787:8787"
+    environment:
+      TZ: Asia/Shanghai
+      # Optional environment overrides:
+      # SSUBB_WORKER_URL: http://worker-host:8788
+      # SSUBB_EMBY_SERVER: http://emby-host:8096
+      # SSUBB_EMBY_API_KEY: your-emby-api-key
+    volumes:
+      # Coordinator config and runtime data (config.yaml is auto-created in ./data)
+      - ./data:/app/data
+
+      # Media library mounts.
+      # IMPORTANT: the in-container path must match the media path submitted
+      # to Coordinator by MoviePilot / Emby / manual tasks.
+      - /volume1/video:/volume1/video
+      - /volume1/media:/volume1/media
+    network_mode: bridge
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

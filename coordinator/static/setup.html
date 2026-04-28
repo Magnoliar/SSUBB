@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSUBB - 初始化配置引导</title>
+    <meta name="description" content="SSUBB Coordinator 首次启动设置">
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;800&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #0d0f12;
+            color: #eceff4;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-image: radial-gradient(circle at 50% 0%, #1e293b 0%, #0d0f12 70%);
+        }
+
+        [v-cloak] { display: none; }
+
+        .glass-panel {
+            background: rgba(25, 30, 36, 0.7);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.5);
+        }
+
+        .glow-text {
+            text-shadow: 0 0 16px rgba(56, 189, 248, 0.5);
+        }
+
+        .gradient-text {
+            background: linear-gradient(135deg, #38bdf8 0%, #818cf8 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .form-input {
+            width: 100%;
+            background: rgba(17, 24, 39, 0.7);
+            border: 1px solid #374151;
+            border-radius: 8px;
+            padding: 10px 14px;
+            color: #f3f4f6;
+            transition: all 0.2s;
+        }
+        .form-input:focus {
+            outline: none;
+            border-color: #38bdf8;
+            box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
+            transition: all 0.3s;
+        }
+        .btn-primary:hover:not(:disabled) {
+            box-shadow: 0 0 20px rgba(79, 70, 229, 0.6);
+            transform: translateY(-2px);
+        }
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .step-icon {
+            width: 40px; height: 40px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 50%;
+            background: rgba(55, 65, 81, 0.5);
+            color: #9ca3af;
+            border: 1px solid #4b5563;
+        }
+        .step-icon.active {
+            background: rgba(56, 189, 248, 0.2);
+            color: #38bdf8;
+            border-color: rgba(56, 189, 248, 0.5);
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.3);
+        }
+    </style>
+</head>
+<body class="p-4">
+
+<div id="app" class="w-full max-w-2xl" v-cloak>
+    
+    <div class="text-center mb-8">
+        <div class="inline-block p-4 bg-gray-800 rounded-2xl shadow-inner border border-gray-700 mb-4">
+            <i class="fa-solid fa-closed-captioning text-4xl gradient-text glow-text"></i>
+        </div>
+        <h1 class="text-3xl font-bold tracking-wider mb-2">SSUBB <span class="font-light text-gray-400 text-lg">Setup</span></h1>
+        <p class="text-gray-400">欢迎！看起来这是你第一次启动，请完成基础配置以继续。</p>
+    </div>
+
+    <div class="glass-panel p-8">
+        <form @submit.prevent="submitSetup">
+            
+            <!-- 核心连接 -->
+            <div class="mb-8">
+                <div class="flex items-center space-x-3 mb-4">
+                    <div class="step-icon active"><i class="fa-solid fa-server"></i></div>
+                    <h2 class="text-lg font-semibold">1. 核心连接</h2>
+                </div>
+                <div class="ml-12">
+                    <label class="block text-sm font-medium text-gray-400 mb-1">GPU Worker 地址 <span class="text-red-400">*</span></label>
+                    <input type="text" v-model="form.worker_url" class="form-input mb-2" placeholder="例如: http://192.168.1.50:8788" required>
+                    <p class="text-xs text-gray-500">Worker 是实际进行语音转写和 AI 翻译的节点，通常运行在带显卡的机器上。</p>
+                </div>
+            </div>
+
+            <hr class="border-gray-700/50 mb-8">
+
+            <!-- 字幕偏好 -->
+            <div class="mb-8">
+                <div class="flex items-center space-x-3 mb-4">
+                    <div class="step-icon" :class="{'active': form.worker_url}"><i class="fa-solid fa-language"></i></div>
+                    <h2 class="text-lg font-semibold">2. 字幕偏好</h2>
+                </div>
+                <div class="ml-12 grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">输出模式</label>
+                        <select v-model="form.output_mode" class="form-input">
+                            <option value="bilingual">中英双语 (推荐)</option>
+                            <option value="single">仅中文翻译</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">输出格式</label>
+                        <select v-model="form.output_format" class="form-input">
+                            <option value="ass">ASS (高级样式/描边)</option>
+                            <option value="srt">SRT (基础格式)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <hr class="border-gray-700/50 mb-8">
+
+            <!-- 高级选项 -->
+            <div class="mb-8">
+                <div class="flex items-center space-x-3 mb-4">
+                    <div class="step-icon" :class="{'active': form.worker_url}"><i class="fa-solid fa-sliders"></i></div>
+                    <h2 class="text-lg font-semibold">3. 进阶选项 (可选)</h2>
+                </div>
+                
+                <div class="ml-12 space-y-5">
+                    <!-- Emby -->
+                    <div class="bg-gray-800/50 rounded-lg p-4 border border-gray-700/50">
+                        <h3 class="text-sm font-medium text-gray-300 mb-3"><i class="fa-solid fa-tv mr-2 text-green-400"></i>Emby/Jellyfin 联动</h3>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1">服务器地址</label>
+                                <input type="text" v-model="form.emby_server" class="form-input text-sm" placeholder="http://192.168.1.100:8096">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1">API Key</label>
+                                <input type="text" v-model="form.emby_api_key" class="form-input text-sm" placeholder="Emby 控制台生成">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 自动化 -->
+                    <div class="bg-gray-800/50 rounded-lg p-4 border border-gray-700/50">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-sm font-medium text-gray-300"><i class="fa-solid fa-robot mr-2 text-purple-400"></i>自动化定时扫描</h3>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" v-model="form.enable_automation" class="sr-only peer">
+                                <div class="w-9 h-5 bg-gray-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[-2px] after:left-[-2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-blue-500"></div>
+                            </label>
+                        </div>
+                        
+                        <div v-if="form.enable_automation" class="mt-3">
+                            <label class="block text-xs text-gray-400 mb-1">需要监控的媒体目录 (多目录用回车分隔)</label>
+                            <textarea v-model="scanPathsRaw" class="form-input text-sm h-20" placeholder="/volume1/video/movies&#10;/volume1/video/tv"></textarea>
+                            <p class="text-xs text-gray-500 mt-1">注意：Docker 部署时，这里填写的必须是容器内的路径。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 错误提示 -->
+            <div v-if="errorMsg" class="mb-6 p-4 bg-red-500/20 border border-red-500/50 rounded-lg text-red-400 text-sm flex items-start">
+                <i class="fa-solid fa-triangle-exclamation mt-0.5 mr-2"></i>
+                <span>{{ errorMsg }}</span>
+            </div>
+
+            <!-- 提交 -->
+            <div class="mt-8 flex justify-end">
+                <button type="submit" class="btn-primary px-8 py-3 rounded-lg font-medium text-white flex items-center" :disabled="submitting || !form.worker_url">
+                    <i v-if="submitting" class="fa-solid fa-spinner fa-spin mr-2"></i>
+                    <i v-else class="fa-solid fa-rocket mr-2"></i>
+                    保存并初始化系统
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    const { createApp, ref, computed } = Vue;
+
+    createApp({
+        setup() {
+            const form = ref({
+                worker_url: '',
+                output_mode: 'bilingual',
+                output_format: 'ass',
+                emby_server: '',
+                emby_api_key: '',
+                enable_automation: false,
+                scan_paths: []
+            });
+            
+            const scanPathsRaw = ref('');
+            const submitting = ref(false);
+            const errorMsg = ref('');
+
+            const submitSetup = async () => {
+                if (!form.value.worker_url) return;
+                
+                submitting.value = true;
+                errorMsg.value = '';
+
+                // 处理扫描路径
+                if (form.value.enable_automation && scanPathsRaw.value) {
+                    form.value.scan_paths = scanPathsRaw.value.split('\n')
+                        .map(p => p.trim())
+                        .filter(p => p.length > 0);
+                } else {
+                    form.value.scan_paths = [];
+                }
+
+                try {
+                    const res = await fetch('/api/setup', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(form.value)
+                    });
+                    
+                    const data = await res.json();
+                    
+                    if (res.ok && data.code === 0) {
+                        // 成功，跳转到首页
+                        document.body.innerHTML = `
+                            <div class="text-center">
+                                <div class="text-green-400 text-6xl mb-4"><i class="fa-regular fa-circle-check"></i></div>
+                                <h2 class="text-2xl font-bold mb-2">初始化成功！</h2>
+                                <p class="text-gray-400 mb-6">调度引擎已热启动，正在带您进入控制台...</p>
+                                <div class="w-12 h-1 bg-gray-800 rounded mx-auto overflow-hidden">
+                                    <div class="h-full bg-blue-500 w-full animate-pulse"></div>
+                                </div>
+                            </div>
+                        `;
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 2000);
+                    } else {
+                        errorMsg.value = data.detail || data.msg || '保存配置失败，请检查填写的内容。';
+                    }
+                } catch (e) {
+                    errorMsg.value = '网络错误，请稍后重试: ' + e.message;
+                } finally {
+                    submitting.value = false;
+                }
+            };
+
+            return {
+                form,
+                scanPathsRaw,
+                submitting,
+                errorMsg,
+                submitSetup
+            };
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>
