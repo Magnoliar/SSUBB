@@ -1,20 +1,20 @@
-# SSUBB 配置手册
+# SSUBB 配置手册 (V0.5)
 
-## 快速开始
+## 🚀 零配置向导 (推荐)
 
-```bash
-# 1. 复制示例配置
-cp config.example.yaml config.yaml
+自 SSUBB V0.5 起，我们强烈推荐使用**内置的交互式配置向导**，你几乎不需要手动编辑任何 YAML 文件。
 
-# 2. 编辑必填项
-#    - coordinator.worker.url
-#    - worker.coordinator_url
-#    - worker.llm.api_base / api_key / model
-```
+### Coordinator (NAS 端)
+直接使用 Docker Compose 启动（不挂载 `config.yaml` 文件，仅挂载 `data/` 目录），启动后访问 Web 控制台（如 `http://<NAS_IP>:8787`），系统会自动弹出图形化的 **WebUI 配置向导**。填完保存后系统自动热启动。
 
-## 配置优先级
+### Worker (GPU 端)
+在 Windows/Linux 下运行 `run_worker.bat` 或 `run_worker.sh`，如果检测到没有配置文件，脚本会在终端中逐步询问你的 LLM API Key、模型等信息，并自动生成完善的 `config.yaml`。
 
-SSUBB 的配置加载遵循以下优先级（高 → 低）：
+---
+
+## 🛠️ 高级手动配置 (供开发者参考)
+
+如果你需要深度定制（如调整超时时间、数据库路径等），可以参考以下内容。SSUBB 的配置加载遵循以下优先级（高 → 低）：
 
 1. **环境变量** (`SSUBB_*`)
 2. **config.yaml** 中的值
