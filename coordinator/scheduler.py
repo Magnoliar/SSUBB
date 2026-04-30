@@ -6,8 +6,9 @@
 
 import asyncio
 import logging
-from datetime import datetime, time as dtime
+from datetime import datetime, time as dtime, timezone
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 from shared.models import TaskCreate
 
@@ -40,6 +41,7 @@ class AutoScheduler:
         self._enabled = self.auto_cfg.enabled
         self._last_scan: Optional[datetime] = None
         self._last_report: Optional[dict] = None
+        self._tz = ZoneInfo(self.auto_cfg.timezone)
 
     @property
     def enabled(self) -> bool:
@@ -69,7 +71,7 @@ class AutoScheduler:
 
     def get_status(self) -> dict:
         """查询调度器状态"""
-        now = datetime.utcnow()
+        now = datetime.now(self._tz)
         in_window = self._in_time_window(now)
 
         return {
@@ -104,7 +106,7 @@ class AutoScheduler:
                 if not self._enabled:
                     continue
 
-                now = datetime.utcnow()
+                now = datetime.now(self._tz)
 
                 # 检查是否在时间窗口内
                 if not self._in_time_window(now):
@@ -139,7 +141,7 @@ class AutoScheduler:
                 result = {
                     "skipped": True,
                     "reason": "Worker 正忙，等待空闲",
-                    "time": datetime.utcnow().isoformat(),
+                    "time": datetime.now(self._tz).isoformat(),
                 }
                 logger.info("扫描延迟: Worker 正忙")
                 self._last_report = result
@@ -155,7 +157,7 @@ class AutoScheduler:
             max_results=self.auto_cfg.max_tasks_per_scan,
         )
 
-        self._last_scan = datetime.utcnow()
+        self._last_scan = datetime.now(self._tz)
 
         # 3. 为缺字幕的视频创建任务
         created = 0
@@ -184,6 +186,20 @@ class AutoScheduler:
             "time": self._last_scan.isoformat(),
         }
         self._last_report = result
+
+        # 持久化扫描历史
+        try:
+            self.task_manager.store.save_scan_report({
+                "scan_time": self._last_scan.isoformat(),
+                "total_videos": report.total_videos,
+                "missing_subtitle": report.missing_subtitle,
+                "already_active": report.already_active,
+                "new_tasks_created": created,
+                "duration_seconds": report.duration_seconds,
+            })
+        except Exception as e:
+            logger.warning(f"保存扫描历史失败: {e}")
+
         return result
 
     async def preheat_next_episode(self, completed_media_path: str, target_lang: str):
@@ -254,13 +270,15 @@ class AutoScheduler:
         return dtime(int(parts[0]), int(parts[1]))
 
     async def _is_worker_idle(self) -> bool:
-        """检测 Worker 是否空闲"""
-        if not self.task_manager.worker:
-            return False
+        """检测是否有空闲 Worker（任一在线 Worker 空闲即可）"""
         try:
-            status = await self.task_manager.worker.get_status()
-            if status is None:
+            workers = self.task_manager.registry.get_online_workers()
+            if not workers:
                 return False
-            return status.queue_length == 0 and status.current_task_id is None
+            for _client, status, _weight in workers:
+                hb = status.heartbeat
+                if hb and hb.queue_length == 0 and hb.current_task_id is None:
+                    return True
+            return False
         except Exception:
             return False

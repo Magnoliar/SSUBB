@@ -31,8 +31,20 @@ coordinator:
     temp_dir: "./data/audio_temp"
 
   # ---- Worker 连接 [必填] ----
+  # 方式一 (推荐, V0.6): 多 Worker 节点列表
+  workers:
+    - url: "http://192.168.1.50:8788"     # GPU Worker 1
+      worker_id: "office-gpu"
+      weight: 2                            # 权重越高，分配越多任务
+      enabled: true
+    # - url: "http://192.168.1.51:8788"   # GPU Worker 2 (取消注释启用)
+    #   worker_id: "home-gpu"
+    #   weight: 1
+
+  # 方式二 (兼容旧版): 单 Worker
   worker:
     url: ""                          # GPU Worker 地址，如 http://192.168.1.50:8788
+                                     # 如果 workers 为空，自动从此字段迁移
                                      # 环境变量: SSUBB_WORKER_URL
     heartbeat_interval: 30           # 心跳检查间隔 (秒)
     heartbeat_timeout: 300           # 心跳超时 (秒)
@@ -86,6 +98,19 @@ coordinator:
     max_tasks_per_scan: 5              # 单次扫描最多提交任务数
     require_worker_idle: true          # 仅在 Worker 空闲时提交扫描任务
     preheat_next_episode: true         # 任务完成后自动预热下一集
+
+  # ---- 局域网自动发现 (V0.7) ----
+  discovery:
+    enabled: true                      # 启用 UDP 自动发现
+    port: 8789                         # UDP 广播端口 (Docker 需映射或 --network host)
+    auto_register: true                # 自动注册发现的 Worker
+                                       # 关闭: SSUBB_DISCOVERY_ENABLED=false
+
+  # ---- 通用 Webhook (V0.8) ----
+  webhook:
+    enabled: true                      # 启用通用 Webhook 入口 (POST /api/webhook)
+    token: ""                          # 认证 Token (空=不验证, 推荐设置)
+                                       # 环境变量: SSUBB_WEBHOOK_TOKEN
 
 # ============================================================
 # Worker 配置 (公司 GPU 端)

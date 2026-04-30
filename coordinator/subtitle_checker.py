@@ -212,6 +212,174 @@ class SubtitleChecker:
 
         return subs
 
+    # =========================================================================
+    # 质量评分
+    # =========================================================================
+
+    def score_subtitle(self, subtitle_content: str, video_duration: float) -> dict:
+        """对生成的字幕进行质量评分 (0-100)
+
+        评分维度:
+        - 覆盖率 (30分): 字幕时间覆盖视频时长的比例
+        - 密度 (20分): 每分钟字幕条数
+        - 行长合理性 (20分): 过长/过短行的比例
+        - 时间连续性 (15分): 相邻字幕间隔是否合理
+        - 内容质量 (15分): 空白行、重复行检测
+
+        Returns:
+            {"score": 85, "grade": "B", "details": {...}, "issues": [...]}
+        """
+        issues = []
+        details = {}
+
+        # 解析 SRT
+        try:
+            subs = self._parse_srt_content(subtitle_content)
+        except Exception as e:
+            return {"score": 0, "grade": "F", "details": {}, "issues": [f"解析失败: {e}"]}
+
+        if not subs:
+            return {"score": 0, "grade": "F", "details": {}, "issues": ["字幕为空"]}
+
+        total_score = 0
+
+        # 1. 覆盖率 (30分)
+        if video_duration and video_duration > 0:
+            last_end = max(s["end"] for s in subs)
+            coverage = min(1.0, last_end / video_duration)
+            cov_score = round(coverage * 30)
+            total_score += cov_score
+            details["coverage"] = f"{coverage:.0%} ({cov_score}/30)"
+            if coverage < 0.5:
+                issues.append(f"覆盖率过低: {coverage:.0%}")
+        else:
+            total_score += 20  # 无视频时长，给默认分
+            details["coverage"] = "N/A (20/30)"
+
+        # 2. 密度 (20分)
+        if video_duration and video_duration > 0:
+            density = len(subs) / (video_duration / 60)
+            # 理想密度: 3-15 条/分钟
+            if 3 <= density <= 15:
+                density_score = 20
+            elif 2 <= density < 3 or 15 < density <= 20:
+                density_score = 15
+            elif 1 <= density < 2 or 20 < density <= 30:
+                density_score = 10
+            else:
+                density_score = 5
+            total_score += density_score
+            details["density"] = f"{density:.1f}条/分 ({density_score}/20)"
+            if density < 1:
+                issues.append(f"密度过低: {density:.1f}条/分")
+        else:
+            total_score += 12
+            details["density"] = "N/A (12/20)"
+
+        # 3. 行长合理性 (20分)
+        long_lines = sum(1 for s in subs if len(s["text"]) > 50)
+        short_lines = sum(1 for s in subs if len(s["text"]) < 3)
+        bad_ratio = (long_lines + short_lines) / max(len(subs), 1)
+        length_score = round(max(0, 20 * (1 - bad_ratio * 2)))
+        total_score += length_score
+        details["line_length"] = f"异常行{bad_ratio:.0%} ({length_score}/20)"
+        if bad_ratio > 0.3:
+            issues.append(f"异常行长占比过高: {bad_ratio:.0%}")
+
+        # 4. 时间连续性 (15分)
+        if len(subs) >= 2:
+            gaps = []
+            overlaps = 0
+            for i in range(1, len(subs)):
+                gap = subs[i]["start"] - subs[i - 1]["end"]
+                gaps.append(gap)
+                if gap < -0.5:
+                    overlaps += 1
+
+            avg_gap = sum(gaps) / len(gaps) if gaps else 0
+            max_gap = max(gaps) if gaps else 0
+
+            if max_gap < 60 and overlaps == 0:
+                cont_score = 15
+            elif max_gap < 120 and overlaps <= 2:
+                cont_score = 10
+            else:
+                cont_score = 5
+            total_score += cont_score
+            details["continuity"] = f"最大间隔{max_gap:.0f}s, {overlaps}处重叠 ({cont_score}/15)"
+            if max_gap > 120:
+                issues.append(f"存在{max_gap:.0f}s的长间隔")
+        else:
+            total_score += 10
+            details["continuity"] = "N/A (10/15)"
+
+        # 5. 内容质量 (15分)
+        empty_lines = sum(1 for s in subs if not s["text"].strip())
+        all_texts = [s["text"].strip() for s in subs]
+        duplicates = len(all_texts) - len(set(all_texts))
+        content_issues = empty_lines + duplicates
+        content_ratio = content_issues / max(len(subs), 1)
+        content_score = round(max(0, 15 * (1 - content_ratio * 3)))
+        total_score += content_score
+        details["content"] = f"空行{empty_lines}, 重复{duplicates} ({content_score}/15)"
+        if duplicates > len(subs) * 0.1:
+            issues.append(f"重复行过多: {duplicates}条")
+
+        # 等级
+        if total_score >= 90:
+            grade = "A"
+        elif total_score >= 75:
+            grade = "B"
+        elif total_score >= 60:
+            grade = "C"
+        elif total_score >= 40:
+            grade = "D"
+        else:
+            grade = "F"
+
+        return {
+            "score": total_score,
+            "grade": grade,
+            "details": details,
+            "issues": issues,
+        }
+
+    @staticmethod
+    def _parse_srt_content(content: str) -> list[dict]:
+        """从 SRT 内容字符串解析字幕"""
+        subs = []
+        blocks = re.split(r"\n\s*\n", content.strip())
+        time_pattern = re.compile(
+            r"(\d{2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*"
+            r"(\d{2}):(\d{2}):(\d{2})[,.](\d{3})"
+        )
+
+        for block in blocks:
+            lines = block.strip().split("\n")
+            if len(lines) < 2:
+                continue
+
+            time_match = None
+            text_start = 0
+            for i, line in enumerate(lines):
+                m = time_pattern.search(line)
+                if m:
+                    time_match = m
+                    text_start = i + 1
+                    break
+
+            if time_match is None:
+                continue
+
+            h1, m1, s1, ms1, h2, m2, s2, ms2 = time_match.groups()
+            start = int(h1) * 3600 + int(m1) * 60 + int(s1) + int(ms1) / 1000
+            end = int(h2) * 3600 + int(m2) * 60 + int(s2) + int(ms2) / 1000
+            text = " ".join(lines[text_start:]).strip()
+
+            subs.append({"start": start, "end": end, "text": text})
+
+        return subs
+
     @staticmethod
     def _is_cjk(char: str) -> bool:
         """判断字符是否为 CJK 统一汉字"""

@@ -7,6 +7,8 @@ from typing import Optional
 import yaml
 from pydantic import BaseModel, Field
 
+from shared.models import LLMProviderConfig
+
 
 class TranscribeConfig(BaseModel):
     model: str = "large-v3-turbo"
@@ -53,10 +55,23 @@ class WorkerConfig(BaseModel):
     coordinator_url: str = ""
     transcribe: TranscribeConfig = Field(default_factory=TranscribeConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
+    llm_providers: list[LLMProviderConfig] = Field(default_factory=list)
     translate: TranslateConfig = Field(default_factory=TranslateConfig)
     optimize: OptimizeConfig = Field(default_factory=OptimizeConfig)
     vram: VRAMConfig = Field(default_factory=VRAMConfig)
     temp_dir: str = "./data/worker_temp"
+
+    def model_post_init(self, __context):
+        # 向后兼容：如果 llm_providers 为空但 llm.api_key 有值，自动迁移
+        if not self.llm_providers and self.llm.api_key:
+            self.llm_providers = [LLMProviderConfig(
+                api_base=self.llm.api_base,
+                api_key=self.llm.api_key,
+                model=self.llm.model,
+                priority=1,
+                enabled=True,
+                label="默认",
+            )]
 
 
 def load_worker_config(config_path: Optional[str] = None) -> WorkerConfig:
@@ -97,3 +112,23 @@ def load_worker_config(config_path: Optional[str] = None) -> WorkerConfig:
     Path(config.transcribe.model_dir).mkdir(parents=True, exist_ok=True)
 
     return config
+
+
+def save_worker_config(config_data: dict, config_path: Optional[str] = None):
+    """保存 Worker 配置到文件（保留非 worker 字段）"""
+    if config_path is None:
+        config_path = os.environ.get(
+            "SSUBB_CONFIG",
+            str(Path(__file__).parent.parent / "config.yaml")
+        )
+
+    # 读取现有配置以保留非 worker 字段
+    existing = {}
+    if Path(config_path).exists():
+        with open(config_path, "r", encoding="utf-8") as f:
+            existing = yaml.safe_load(f) or {}
+
+    existing["worker"] = config_data
+
+    with open(config_path, "w", encoding="utf-8") as f:
+        yaml.safe_dump(existing, f, default_flow_style=False, allow_unicode=True)

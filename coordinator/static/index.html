@@ -137,6 +137,20 @@
         .stage-node.failed { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
         .stage-arrow { color: #475569; font-size: 10px; }
 
+        /* 垂直时间线 */
+        .timeline { position: relative; padding-left: 24px; }
+        .timeline::before { content: ''; position: absolute; left: 7px; top: 4px; bottom: 4px; width: 2px; background: rgba(100,116,139,0.3); border-radius: 1px; }
+        .timeline-node { position: relative; padding: 6px 0 6px 16px; }
+        .timeline-node::before {
+            content: ''; position: absolute; left: -20px; top: 12px;
+            width: 10px; height: 10px; border-radius: 50%;
+            border: 2px solid; z-index: 1;
+        }
+        .timeline-node.done::before { background: #10b981; border-color: #10b981; }
+        .timeline-node.active::before { background: #38bdf8; border-color: #38bdf8; box-shadow: 0 0 8px rgba(56,189,248,0.5); animation: pulse-blue 1.5s infinite; }
+        .timeline-node.pending::before { background: transparent; border-color: #475569; }
+        .timeline-node.failed::before { background: #ef4444; border-color: #ef4444; }
+
         @keyframes pulse-blue {
             0%, 100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.4); }
             50% { box-shadow: 0 0 0 4px rgba(56, 189, 248, 0); }
@@ -147,6 +161,82 @@
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+
+        /* Toast 通知 */
+        .toast-container {
+            position: fixed; top: 16px; right: 16px; z-index: 100;
+            display: flex; flex-direction: column; gap: 8px;
+            pointer-events: none;
+        }
+        .toast {
+            pointer-events: auto;
+            background: rgba(25, 30, 36, 0.9); backdrop-filter: blur(12px);
+            border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;
+            padding: 12px 20px; min-width: 280px; max-width: 400px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            animation: toast-in 0.35s cubic-bezier(0.21,1.02,0.73,1) forwards;
+            display: flex; align-items: center; gap: 10px; font-size: 13px;
+        }
+        .toast.fade-out { animation: toast-out 0.3s ease forwards; }
+        .toast-success { border-left: 3px solid #10b981; }
+        .toast-error { border-left: 3px solid #ef4444; }
+        .toast-warning { border-left: 3px solid #f59e0b; }
+        .toast-info { border-left: 3px solid #38bdf8; }
+        .toast-success .toast-icon { color: #10b981; }
+        .toast-error .toast-icon { color: #ef4444; }
+        .toast-warning .toast-icon { color: #f59e0b; }
+        .toast-info .toast-icon { color: #38bdf8; }
+        @keyframes toast-in {
+            from { opacity: 0; transform: translateX(60px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes toast-out {
+            to { opacity: 0; transform: translateX(60px); }
+        }
+
+        /* 确认对话框 */
+        .confirm-overlay {
+            position: fixed; inset: 0; z-index: 200;
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+            display: flex; align-items: center; justify-content: center;
+            animation: fade-in 0.2s ease;
+        }
+        .confirm-dialog {
+            background: rgba(25, 30, 36, 0.95); backdrop-filter: blur(16px);
+            border: 1px solid rgba(255,255,255,0.1); border-radius: 16px;
+            padding: 24px; min-width: 340px; max-width: 440px;
+            box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+            animation: scale-in 0.25s cubic-bezier(0.21,1.02,0.73,1);
+        }
+        @keyframes fade-in { from { opacity: 0; } }
+        @keyframes scale-in {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        /* 移动端适配 */
+        @media (max-width: 767px) {
+            /* 任务表格改为卡片布局 */
+            .task-table thead { display: none; }
+            .task-table tbody tr { display: block; margin-bottom: 8px; border-radius: 12px; background: rgba(25,30,36,0.4); border: 1px solid rgba(255,255,255,0.05); }
+            .task-table tbody tr td { display: block; padding: 8px 16px !important; width: 100% !important; }
+            .task-table tbody tr td:nth-child(1) { display: none; }
+            .task-table tbody tr td:nth-child(2) { padding-top: 12px !important; }
+            .task-table tbody tr td:nth-child(4) { padding-bottom: 12px !important; }
+            .task-table tbody tr td:nth-child(5) { display: none; }
+            .task-table tbody tr.detail-row { background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.03); }
+            .task-table tbody tr.detail-row td { padding: 12px 16px !important; }
+
+            /* 响应式高度 */
+            .task-list-container { height: auto !important; max-height: 50vh; }
+
+            /* 触控目标最小 44px */
+            button, select, input, a { min-height: 44px; }
+            .stage-node { min-height: 32px; display: inline-flex; align-items: center; }
+
+            /* 侧边栏堆叠 */
+            .right-panel { order: -1; }
+        }
     </style>
 </head>
 <body class="p-4 md:p-8">
@@ -164,50 +254,103 @@
             </div>
         </div>
         
-        <div class="flex space-x-6">
-            <div class="text-center">
+        <div class="flex items-center space-x-3">
+            <!-- 配置健康度 -->
+            <div v-if="healthData && healthData.score < 100" class="relative">
+                <button @click="showHealthDetail = !showHealthDetail" class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-700 hover:border-gray-500 transition-all text-xs"
+                    :title="'配置完成度: ' + healthData.score + '%'">
+                    <svg class="w-5 h-5" viewBox="0 0 36 36">
+                        <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                            fill="none" :stroke="'rgba(100,116,139,0.3)'" stroke-width="3"/>
+                        <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                            fill="none" :stroke="getHealthColor(healthData.score)" stroke-width="3"
+                            :stroke-dasharray="healthData.score + ', 100'" stroke-linecap="round"/>
+                    </svg>
+                    <span class="text-gray-400">{{ healthData.score }}%</span>
+                </button>
+                <!-- 健康度详情弹出 -->
+                <div v-if="showHealthDetail" class="absolute right-0 top-full mt-2 w-80 glass-panel p-4 z-50 border border-gray-700">
+                    <h4 class="text-sm font-medium text-gray-300 mb-3">配置健康度</h4>
+                    <div v-for="(check, key) in healthData.checks" :key="key" class="flex items-start gap-2 mb-2 text-xs">
+                        <i :class="check.pass ? 'fa-solid fa-circle-check text-green-400' : 'fa-solid fa-circle-xmark text-red-400'" class="mt-0.5"></i>
+                        <span class="text-gray-300">{{ check.message }}</span>
+                    </div>
+                    <div v-if="healthData.suggestions.length" class="mt-3 pt-3 border-t border-gray-700">
+                        <div v-for="s in healthData.suggestions" :key="s" class="text-[11px] text-amber-400 mb-1">
+                            <i class="fa-solid fa-lightbulb mr-1"></i>{{ s }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- 简单/高级模式切换 -->
+            <button @click="toggleViewMode" class="p-2 rounded-lg border transition-all text-xs"
+                :class="viewMode === 'advanced' ? 'border-blue-500/50 text-blue-400 bg-blue-900/20' : 'border-gray-700 text-gray-400 hover:text-white hover:border-gray-500'"
+                :title="viewMode === 'advanced' ? '切换到简单模式' : '切换到高级模式'">
+                <i :class="viewMode === 'advanced' ? 'fa-solid fa-wrench' : 'fa-solid fa-eye'"></i>
+            </button>
+        </div>
+        <div class="flex space-x-6 mt-4 md:mt-0">
+            <div class="text-center" title="Coordinator 任务调度节点状态">
                 <div class="text-xs text-gray-400 uppercase tracking-wider mb-1">Coordinator (NAS)</div>
                 <div class="flex items-center space-x-2 font-medium">
                     <span class="status-dot online"></span>
                     <span class="glow-text text-green-400">ONLINE</span>
                 </div>
             </div>
-            <div class="w-px bg-gray-700"></div>
-            <div class="text-center flex-1">
-                <div class="text-xs text-gray-400 uppercase tracking-wider mb-1">Worker (GPU)</div>
-                <div class="flex items-center space-x-2 font-medium" v-if="sysInfo.worker?.online">
-                    <span class="status-dot online"></span>
-                    <span class="glow-text text-green-400">{{ sysInfo.worker?.heartbeat?.gpu_name || 'NVIDIA GPU' }}</span>
+            <template v-for="(w, idx) in (sysInfo.workers || [])" :key="w.url">
+                <div class="w-px bg-gray-700"></div>
+                <div class="text-center">
+                    <div class="text-xs text-gray-400 uppercase tracking-wider mb-1">{{ w.worker_id || 'Worker' }}</div>
+                    <div class="flex items-center space-x-2 font-medium" v-if="w.online">
+                        <span class="status-dot online"></span>
+                        <span class="glow-text text-green-400">{{ w.heartbeat?.gpu_name || w.worker_id }}</span>
+                    </div>
+                    <div class="flex items-center space-x-2 font-medium text-red-400" v-else>
+                        <span class="status-dot offline"></span>
+                        <span>OFFLINE</span>
+                    </div>
                 </div>
-                <div class="flex items-center space-x-2 font-medium text-red-400" v-else>
-                    <span class="status-dot offline"></span>
-                    <span>OFFLINE</span>
+            </template>
+            <!-- 单 Worker 兼容 fallback -->
+            <template v-if="!(sysInfo.workers?.length) && sysInfo.worker">
+                <div class="w-px bg-gray-700"></div>
+                <div class="text-center flex-1">
+                    <div class="text-xs text-gray-400 uppercase tracking-wider mb-1">Worker (GPU)</div>
+                    <div class="flex items-center space-x-2 font-medium" v-if="sysInfo.worker.online">
+                        <span class="status-dot online"></span>
+                        <span class="glow-text text-green-400">{{ sysInfo.worker.heartbeat?.gpu_name || 'NVIDIA GPU' }}</span>
+                    </div>
+                    <div class="flex items-center space-x-2 font-medium text-red-400" v-else>
+                        <span class="status-dot offline"></span>
+                        <span>OFFLINE</span>
+                    </div>
                 </div>
-            </div>
+            </template>
         </div>
     </header>
 
-    <!-- Stats Row -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <div class="glass-panel p-5 relative overflow-hidden group">
-            <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><i class="fa-solid fa-hourglass-half text-5xl"></i></div>
-            <div class="text-sm text-gray-400 mb-1">排队中 (Pending)</div>
-            <div class="text-3xl font-bold text-yellow-400">{{ sysInfo.tasks_pending }}</div>
+    <!-- System Health Strip -->
+    <div class="glass-panel px-5 py-3 mb-6 flex flex-wrap items-center gap-4 text-xs" role="region" aria-label="系统健康状态">
+        <div class="flex items-center gap-1.5">
+            <span class="status-dot online"></span>
+            <span class="text-gray-300">Coordinator</span>
         </div>
-        <div class="glass-panel p-5 relative overflow-hidden group">
-            <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><i class="fa-solid fa-microchip text-5xl"></i></div>
-            <div class="text-sm text-gray-400 mb-1">计算中 (Active)</div>
-            <div class="text-3xl font-bold text-blue-400 glow-text">{{ sysInfo.tasks_active }}</div>
+        <template v-for="w in (sysInfo.workers || [])" :key="w.url">
+            <div class="flex items-center gap-1.5 cursor-pointer hover:opacity-80" @click="openWorkerDetail(w)" :title="w.worker_id || w.url">
+                <span class="status-dot" :class="w.online ? 'online' : 'offline'"></span>
+                <span class="text-gray-300">{{ w.worker_id || w.url }}</span>
+                <span v-if="w.heartbeat && w.heartbeat.gpu_utilization != null" class="text-gray-500">({{ w.heartbeat.gpu_utilization }}%)</span>
+            </div>
+        </template>
+        <div class="flex items-center gap-1.5" v-if="!sysInfo.workers || sysInfo.workers.length === 0">
+            <span class="status-dot offline"></span>
+            <span class="text-gray-500">无 Worker</span>
         </div>
-        <div class="glass-panel p-5 relative overflow-hidden group">
-            <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><i class="fa-solid fa-check-double text-5xl"></i></div>
-            <div class="text-sm text-gray-400 mb-1">已完成 (Completed)</div>
-            <div class="text-3xl font-bold text-green-400">{{ sysInfo.tasks_completed }}</div>
-        </div>
-        <div class="glass-panel p-5 relative overflow-hidden group">
-            <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><i class="fa-solid fa-triangle-exclamation text-5xl"></i></div>
-            <div class="text-sm text-gray-400 mb-1">处理失败 (Failed)</div>
-            <div class="text-3xl font-bold text-red-400">{{ sysInfo.tasks_failed }}</div>
+        <div class="ml-auto flex items-center gap-4 text-gray-400">
+            <span title="排队中"><i class="fa-solid fa-hourglass-half text-yellow-500 mr-1"></i>{{ sysInfo.tasks_pending || 0 }}</span>
+            <span title="计算中"><i class="fa-solid fa-microchip text-blue-400 mr-1"></i>{{ sysInfo.tasks_active || 0 }}</span>
+            <span title="已完成"><i class="fa-solid fa-check text-green-400 mr-1"></i>{{ sysInfo.tasks_completed || 0 }}</span>
+            <span title="失败"><i class="fa-solid fa-xmark text-red-400 mr-1"></i>{{ sysInfo.tasks_failed || 0 }}</span>
         </div>
     </div>
 
@@ -215,15 +358,18 @@
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
         <!-- Task List -->
-        <div class="lg:col-span-2 glass-panel flex flex-col h-[640px] overflow-hidden">
+        <div class="lg:col-span-2 glass-panel flex flex-col h-[640px] overflow-hidden task-list-container">
             <div class="px-6 py-4 border-b border-gray-700/50 flex justify-between items-center bg-gray-800/30">
                 <h2 class="font-semibold text-lg"><i class="fa-solid fa-list-ul mr-2 text-blue-400"></i>近况队列看板</h2>
                 <div class="flex items-center space-x-3">
+                    <!-- 搜索 -->
+                    <input id="task-search" v-model="searchQuery" placeholder="搜索影片名称..." class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-gray-300 w-40 focus:outline-none focus:border-blue-500 focus:w-56 transition-all" @input="onSearchInput" />
                     <!-- 状态筛选 -->
                     <select v-model="filterStatus" class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-blue-500">
                         <option value="">全部状态</option>
                         <option value="pending">排队中</option>
                         <option value="extracting">提取音频</option>
+                        <option value="extracted">已提取</option>
                         <option value="uploading">推流传输</option>
                         <option value="transcribing">ASR 转写</option>
                         <option value="optimizing">LLM 优化</option>
@@ -235,6 +381,9 @@
                     <button @click="fetchData" class="text-gray-400 hover:text-white transition-colors" title="刷新">
                         <i class="fa-solid fa-rotate-right" :class="{'fa-spin': loading}"></i>
                     </button>
+                    <button @click="openSettings" class="text-gray-400 hover:text-white transition-colors" title="设置">
+                        <i class="fa-solid fa-gear text-lg"></i>
+                    </button>
                 </div>
             </div>
             
@@ -244,9 +393,10 @@
                     <p>当前没有任何任务</p>
                 </div>
                 
-                <table class="w-full text-left border-collapse" v-if="tasks.length > 0">
+                <table class="w-full text-left border-collapse task-table" v-if="tasks.length > 0" role="table" aria-label="任务列表">
                     <thead class="sticky top-0 bg-gray-800/90 backdrop-blur z-10 text-xs text-gray-400 uppercase">
                         <tr>
+                            <th class="px-2 py-3 w-8"><input type="checkbox" v-model="selectAll" class="form-checkbox h-3.5 w-3.5 text-blue-600 bg-gray-900 border-gray-600 rounded"></th>
                             <th class="px-6 py-3 font-medium">影片名称</th>
                             <th class="px-6 py-3 font-medium">状态 / 进度</th>
                             <th class="px-6 py-3 font-medium">时间</th>
@@ -256,11 +406,17 @@
                     <tbody class="text-sm">
                         <template v-for="task in tasks" :key="task.id">
                             <tr class="border-b border-gray-700/30 cursor-pointer" @click="toggleDetail(task.id)">
+                                <td class="px-2 py-4 w-8" @click.stop>
+                                    <input type="checkbox" :checked="selectedTasks.has(task.id)" @change="toggleSelect(task.id)" class="form-checkbox h-3.5 w-3.5 text-blue-600 bg-gray-900 border-gray-600 rounded">
+                                </td>
                                 <td class="px-6 py-4 w-4/12">
-                                    <div class="font-medium text-white truncate w-48 lg:w-64" :title="task.media_title || getFileName(task.media_path)">
+                                    <div class="font-medium text-white truncate w-48 lg:w-64 flex items-center gap-1.5" :title="task.media_title || getFileName(task.media_path)">
+                                        <span v-if="task.priority <= 2" class="inline-block w-2 h-2 rounded-full bg-red-500 flex-shrink-0" :title="'优先级: ' + task.priority"></span>
+                                        <span v-else-if="task.priority === 3" class="inline-block w-2 h-2 rounded-full bg-yellow-500 flex-shrink-0" :title="'优先级: ' + task.priority"></span>
+                                        <span v-else class="inline-block w-2 h-2 rounded-full bg-gray-500 flex-shrink-0" :title="'优先级: ' + task.priority"></span>
                                         {{ task.media_title || getFileName(task.media_path) }}
                                     </div>
-                                    <div class="text-xs text-gray-500 mt-1 truncate max-w-xs font-mono">{{ task.id }}</div>
+                                    <div v-if="viewMode === 'advanced'" class="text-xs text-gray-500 mt-1 truncate max-w-xs font-mono">{{ task.id }}</div>
                                 </td>
                                 <td class="px-6 py-4 w-4/12">
                                     <div class="flex justify-between text-xs mb-1">
@@ -271,7 +427,7 @@
                                         <div class="h-1.5 rounded-full progress-bar-fill" :style="`width: ${task.progress || 0}%`" :class="getBarColor(task.status)"></div>
                                     </div>
                                     <div class="text-[10px] text-gray-400 truncate" :title="task.error_msg" v-if="task.error_msg">
-                                        <span v-if="task.error_code" class="bg-red-900/30 text-red-400 px-1 rounded mr-1">{{ task.error_code }}</span>
+                                        <span v-if="task.error_code && viewMode === 'advanced'" class="bg-red-900/30 text-red-400 px-1 rounded mr-1">{{ task.error_code }}</span>
                                         {{ task.error_msg }}
                                     </div>
                                 </td>
@@ -283,18 +439,35 @@
                                 </td>
                             </tr>
                             <!-- Detail Panel -->
-                            <tr v-if="expandedTask === task.id">
-                                <td colspan="4" class="px-6 pb-4 bg-gray-900/40">
+                            <tr v-if="expandedTask === task.id" class="detail-row">
+                                <td colspan="5" class="px-6 pb-4 bg-gray-900/40">
                                     <div class="pt-3 space-y-4">
                                         <!-- 阶段流水线 -->
-                                        <div>
+                                        <div v-if="viewMode === 'advanced'">
                                             <div class="text-xs text-gray-400 font-medium mb-2"><i class="fa-solid fa-timeline mr-1"></i>处理流水线</div>
+                                            <div class="timeline">
+                                                <div v-for="stage in pipelineStages" :key="stage.key"
+                                                     class="timeline-node" :class="getStageClass(task, stage.key)">
+                                                    <div class="flex items-center gap-2">
+                                                        <span class="text-xs font-medium" :class="{
+                                                            'text-green-400': getStageClass(task, stage.key) === 'done',
+                                                            'text-blue-400': getStageClass(task, stage.key) === 'active',
+                                                            'text-gray-500': getStageClass(task, stage.key) === 'pending',
+                                                            'text-red-400': getStageClass(task, stage.key) === 'failed',
+                                                        }">{{ stage.label }}</span>
+                                                        <span v-if="task.stage_times && task.stage_times[stage.key]" class="text-[10px] text-gray-500 font-mono">
+                                                            {{ task.stage_times[stage.key].toFixed(1) }}s
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <!-- 简单模式: 水平流水线 -->
+                                        <div v-else>
+                                            <div class="text-xs text-gray-400 font-medium mb-2"><i class="fa-solid fa-timeline mr-1"></i>处理进度</div>
                                             <div class="stage-pipeline">
                                                 <template v-for="(stage, idx) in pipelineStages" :key="stage.key">
-                                                    <div class="stage-node" :class="getStageClass(task, stage.key)">
-                                                        {{ stage.label }}
-                                                        <span v-if="task.stage_times && task.stage_times[stage.key]" class="ml-1 opacity-70">{{ task.stage_times[stage.key].toFixed(1) }}s</span>
-                                                    </div>
+                                                    <div class="stage-node" :class="getStageClass(task, stage.key)">{{ stage.label }}</div>
                                                     <span class="stage-arrow" v-if="idx < pipelineStages.length - 1">→</span>
                                                 </template>
                                             </div>
@@ -302,11 +475,11 @@
 
                                         <!-- 详情信息 -->
                                         <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                                            <div class="bg-gray-800/50 rounded-lg p-3">
+                                            <div v-if="viewMode === 'advanced'" class="bg-gray-800/50 rounded-lg p-3">
                                                 <div class="text-gray-500 mb-1">任务 ID</div>
                                                 <div class="text-gray-300 font-mono">{{ task.id }}</div>
                                             </div>
-                                            <div class="bg-gray-800/50 rounded-lg p-3">
+                                            <div v-if="viewMode === 'advanced'" class="bg-gray-800/50 rounded-lg p-3">
                                                 <div class="text-gray-500 mb-1">重试次数</div>
                                                 <div class="text-gray-300">{{ task.retry_count }} 次</div>
                                             </div>
@@ -322,14 +495,27 @@
                                                 <div class="text-gray-500 mb-1">总耗时</div>
                                                 <div class="text-gray-300">{{ task.result_summary.total_duration.toFixed(1) }}s</div>
                                             </div>
+                                            <div class="bg-gray-800/50 rounded-lg p-3" v-if="task.result_summary?.quality_score !== undefined">
+                                                <div class="text-gray-500 mb-1">质量评分</div>
+                                                <div class="flex items-center gap-2">
+                                                    <span :class="{
+                                                        'text-green-400': task.result_summary.quality_grade === 'A',
+                                                        'text-blue-400': task.result_summary.quality_grade === 'B',
+                                                        'text-yellow-400': task.result_summary.quality_grade === 'C',
+                                                        'text-orange-400': task.result_summary.quality_grade === 'D',
+                                                        'text-red-400': task.result_summary.quality_grade === 'F',
+                                                    }" class="font-bold text-lg">{{ task.result_summary.quality_grade }}</span>
+                                                    <span class="text-gray-300 text-xs">({{ task.result_summary.quality_score }}/100)</span>
+                                                </div>
+                                            </div>
                                             <div class="bg-gray-800/50 rounded-lg p-3" v-if="task.failed_stage">
                                                 <div class="text-gray-500 mb-1">失败阶段</div>
                                                 <div class="text-red-400">{{ getStatusLabel(task.failed_stage) }}</div>
                                             </div>
                                         </div>
 
-                                        <!-- 错误详情 -->
-                                        <div v-if="task.error_msg" class="bg-red-900/20 border border-red-800/30 rounded-lg p-3">
+                                        <!-- 错误详情 (高级模式) -->
+                                        <div v-if="task.error_msg && viewMode === 'advanced'" class="bg-red-900/20 border border-red-800/30 rounded-lg p-3">
                                             <div class="text-xs font-medium text-red-400 mb-1"><i class="fa-solid fa-circle-exclamation mr-1"></i>错误详情</div>
                                             <div class="text-xs text-red-300/80">
                                                 <span v-if="task.error_code" class="font-mono bg-red-900/40 px-1.5 py-0.5 rounded mr-2">{{ task.error_code }}</span>
@@ -343,6 +529,24 @@
                                             <div class="font-mono break-all">{{ task.media_path }}</div>
                                         </div>
 
+                                        <!-- 优先级调整 (仅 pending) -->
+                                        <div v-if="task.status === 'pending'" class="flex items-center gap-2 text-xs">
+                                            <span class="text-gray-400">优先级:</span>
+                                            <button v-for="p in 5" :key="p" @click.stop="updatePriority(task.id, p)"
+                                                :class="['w-6 h-6 rounded text-[10px] font-medium transition-all',
+                                                    task.priority === p
+                                                        ? (p <= 2 ? 'bg-red-600 text-white' : p === 3 ? 'bg-yellow-600 text-white' : 'bg-gray-600 text-white')
+                                                        : 'bg-gray-800 text-gray-400 hover:bg-gray-700']">
+                                                {{ p }}
+                                            </button>
+                                        </div>
+
+                                        <!-- 预览字幕按钮 -->
+                                        <div v-if="task.status === 'completed'" class="flex space-x-3">
+                                            <button @click.stop="openSubtitlePreview(task)" class="text-cyan-400 hover:text-cyan-300 text-xs font-medium py-2 px-4 rounded-lg flex items-center bg-cyan-500/10 hover:bg-cyan-500/20 transition-colors">
+                                                <i class="fa-solid fa-closed-captioning mr-1.5"></i>预览字幕
+                                            </button>
+                                        </div>
                                         <!-- 重试按钮 -->
                                         <div v-if="task.status === 'failed' || task.status === 'cancelled'" class="flex space-x-3">
                                             <button @click.stop="retryTask(task.id)" class="btn-retry text-white text-xs font-medium py-2 px-4 rounded-lg flex items-center">
@@ -356,10 +560,36 @@
                     </tbody>
                 </table>
             </div>
+            <div v-if="totalTasks > pageSize" class="px-6 py-3 border-t border-gray-700/50 flex justify-between items-center bg-gray-800/30 text-xs">
+                <span class="text-gray-400">共 {{ totalTasks }} 条</span>
+                <div class="flex items-center gap-2">
+                    <button @click="currentPage > 1 && (currentPage--, fetchTasks())" :disabled="currentPage <= 1" class="px-2 py-1 rounded border border-gray-700 text-gray-400 hover:text-white disabled:opacity-30">&lt;</button>
+                    <span class="text-gray-300">{{ currentPage }} / {{ Math.ceil(totalTasks / pageSize) }}</span>
+                    <button @click="currentPage < Math.ceil(totalTasks / pageSize) && (currentPage++, fetchTasks())" :disabled="currentPage >= Math.ceil(totalTasks / pageSize)" class="px-2 py-1 rounded border border-gray-700 text-gray-400 hover:text-white disabled:opacity-30">&gt;</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Batch Action Bar -->
+        <div v-if="selectedCount > 0" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 glass-panel px-6 py-3 flex items-center gap-4 border border-blue-500/30 shadow-2xl" style="animation: scale-in 0.2s ease">
+            <span class="text-sm text-gray-300">已选中 <span class="text-blue-400 font-bold">{{ selectedCount }}</span> 个任务</span>
+            <div class="w-px h-6 bg-gray-700"></div>
+            <button @click="batchRetry" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-amber-600/30 hover:bg-amber-600/50 text-amber-300 border border-amber-700/50 transition-all">
+                <i class="fa-solid fa-rotate-right mr-1"></i>批量重试
+            </button>
+            <button @click="batchCancel" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-600/30 hover:bg-gray-600/50 text-gray-300 border border-gray-600/50 transition-all">
+                <i class="fa-solid fa-ban mr-1"></i>批量取消
+            </button>
+            <button @click="batchDelete" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-600/30 hover:bg-red-600/50 text-red-300 border border-red-700/50 transition-all">
+                <i class="fa-solid fa-trash mr-1"></i>批量删除
+            </button>
+            <button @click="clearSelection" class="text-gray-500 hover:text-gray-300 ml-1" title="清除选择">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
         </div>
 
         <!-- Right Panel -->
-        <div class="flex flex-col space-y-8">
+        <div class="flex flex-col space-y-8 right-panel">
             <!-- Manual Intervention -->
             <div class="glass-panel flex flex-col">
                 <div class="px-6 py-4 border-b border-gray-700/50 bg-gray-800/30">
@@ -390,6 +620,23 @@
                             </select>
                         </div>
 
+                        <div>
+                            <label class="block text-xs font-medium text-gray-400 mb-1">优先级 / Priority</label>
+                            <div class="flex gap-2">
+                                <button v-for="p in 5" :key="p" @click="form.priority = p"
+                                    :class="['px-3 py-1.5 rounded-lg text-xs font-medium transition-all',
+                                        form.priority === p
+                                            ? (p <= 2 ? 'bg-red-600/80 text-white ring-1 ring-red-400' : p === 3 ? 'bg-yellow-600/80 text-white ring-1 ring-yellow-400' : 'bg-gray-600/80 text-white ring-1 ring-gray-400')
+                                            : 'bg-gray-800/60 text-gray-400 hover:bg-gray-700/60']"
+                                    :title="['最高', '较高', '普通', '较低', '最低'][p-1]">
+                                    {{ p }}
+                                </button>
+                                <span class="text-[10px] text-gray-500 self-center ml-1">
+                                    {{ ['最高', '较高', '普通', '较低', '最低'][form.priority - 1] }}
+                                </span>
+                            </div>
+                        </div>
+
                         <label class="flex items-center space-x-3 cursor-pointer mt-4">
                             <input type="checkbox" v-model="form.force" class="form-checkbox h-4 w-4 text-blue-600 bg-gray-900 border-gray-600 rounded">
                             <div class="flex flex-col">
@@ -400,77 +647,147 @@
                     </div>
                     
                     <div class="mt-6">
-                        <button @click="submitTask" :disabled="submitting || !form.media_path" 
+                        <button @click="submitTask" :disabled="submitting || !form.media_path"
                             class="w-full btn-primary text-white font-medium py-3 px-4 rounded-lg shadow-lg flex justify-center items-center opacity-90 disabled:opacity-50 disabled:cursor-not-allowed">
                             <i class="fa-solid fa-paper-plane mr-2" v-if="!submitting"></i>
                             <i class="fa-solid fa-circle-notch fa-spin mr-2" v-else></i>
                             {{ submitting ? '指令广播中...' : '提交指令' }}
                         </button>
-                        
-                        <div v-if="submitResult" class="mt-3 text-xs p-3 rounded-md bg-gray-800 border" :class="submitResult.success ? 'border-green-800 text-green-300' : 'border-red-800 text-red-300'">
-                            {{ submitResult.message }}
-                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Worker Status Card -->
-            <div class="glass-panel" v-if="sysInfo.worker">
+            <!-- Worker 节点集群 -->
+            <div class="glass-panel">
                 <div class="px-6 py-4 border-b border-gray-700/50 bg-gray-800/30">
-                    <h2 class="font-semibold text-base"><i class="fa-solid fa-server mr-2 text-purple-400"></i>Worker 节点状态</h2>
+                    <h2 class="font-semibold text-base">
+                        <i class="fa-solid fa-server mr-2 text-purple-400"></i>Worker 节点集群
+                        <span class="text-xs text-gray-400 ml-2">({{ onlineCount }}/{{ (sysInfo.workers || []).length }} 在线)</span>
+                    </h2>
                 </div>
-                <div class="p-5 space-y-3">
-                    <!-- 在线状态 -->
-                    <div class="flex justify-between items-center text-sm">
-                        <span class="text-gray-400">连接状态</span>
-                        <span v-if="sysInfo.worker.online" class="text-green-400 font-medium"><span class="status-dot online mr-1.5" style="height:8px;width:8px"></span>在线</span>
-                        <span v-else class="text-red-400 font-medium"><span class="status-dot offline mr-1.5" style="height:8px;width:8px"></span>离线</span>
+                <div class="p-4 space-y-3">
+                    <div v-for="w in (sysInfo.workers || [])" :key="w.url"
+                         class="rounded-xl p-4 border transition-all"
+                         :class="{
+                             'bg-green-900/10 border-green-800/30': w.online && !w.heartbeat?.current_task_id,
+                             'bg-blue-900/10 border-blue-800/30': w.online && w.heartbeat?.current_task_id,
+                             'bg-red-900/10 border-red-800/30': !w.online,
+                         }">
+
+                        <!-- 头部: ID + 状态 + 权重 + 操作 -->
+                        <div class="flex justify-between items-center mb-3">
+                            <div class="flex items-center space-x-2">
+                                <span class="status-dot" :class="w.online ? 'online' : 'offline'" style="height:8px;width:8px"></span>
+                                <span class="font-medium text-sm" :class="w.online ? 'text-green-400' : 'text-red-400'">
+                                    {{ w.worker_id }}
+                                </span>
+                                <span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-700/50 text-gray-400">w={{ w.weight }}</span>
+                            </div>
+                            <button @click.stop="toggleWorker(w)" class="text-[10px] px-2 py-1 rounded border transition-all"
+                                :class="w.online ? 'border-red-700/50 text-red-400 hover:bg-red-900/30' : 'border-green-700/50 text-green-400 hover:bg-green-900/30'"
+                                :title="w.online ? '下线此 Worker' : '上线此 Worker'">
+                                {{ w.online ? '下线' : '上线' }}
+                            </button>
+                        </div>
+
+                        <!-- 详情 (在线时显示) -->
+                        <template v-if="w.online && w.heartbeat">
+                            <div class="flex justify-between text-sm mb-2">
+                                <span class="text-gray-400">GPU</span>
+                                <span class="text-gray-200">{{ w.heartbeat.gpu_name }}</span>
+                            </div>
+                            <div class="mb-2">
+                                <div class="flex justify-between text-xs mb-1">
+                                    <span class="text-gray-400">GPU 使用率</span>
+                                    <span class="text-gray-300">{{ w.heartbeat.gpu_utilization }}%</span>
+                                </div>
+                                <div class="w-full bg-gray-800 rounded-full h-1.5">
+                                    <div class="bg-cyan-500 h-1.5 rounded-full transition-all" :style="'width:' + (w.heartbeat.gpu_utilization||0) + '%'"></div>
+                                </div>
+                            </div>
+                            <div v-if="w.heartbeat.vram_total_mb" class="mb-2">
+                                <div class="flex justify-between text-xs mb-1">
+                                    <span class="text-gray-400">VRAM</span>
+                                    <span class="text-gray-300">{{ w.heartbeat.vram_used_mb }}M / {{ w.heartbeat.vram_total_mb }}M</span>
+                                </div>
+                                <div class="w-full bg-gray-800 rounded-full h-1.5">
+                                    <div class="bg-purple-500 h-1.5 rounded-full transition-all" :style="'width:' + ((w.heartbeat.vram_used_mb / w.heartbeat.vram_total_mb) * 100) + '%'"></div>
+                                </div>
+                            </div>
+                            <!-- 当前任务进度 (高级模式) -->
+                            <div v-if="viewMode === 'advanced' && w.heartbeat.current_task_id" class="mb-2">
+                                <div class="flex justify-between text-xs mb-1">
+                                    <span class="text-gray-400">任务进度</span>
+                                    <span class="text-blue-300 font-mono">{{ w.heartbeat.current_progress || 0 }}%</span>
+                                </div>
+                                <div class="w-full bg-gray-800 rounded-full h-1.5">
+                                    <div class="bg-blue-500 h-1.5 rounded-full transition-all progress-bar-fill" :style="'width:' + (w.heartbeat.current_progress||0) + '%'"></div>
+                                </div>
+                            </div>
+                            <div class="flex justify-between items-center text-sm" v-if="w.heartbeat.current_task_id">
+                                <span class="text-gray-400">当前任务</span>
+                                <span class="text-blue-400 font-mono text-xs">{{ w.heartbeat.current_task_id }}</span>
+                            </div>
+                            <div class="flex justify-between items-center text-xs text-gray-500 pt-2 border-t border-gray-800">
+                                <span v-if="viewMode === 'advanced'">v{{ w.heartbeat.version }} · 运行 {{ formatUptime(w.heartbeat.uptime_seconds) }}</span>
+                                <span v-else class="text-gray-600">-</span>
+                                <span>队列: {{ w.heartbeat.queue_length }}</span>
+                            </div>
+                        </template>
+
+                        <div v-else-if="!w.online" class="text-xs text-gray-500 text-center py-2">
+                            <i class="fa-solid fa-wifi-slash mr-1"></i>离线
+                        </div>
                     </div>
 
-                    <template v-if="sysInfo.worker.online && sysInfo.worker.heartbeat">
-                        <!-- GPU 信息 -->
-                        <div class="flex justify-between items-center text-sm">
-                            <span class="text-gray-400">GPU</span>
-                            <span class="text-gray-200 font-medium">{{ sysInfo.worker.heartbeat.gpu_name }}</span>
-                        </div>
-
-                        <!-- GPU 使用率 -->
-                        <div>
-                            <div class="flex justify-between text-xs mb-1">
-                                <span class="text-gray-400"><i class="fa-solid fa-gauge mr-1"></i>GPU 使用率</span>
-                                <span class="font-medium text-gray-300">{{ sysInfo.worker.heartbeat.gpu_utilization }}%</span>
-                            </div>
-                            <div class="w-full bg-gray-800 rounded-full h-1.5">
-                                <div class="bg-cyan-500 h-1.5 rounded-full transition-all duration-500" :style="`width: ${sysInfo.worker.heartbeat.gpu_utilization}%`"></div>
+                    <!-- 兼容旧单 Worker 显示 -->
+                    <div v-if="!(sysInfo.workers?.length) && sysInfo.worker" class="rounded-xl p-4 border transition-all"
+                         :class="sysInfo.worker.online ? 'bg-green-900/10 border-green-800/30' : 'bg-red-900/10 border-red-800/30'">
+                        <div class="flex justify-between items-center mb-3">
+                            <div class="flex items-center space-x-2">
+                                <span class="status-dot" :class="sysInfo.worker.online ? 'online' : 'offline'" style="height:8px;width:8px"></span>
+                                <span class="font-medium text-sm" :class="sysInfo.worker.online ? 'text-green-400' : 'text-red-400'">
+                                    {{ sysInfo.worker.worker_id }}
+                                </span>
                             </div>
                         </div>
-
-                        <!-- VRAM -->
-                        <div v-if="sysInfo.worker.heartbeat.vram_total_mb">
-                            <div class="flex justify-between text-xs mb-1">
-                                <span class="text-gray-400"><i class="fa-solid fa-memory mr-1"></i>VRAM</span>
-                                <span class="font-medium text-gray-300">{{ sysInfo.worker.heartbeat.vram_used_mb }}M / {{ sysInfo.worker.heartbeat.vram_total_mb }}M</span>
+                        <template v-if="sysInfo.worker.online && sysInfo.worker.heartbeat">
+                            <div class="flex justify-between text-sm mb-2">
+                                <span class="text-gray-400">GPU</span>
+                                <span class="text-gray-200">{{ sysInfo.worker.heartbeat.gpu_name }}</span>
                             </div>
-                            <div class="w-full bg-gray-800 rounded-full h-1.5">
-                                <div class="bg-purple-500 h-1.5 rounded-full transition-all duration-500" :style="`width: ${(sysInfo.worker.heartbeat.vram_used_mb / sysInfo.worker.heartbeat.vram_total_mb) * 100}%`"></div>
+                            <div class="mb-2">
+                                <div class="flex justify-between text-xs mb-1">
+                                    <span class="text-gray-400">GPU 使用率</span>
+                                    <span class="text-gray-300">{{ sysInfo.worker.heartbeat.gpu_utilization }}%</span>
+                                </div>
+                                <div class="w-full bg-gray-800 rounded-full h-1.5">
+                                    <div class="bg-cyan-500 h-1.5 rounded-full transition-all" :style="'width:' + (sysInfo.worker.heartbeat.gpu_utilization||0) + '%'"></div>
+                                </div>
                             </div>
+                            <div v-if="sysInfo.worker.heartbeat.vram_total_mb" class="mb-2">
+                                <div class="flex justify-between text-xs mb-1">
+                                    <span class="text-gray-400">VRAM</span>
+                                    <span class="text-gray-300">{{ sysInfo.worker.heartbeat.vram_used_mb }}M / {{ sysInfo.worker.heartbeat.vram_total_mb }}M</span>
+                                </div>
+                                <div class="w-full bg-gray-800 rounded-full h-1.5">
+                                    <div class="bg-purple-500 h-1.5 rounded-full transition-all" :style="'width:' + ((sysInfo.worker.heartbeat.vram_used_mb / sysInfo.worker.heartbeat.vram_total_mb) * 100) + '%'"></div>
+                                </div>
+                            </div>
+                            <div class="flex justify-between items-center text-xs text-gray-500 pt-2 border-t border-gray-800">
+                                <span>v{{ sysInfo.worker.heartbeat.version }} · 运行 {{ formatUptime(sysInfo.worker.heartbeat.uptime_seconds) }}</span>
+                                <span>队列: {{ sysInfo.worker.heartbeat.queue_length }}</span>
+                            </div>
+                        </template>
+                        <div v-else class="text-xs text-gray-500 text-center py-3">
+                            <i class="fa-solid fa-wifi-slash mr-1"></i>无法获取 Worker 状态信息
                         </div>
+                    </div>
 
-                        <!-- 当前任务 -->
-                        <div class="flex justify-between items-center text-sm" v-if="sysInfo.worker.heartbeat.current_task_id">
-                            <span class="text-gray-400">当前任务</span>
-                            <span class="text-blue-400 font-mono text-xs">{{ sysInfo.worker.heartbeat.current_task_id }}</span>
-                        </div>
-
-                        <!-- Worker 版本/运行时间 -->
-                        <div class="flex justify-between items-center text-xs text-gray-500 pt-2 border-t border-gray-800">
-                            <span>v{{ sysInfo.worker.heartbeat.version }} · {{ sysInfo.worker.heartbeat.worker_id }}</span>
-                            <span>运行 {{ formatUptime(sysInfo.worker.heartbeat.uptime_seconds) }}</span>
-                        </div>
-                    </template>
-
-                    <div v-else class="text-xs text-gray-500 text-center py-3">
-                        <i class="fa-solid fa-wifi-slash mr-1"></i>无法获取 Worker 状态信息
+                    <!-- 空状态 -->
+                    <div v-if="!(sysInfo.workers?.length) && !sysInfo.worker" class="text-center text-gray-500 py-8">
+                        <i class="fa-solid fa-server-slash text-3xl mb-2"></i>
+                        <p>未配置 Worker 节点</p>
                     </div>
                 </div>
             </div>
@@ -526,10 +843,15 @@
         </div>
     </div>
 
-    <!-- Live Logs Terminal -->
-    <div class="glass-panel mt-8 flex flex-col mb-8 overflow-hidden">
+    <!-- Live Logs Terminal (高级模式) -->
+    <div v-if="viewMode === 'advanced'" class="glass-panel mt-8 flex flex-col mb-8 overflow-hidden">
         <div class="px-6 py-3 border-b border-gray-700/50 bg-gray-800/50 flex justify-between items-center cursor-pointer" @click="toggleLogs">
-            <h2 class="font-semibold text-sm font-mono"><i class="fa-solid fa-terminal mr-2 text-green-400"></i>系统实时日志 / TTY0</h2>
+            <h2 class="font-semibold text-sm font-mono">
+                <i class="fa-solid fa-terminal mr-2 text-green-400"></i>系统实时日志 / TTY0
+                <span class="ml-2 text-[10px] px-1.5 py-0.5 rounded" :class="logWsConnected ? 'bg-green-900/30 text-green-400' : 'bg-yellow-900/30 text-yellow-400'">
+                    {{ logWsConnected ? 'WebSocket' : 'REST' }}
+                </span>
+            </h2>
             <div class="flex items-center space-x-3">
                 <span class="flex h-2 w-2 relative">
                     <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
@@ -552,7 +874,7 @@
     </div>
 
     <!-- File Browser Modal -->
-    <div v-if="showBrowser" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div v-if="showBrowser" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" @keydown.escape="showBrowser = false">
         <div class="glass-panel w-full max-w-4xl flex flex-col h-[80vh] border border-gray-700">
             <!-- Modal Header -->
             <div class="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-800/80 rounded-t-2xl">
@@ -580,13 +902,13 @@
                 </div>
                 <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                     <!-- Directories -->
-                    <div v-for="d in browserData.dirs" :key="'d-'+d" @click="loadPath((browserData.current_path ? browserData.current_path + '\\' : '') + d)" 
+                    <div v-for="d in browserData.dirs" :key="'d-'+d" @click="loadPath((browserData.current_path ? browserData.current_path + '/' : '') + d)" 
                         class="flex items-center p-3 rounded hover:bg-white/5 cursor-pointer transition-colors border border-transparent hover:border-gray-700">
                         <i class="fa-solid fa-folder text-yellow-500 text-xl mr-3 w-6 text-center"></i>
                         <span class="truncate text-sm font-medium">{{ d }}</span>
                     </div>
                     <!-- Files -->
-                    <div v-for="f in browserData.files" :key="'f-'+f.name" @click="selectFile((browserData.current_path ? browserData.current_path + '\\' : '') + f.name)"
+                    <div v-for="f in browserData.files" :key="'f-'+f.name" @click="selectFile((browserData.current_path ? browserData.current_path + '/' : '') + f.name)"
                         class="flex items-center p-3 rounded hover:bg-blue-900/40 cursor-pointer transition-colors border border-transparent hover:border-blue-700/50 group">
                         <i class="fa-solid fa-file-video text-blue-400 text-xl mr-3 w-6 text-center group-hover:text-blue-300"></i>
                         <div class="flex-1 min-w-0">
@@ -604,6 +926,316 @@
             </div>
         </div>
     </div>
+
+    <!-- Toast 通知容器 -->
+    <div class="toast-container">
+        <div v-for="t in toasts" :key="t.id" class="toast" :class="['toast-' + t.type, t.exiting ? 'fade-out' : '']">
+            <i class="toast-icon" :class="{
+                'fa-solid fa-circle-check': t.type === 'success',
+                'fa-solid fa-circle-xmark': t.type === 'error',
+                'fa-solid fa-triangle-exclamation': t.type === 'warning',
+                'fa-solid fa-circle-info': t.type === 'info',
+            }"></i>
+            <span class="flex-1">{{ t.message }}</span>
+        </div>
+    </div>
+
+    <!-- 确认对话框 -->
+    <div v-if="confirmState.show" class="confirm-overlay" @click.self="confirmResolve(false)" @keydown.escape="confirmResolve(false)" tabindex="0">
+        <div class="confirm-dialog">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center flex-shrink-0">
+                    <i class="fa-solid fa-question text-amber-400"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-white">{{ confirmState.title || '确认操作' }}</h3>
+            </div>
+            <p class="text-gray-300 text-sm mb-6 pl-13">{{ confirmState.message }}</p>
+            <div class="flex justify-end gap-3">
+                <button @click="confirmResolve(false)" class="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors rounded-lg border border-gray-700 hover:border-gray-500">取消</button>
+                <button @click="confirmResolve(true)" class="px-4 py-2 text-sm text-white bg-red-600 hover:bg-red-500 transition-colors rounded-lg font-medium">确认</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div v-if="showSettings" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" @keydown.escape="showSettings = false">
+        <div class="glass-panel w-full max-w-3xl max-h-[85vh] flex flex-col border border-gray-700" role="dialog" aria-modal="true" aria-label="系统设置">
+            <div class="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-800/80 rounded-t-2xl">
+                <h3 class="font-bold text-lg"><i class="fa-solid fa-gear mr-2 text-blue-400"></i>系统设置</h3>
+                <button @click="showSettings = false" class="text-gray-400 hover:text-white" aria-label="关闭"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+
+            <!-- Tabs -->
+            <div class="flex border-b border-gray-700 bg-gray-900/50" role="tablist">
+                <button v-for="tab in settingsTabs" :key="tab.key" @click="settingsTab = tab.key"
+                    class="px-4 py-2 text-xs font-medium transition-colors"
+                    :class="settingsTab === tab.key ? 'text-blue-400 border-b-2 border-blue-400 bg-gray-800/50' : 'text-gray-400 hover:text-gray-200'"
+                    role="tab" :aria-selected="settingsTab === tab.key">
+                    <i :class="tab.icon" class="mr-1"></i>{{ tab.label }}
+                </button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-6 space-y-4">
+                <!-- Worker Tab -->
+                <div v-if="settingsTab === 'workers'">
+                    <div v-for="(w, idx) in configForm.workers || []" :key="idx" class="bg-gray-800/50 rounded-lg p-4 mb-3 border border-gray-700/50">
+                        <div class="flex justify-between items-center mb-3">
+                            <span class="text-sm font-medium text-gray-300">Worker {{ idx + 1 }}</span>
+                            <button @click="removeWorker(idx)" class="text-red-400 hover:text-red-300 text-xs"><i class="fa-solid fa-trash mr-1"></i>移除</button>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="text-xs text-gray-400">URL</label>
+                                <input v-model="w.url" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500" placeholder="http://192.168.1.50:8788">
+                            </div>
+                            <div>
+                                <label class="text-xs text-gray-400">节点 ID</label>
+                                <input v-model="w.worker_id" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500" placeholder="office-gpu">
+                            </div>
+                            <div>
+                                <label class="text-xs text-gray-400">权重</label>
+                                <input v-model.number="w.weight" type="number" min="1" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500">
+                            </div>
+                            <div class="flex items-end">
+                                <label class="flex items-center space-x-2 cursor-pointer">
+                                    <input type="checkbox" v-model="w.enabled" class="form-checkbox h-4 w-4 text-blue-600 bg-gray-900 border-gray-600 rounded">
+                                    <span class="text-sm text-gray-300">启用</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <button @click="addWorker" class="w-full py-2 border border-dashed border-gray-600 rounded-lg text-gray-400 hover:text-white hover:border-gray-400 transition-colors text-sm">
+                        <i class="fa-solid fa-plus mr-1"></i>添加 Worker
+                    </button>
+                </div>
+
+                <!-- Subtitle Tab -->
+                <div v-if="settingsTab === 'subtitle'" class="space-y-4">
+                    <div>
+                        <label class="text-xs text-gray-400 block mb-1">输出模式</label>
+                        <select v-model="configForm.subtitle.output_mode" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
+                            <option value="single">单语翻译</option>
+                            <option value="bilingual">中英双语</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-400 block mb-1">输出格式</label>
+                        <select v-model="configForm.subtitle.output_format" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
+                            <option value="srt">SRT</option>
+                            <option value="ass">ASS</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Automation Tab -->
+                <div v-if="settingsTab === 'automation'" class="space-y-4">
+                    <label class="flex items-center space-x-3 cursor-pointer">
+                        <input type="checkbox" v-model="configForm.automation.enabled" class="form-checkbox h-4 w-4 text-blue-600 bg-gray-900 border-gray-600 rounded">
+                        <span class="text-sm text-gray-300">启用自动化扫描</span>
+                    </label>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-xs text-gray-400 block mb-1">扫描开始时间</label>
+                            <input v-model="configForm.automation.schedule_start" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-400 block mb-1">扫描结束时间</label>
+                            <input v-model="configForm.automation.schedule_end" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-blue-500">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Emby Tab -->
+                <div v-if="settingsTab === 'emby'" class="space-y-4">
+                    <div>
+                        <label class="text-xs text-gray-400 block mb-1">Emby 服务器地址</label>
+                        <input v-model="configForm.emby.server" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" placeholder="http://192.168.1.100:8096">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-400 block mb-1">API Key</label>
+                        <input v-model="configForm.emby.api_key" type="password" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
+                    </div>
+                </div>
+
+                <!-- Statistics Tab -->
+                <div v-if="settingsTab === 'stats'" class="space-y-6">
+                    <div v-if="statsData" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="bg-gray-800/50 rounded-xl p-4 text-center">
+                            <div class="text-2xl font-bold text-blue-400">{{ statsData.total }}</div>
+                            <div class="text-xs text-gray-400 mt-1">近 {{ statsData.days }} 天总任务</div>
+                        </div>
+                        <div class="bg-gray-800/50 rounded-xl p-4 text-center">
+                            <div class="text-2xl font-bold text-green-400">{{ statsData.success_rate }}%</div>
+                            <div class="text-xs text-gray-400 mt-1">成功率</div>
+                        </div>
+                        <div class="bg-gray-800/50 rounded-xl p-4 text-center">
+                            <div class="text-2xl font-bold text-yellow-400">{{ statsData.completed }}</div>
+                            <div class="text-xs text-gray-400 mt-1">已完成</div>
+                        </div>
+                        <div class="bg-gray-800/50 rounded-xl p-4 text-center">
+                            <div class="text-2xl font-bold text-red-400">{{ statsData.failed }}</div>
+                            <div class="text-xs text-gray-400 mt-1">失败</div>
+                        </div>
+                    </div>
+
+                    <!-- 7-day trend (simple bar chart) -->
+                    <div v-if="statsData?.by_day?.length" class="bg-gray-800/50 rounded-xl p-4">
+                        <h4 class="text-sm font-medium text-gray-300 mb-3"><i class="fa-solid fa-chart-bar mr-1"></i>近 7 天趋势</h4>
+                        <div class="flex items-end gap-2 h-32">
+                            <div v-for="day in statsData.by_day" :key="day.date" class="flex-1 flex flex-col items-center justify-end h-full">
+                                <div class="text-[10px] text-gray-400 mb-1">{{ day.count }}</div>
+                                <div class="w-full rounded-t transition-all"
+                                    :style="'height:' + Math.max(4, (day.count / Math.max(...statsData.by_day.map(d => d.count), 1)) * 100) + '%; background: linear-gradient(180deg, #38bdf8, #4f46e5)'"></div>
+                                <div class="text-[9px] text-gray-500 mt-1">{{ day.date?.slice(5) }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Average duration -->
+                    <div v-if="statsData" class="bg-gray-800/50 rounded-xl p-4">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-300"><i class="fa-solid fa-clock mr-1"></i>平均处理耗时</span>
+                            <span class="text-lg font-bold text-cyan-400">
+                                {{ statsData.avg_duration_sec > 60 ? Math.floor(statsData.avg_duration_sec / 60) + '分' + Math.round(statsData.avg_duration_sec % 60) + '秒' : statsData.avg_duration_sec + '秒' }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Worker stats -->
+                    <div v-if="workerStatsData && Object.keys(workerStatsData).length" class="bg-gray-800/50 rounded-xl p-4">
+                        <h4 class="text-sm font-medium text-gray-300 mb-3"><i class="fa-solid fa-server mr-1"></i>Worker 统计</h4>
+                        <div class="space-y-3">
+                            <div v-for="(stats, wid) in workerStatsData" :key="wid" class="flex items-center justify-between text-sm">
+                                <span class="text-gray-300 font-mono">{{ wid }}</span>
+                                <div class="flex items-center gap-4 text-xs">
+                                    <span class="text-gray-400">总计: <span class="text-white">{{ stats.total }}</span></span>
+                                    <span class="text-green-400">成功: {{ stats.completed }}</span>
+                                    <span class="text-red-400">失败: {{ stats.failed }}</span>
+                                    <span class="text-cyan-400 font-medium">{{ stats.success_rate }}%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="!statsData" class="text-center text-gray-500 py-8">
+                        <i class="fa-solid fa-chart-pie text-3xl mb-2"></i>
+                        <p>加载统计数据中...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-4 border-t border-gray-700 flex justify-between items-center bg-gray-800/50 rounded-b-2xl">
+                <a href="/docs" target="_blank" class="text-xs text-gray-500 hover:text-blue-400 transition-colors">
+                    <i class="fa-solid fa-book mr-1"></i>API 文档
+                </a>
+                <div class="flex space-x-3">
+                <button @click="showSettings = false" class="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors">取消</button>
+                <button @click="saveSettings" :disabled="savingSettings" class="btn-primary text-white text-sm font-medium py-2 px-6 rounded-lg flex items-center">
+                    <i class="fa-solid fa-check mr-1.5" v-if="!savingSettings"></i>
+                    <i class="fa-solid fa-circle-notch fa-spin mr-1.5" v-else></i>
+                    {{ savingSettings ? '保存中...' : '保存并重载' }}
+                </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Subtitle Preview Modal -->
+<div v-if="showSubtitlePreview" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" @click.self="showSubtitlePreview = false">
+    <div class="glass-panel w-full max-w-4xl max-h-[85vh] flex flex-col mx-4">
+        <div class="px-6 py-4 border-b border-gray-700/50 flex justify-between items-center">
+            <h2 class="font-semibold text-lg"><i class="fa-solid fa-closed-captioning mr-2 text-cyan-400"></i>字幕预览 — {{ subtitlePreviewTitle }}</h2>
+            <div class="flex items-center gap-3">
+                <button @click="subtitleEditMode = !subtitleEditMode" class="text-xs px-3 py-1 rounded-lg" :class="subtitleEditMode ? 'bg-amber-600/30 text-amber-300' : 'bg-gray-700 text-gray-300 hover:text-white'">
+                    <i class="fa-solid fa-pen mr-1"></i>{{ subtitleEditMode ? '退出编辑' : '编辑' }}
+                </button>
+                <button @click="showSubtitlePreview = false" class="text-gray-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+        </div>
+        <div class="flex-1 overflow-y-auto p-6">
+            <!-- 预览模式 -->
+            <div v-if="!subtitleEditMode" class="space-y-2">
+                <div v-for="(seg, i) in subtitleSegments" :key="i" class="flex items-start gap-3 py-2 px-3 rounded-lg hover:bg-gray-800/50 group">
+                    <input type="checkbox" v-model="seg.selected" class="mt-1 accent-cyan-500" />
+                    <div class="flex-1 min-w-0">
+                        <div class="text-[10px] text-gray-500 font-mono">{{ seg.timecode }}</div>
+                        <div class="text-sm text-gray-200">{{ seg.text }}</div>
+                    </div>
+                </div>
+                <div v-if="subtitleSegments.length === 0" class="text-center text-gray-500 py-8">无字幕数据</div>
+            </div>
+            <!-- 编辑模式 -->
+            <div v-else>
+                <textarea v-model="subtitleRawSrt" class="w-full h-[50vh] bg-gray-900 text-gray-200 font-mono text-xs p-4 rounded-lg border border-gray-700 focus:outline-none focus:border-cyan-500 resize-none" spellcheck="false"></textarea>
+            </div>
+        </div>
+        <div class="px-6 py-3 border-t border-gray-700/50 flex justify-between items-center">
+            <div class="text-xs text-gray-500">
+                <span v-if="selectedSegmentCount > 0">已选 {{ selectedSegmentCount }} 段</span>
+            </div>
+            <div class="flex gap-2">
+                <button v-if="selectedSegmentCount > 0 && !subtitleEditMode" @click="reoptimizeSelected" class="btn-primary text-white text-xs py-1.5 px-4 rounded-lg">
+                    <i class="fa-solid fa-wand-magic-sparkles mr-1"></i>重新优化选中段落
+                </button>
+                <button v-if="subtitleEditMode" @click="saveSubtitle" class="btn-primary text-white text-xs py-1.5 px-4 rounded-lg">
+                    <i class="fa-solid fa-save mr-1"></i>保存修改
+                </button>
+                <button @click="showSubtitlePreview = false" class="text-gray-400 hover:text-white text-xs py-1.5 px-4 rounded-lg bg-gray-800">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Worker Detail Modal -->
+<div v-if="showWorkerDetail" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" @click.self="showWorkerDetail = false">
+    <div class="glass-panel w-full max-w-lg mx-4">
+        <div class="px-6 py-4 border-b border-gray-700/50 flex justify-between items-center">
+            <h2 class="font-semibold text-lg"><i class="fa-solid fa-server mr-2 text-purple-400"></i>Worker 详情</h2>
+            <button @click="showWorkerDetail = false" class="text-gray-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+        </div>
+        <div class="p-6 space-y-4" v-if="workerDetail">
+            <div class="flex items-center gap-3">
+                <span class="status-dot" :class="workerDetail.online ? 'online' : 'offline'"></span>
+                <span class="font-medium">{{ workerDetail.worker_id || workerDetail.url }}</span>
+                <span class="text-xs text-gray-500 ml-auto">{{ workerDetail.url }}</span>
+            </div>
+            <template v-if="workerDetail.heartbeat">
+                <div class="grid grid-cols-2 gap-3 text-sm">
+                    <div class="bg-gray-800/50 rounded-lg p-3">
+                        <div class="text-xs text-gray-500 mb-1">GPU</div>
+                        <div class="text-gray-200">{{ workerDetail.heartbeat.gpu_name || 'Unknown' }}</div>
+                    </div>
+                    <div class="bg-gray-800/50 rounded-lg p-3">
+                        <div class="text-xs text-gray-500 mb-1">利用率</div>
+                        <div class="flex items-center gap-2">
+                            <div class="flex-1 h-2 bg-gray-700 rounded-full overflow-hidden">
+                                <div class="h-full rounded-full" :style="{width: (workerDetail.heartbeat.gpu_utilization || 0) + '%', background: getBarColor(workerDetail.heartbeat.gpu_utilization)}"></div>
+                            </div>
+                            <span class="text-gray-300">{{ workerDetail.heartbeat.gpu_utilization || 0 }}%</span>
+                        </div>
+                    </div>
+                    <div class="bg-gray-800/50 rounded-lg p-3">
+                        <div class="text-xs text-gray-500 mb-1">显存</div>
+                        <div class="text-gray-200">{{ ((workerDetail.heartbeat.vram_used_mb || 0) / 1024).toFixed(1) }} / {{ ((workerDetail.heartbeat.vram_total_mb || 0) / 1024).toFixed(1) }} GB</div>
+                    </div>
+                    <div class="bg-gray-800/50 rounded-lg p-3">
+                        <div class="text-xs text-gray-500 mb-1">运行时间</div>
+                        <div class="text-gray-200">{{ formatUptime(workerDetail.heartbeat.uptime_seconds) }}</div>
+                    </div>
+                    <div class="bg-gray-800/50 rounded-lg p-3">
+                        <div class="text-xs text-gray-500 mb-1">版本</div>
+                        <div class="text-gray-200">v{{ workerDetail.heartbeat.version }}</div>
+                    </div>
+                    <div class="bg-gray-800/50 rounded-lg p-3">
+                        <div class="text-xs text-gray-500 mb-1">队列</div>
+                        <div class="text-gray-200">{{ workerDetail.heartbeat.queue_length }} 个任务</div>
+                    </div>
+                </div>
+            </template>
+            <div v-else class="text-center text-gray-500 py-4">Worker 离线，无详细信息</div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -617,8 +1249,124 @@
             const submitting = ref(false);
             const submitResult = ref(null);
             const filterStatus = ref('');
+            const searchQuery = ref('');
             const expandedTask = ref(null);
-            
+            const currentPage = ref(1);
+            const pageSize = 20;
+            const totalTasks = ref(0);
+
+            // Subtitle preview state
+            const showSubtitlePreview = ref(false);
+            const subtitlePreviewTitle = ref('');
+            const subtitlePreviewTaskId = ref('');
+            const subtitleSegments = ref([]);
+            const subtitleRawSrt = ref('');
+            const subtitleEditMode = ref(false);
+            const selectedSegmentCount = computed(() => subtitleSegments.value.filter(s => s.selected).length);
+
+            // Worker detail state
+            const showWorkerDetail = ref(false);
+            const workerDetail = ref(null);
+
+            // Search
+            let searchDebounce = null;
+            const onSearchInput = () => {
+                clearTimeout(searchDebounce);
+                searchDebounce = setTimeout(() => {
+                    currentPage.value = 1;
+                    fetchTasks();
+                }, 300);
+            };
+
+            // Batch selection state
+            const selectedTasks = ref(new Set());
+            const selectAll = computed({
+                get: () => tasks.value.length > 0 && tasks.value.every(t => selectedTasks.value.has(t.id)),
+                set: (val) => {
+                    if (val) {
+                        tasks.value.forEach(t => selectedTasks.value.add(t.id));
+                    } else {
+                        selectedTasks.value.clear();
+                    }
+                }
+            });
+            const selectedCount = computed(() => selectedTasks.value.size);
+            const toggleSelect = (taskId) => {
+                if (selectedTasks.value.has(taskId)) {
+                    selectedTasks.value.delete(taskId);
+                } else {
+                    selectedTasks.value.add(taskId);
+                }
+            };
+            const clearSelection = () => { selectedTasks.value.clear(); };
+
+            const batchRetry = async () => {
+                const ids = [...selectedTasks.value];
+                if (ids.length === 0) return;
+                try {
+                    const res = await fetch('/api/tasks/batch/retry', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ task_ids: ids })
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        showToast(`已重试 ${data.data?.affected || 0} 个任务`, 'success');
+                        clearSelection();
+                        setTimeout(fetchData, 500);
+                    } else {
+                        const err = await res.json().catch(() => ({}));
+                        showToast(err.detail || '批量重试失败', 'error');
+                    }
+                } catch (e) { showToast('网络连接异常', 'error'); }
+            };
+
+            const batchCancel = async () => {
+                const ids = [...selectedTasks.value];
+                if (ids.length === 0) return;
+                const ok = await showConfirm(`确定要取消选中的 ${ids.length} 个任务吗？`, '批量取消');
+                if (!ok) return;
+                try {
+                    const res = await fetch('/api/tasks/batch/cancel', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ task_ids: ids })
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        showToast(`已取消 ${data.data?.affected || 0} 个任务`, 'success');
+                        clearSelection();
+                        setTimeout(fetchData, 500);
+                    } else {
+                        const err = await res.json().catch(() => ({}));
+                        showToast(err.detail || '批量取消失败', 'error');
+                    }
+                } catch (e) { showToast('网络连接异常', 'error'); }
+            };
+
+            const batchDelete = async () => {
+                const ids = [...selectedTasks.value];
+                if (ids.length === 0) return;
+                const ok = await showConfirm(`确定要删除选中的 ${ids.length} 个任务吗？此操作不可恢复。`, '批量删除');
+                if (!ok) return;
+                try {
+                    const res = await fetch('/api/tasks/batch/delete', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ task_ids: ids })
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        showToast(`已删除 ${data.data?.affected || 0} 个任务`, 'success');
+                        clearSelection();
+                        setTimeout(fetchData, 500);
+                    } else {
+                        const err = await res.json().catch(() => ({}));
+                        showToast(err.detail || '批量删除失败', 'error');
+                    }
+                } catch (e) { showToast('网络连接异常', 'error'); }
+            };
+
             // System Logs State
             const showLogs = ref(true);
             const sysLogs = ref([]);
@@ -633,16 +1381,153 @@
             const autoStatus = ref({});
             const scanning = ref(false);
 
+            // Multi-Worker computed
+            const onlineCount = computed(() =>
+                (sysInfo.value.workers || []).filter(w => w.online).length
+            );
+
+            // Settings State
+            const showSettings = ref(false);
+            const settingsTab = ref('workers');
+            const settingsTabs = [
+                { key: 'workers', label: 'Worker 节点', icon: 'fa-solid fa-server' },
+                { key: 'subtitle', label: '字幕设置', icon: 'fa-solid fa-closed-captioning' },
+                { key: 'automation', label: '自动化', icon: 'fa-solid fa-robot' },
+                { key: 'emby', label: 'Emby', icon: 'fa-solid fa-play' },
+                { key: 'stats', label: '数据洞察', icon: 'fa-solid fa-chart-pie' },
+            ];
+            const configForm = ref({});
+            const savingSettings = ref(false);
+
+            // === Toast 通知系统 ===
+            const toasts = ref([]);
+            let toastId = 0;
+            const showToast = (message, type = 'info', duration = 3000) => {
+                const id = ++toastId;
+                toasts.value.push({ id, message, type, exiting: false });
+                setTimeout(() => {
+                    const t = toasts.value.find(t => t.id === id);
+                    if (t) t.exiting = true;
+                    setTimeout(() => {
+                        toasts.value = toasts.value.filter(t => t.id !== id);
+                    }, 300);
+                }, duration);
+            };
+
+            // === 确认对话框 ===
+            const confirmState = ref({ show: false, message: '', title: '', resolve: null });
+            const showConfirm = (message, title = '确认操作') => {
+                return new Promise(resolve => {
+                    confirmState.value = { show: true, message, title, resolve };
+                });
+            };
+            const confirmResolve = (result) => {
+                if (confirmState.value.resolve) confirmState.value.resolve(result);
+                confirmState.value.show = false;
+            };
+            watch(() => confirmState.value.show, (val) => {
+                if (val) {
+                    setTimeout(() => {
+                        const btn = document.querySelector('.confirm-dialog button');
+                        if (btn) btn.focus();
+                    }, 50);
+                }
+            });
+
+            // === 简单/高级模式 ===
+            const viewMode = ref(localStorage.getItem('ssubb_viewMode') || 'simple');
+            const toggleViewMode = () => {
+                viewMode.value = viewMode.value === 'simple' ? 'advanced' : 'simple';
+                localStorage.setItem('ssubb_viewMode', viewMode.value);
+                if (viewMode.value === 'advanced') showLogs.value = true;
+            };
+
+            // === 配置健康度 ===
+            const healthData = ref(null);
+            const showHealthDetail = ref(false);
+            const fetchHealth = async () => {
+                try {
+                    const res = await fetch('/api/health');
+                    if (res.ok) healthData.value = await res.json();
+                } catch(e) {}
+            };
+            const getHealthColor = (score) => {
+                if (score >= 80) return '#10b981';
+                if (score >= 50) return '#f59e0b';
+                return '#ef4444';
+            };
+
+            const openSettings = async () => {
+                showSettings.value = true;
+                settingsTab.value = 'workers';
+                try {
+                    const res = await fetch('/api/config');
+                    if (res.ok) configForm.value = await res.json();
+                } catch(e) { console.error('load config error', e); }
+                fetchStats();
+            };
+
+            const addWorker = () => {
+                if (!configForm.value.workers) configForm.value.workers = [];
+                configForm.value.workers.push({ url: '', worker_id: '', weight: 1, enabled: true });
+            };
+
+            const removeWorker = async (idx) => {
+                const w = configForm.value.workers[idx];
+                const ok = await showConfirm(`确定要移除 Worker "${w.worker_id || w.url}" 吗？`, '移除 Worker');
+                if (!ok) return;
+                configForm.value.workers.splice(idx, 1);
+                showToast('Worker 已移除（保存后生效）', 'info');
+            };
+
+            const saveSettings = async () => {
+                savingSettings.value = true;
+                try {
+                    const res = await fetch('/api/config', {
+                        method: 'PUT',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(configForm.value),
+                    });
+                    if (res.ok) {
+                        showSettings.value = false;
+                        showToast('配置已保存，服务正在热重载', 'success');
+                        setTimeout(fetchData, 1000);
+                    } else {
+                        const err = await res.json().catch(() => ({}));
+                        showToast(err.detail || '配置保存失败', 'error');
+                    }
+                } catch(e) {
+                    showToast('网络连接异常: ' + e.message, 'error');
+                }
+                finally { savingSettings.value = false; }
+            };
+
+            // Statistics State
+            const statsData = ref(null);
+            const workerStatsData = ref(null);
+            const fetchStats = async () => {
+                try {
+                    const [statsRes, workerRes] = await Promise.all([
+                        fetch('/api/statistics?days=30'),
+                        fetch('/api/statistics/workers')
+                    ]);
+                    if (statsRes.ok) statsData.value = await statsRes.json();
+                    if (workerRes.ok) workerStatsData.value = await workerRes.json();
+                } catch(e) { console.error('stats error', e); }
+            };
+
             const form = ref({
                 media_path: '',
                 target_lang: 'zh',
-                force: false
+                force: false,
+                priority: 3
             });
 
             // 阶段流水线配置
             const pipelineStages = [
                 { key: 'subtitle_checking', label: '字幕检查' },
                 { key: 'extracting', label: '音频提取' },
+                { key: 'extracted', label: '已提取' },
                 { key: 'uploading', label: '上传' },
                 { key: 'transcribing', label: 'ASR 转写' },
                 { key: 'optimizing', label: 'LLM 优化' },
@@ -700,6 +1585,7 @@
                     'pending': '排队等待...',
                     'subtitle_checking': '字幕检查',
                     'extracting': '抽取音轨',
+                    'extracted': '已提取',
                     'uploading': '推流传输',
                     'worker_queued': 'Worker 排队',
                     'transcribing': 'ASR 转写',
@@ -753,10 +1639,22 @@
                     loading.value = true;
                     const params = new URLSearchParams();
                     if (filterStatus.value) params.set('status', filterStatus.value);
-                    params.set('limit', '50');
+                    const offset = (currentPage.value - 1) * pageSize;
+                    params.set('limit', String(pageSize));
+                    params.set('offset', String(offset));
                     const res = await fetch(`/api/tasks?${params}`);
                     const data = await res.json();
-                    tasks.value = data.tasks || [];
+                    let fetched = data.tasks || [];
+                    // Client-side search filter
+                    if (searchQuery.value) {
+                        const q = searchQuery.value.toLowerCase();
+                        fetched = fetched.filter(t =>
+                            (t.media_title || '').toLowerCase().includes(q) ||
+                            t.media_path.toLowerCase().includes(q)
+                        );
+                    }
+                    tasks.value = fetched;
+                    totalTasks.value = data.total || 0;
                 } catch (e) {
                     console.error("tasks error", e);
                 } finally {
@@ -769,7 +1667,7 @@
             };
 
             // Watch filter change
-            watch(filterStatus, () => { fetchTasks(); });
+            watch(filterStatus, () => { currentPage.value = 1; fetchTasks(); });
 
             // Retry task
             const retryTask = async (taskId) => {
@@ -777,10 +1675,34 @@
                     const res = await fetch(`/api/task/${taskId}/retry`, { method: 'POST' });
                     if (res.ok) {
                         expandedTask.value = null;
+                        showToast('任务已重新提交', 'success');
                         setTimeout(fetchData, 500);
+                    } else {
+                        const err = await res.json().catch(() => ({}));
+                        showToast(err.detail || '重试失败', 'error');
                     }
                 } catch (e) {
-                    console.error("retry error", e);
+                    showToast('网络连接异常', 'error');
+                }
+            };
+
+            // Update task priority
+            const updatePriority = async (taskId, priority) => {
+                try {
+                    const res = await fetch(`/api/task/${taskId}/priority`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ priority })
+                    });
+                    if (res.ok) {
+                        showToast(`优先级已更新为 ${priority}`, 'success');
+                        setTimeout(fetchTasks, 300);
+                    } else {
+                        const err = await res.json();
+                        showToast(err.detail || '更新失败', 'error');
+                    }
+                } catch (e) {
+                    showToast('网络连接异常', 'error');
                 }
             };
 
@@ -792,11 +1714,11 @@
                     const res = await fetch('/api/logs?lines=50');
                     if (res.ok) {
                         const data = await res.json();
-                        const isAtBottom = logContainer.value ? 
+                        const isAtBottom = logContainer.value ?
                             (logContainer.value.scrollHeight - logContainer.value.scrollTop <= logContainer.value.clientHeight + 20) : true;
-                            
+
                         sysLogs.value = data.logs;
-                        
+
                         if (isAtBottom) {
                             setTimeout(() => {
                                 if(logContainer.value) logContainer.value.scrollTop = logContainer.value.scrollHeight;
@@ -804,6 +1726,34 @@
                         }
                     }
                 } catch(e) {}
+            };
+
+            // WebSocket 日志流
+            let logWs = null;
+            let logWsRetry = 0;
+            const logWsConnected = ref(false);
+            const connectLogWs = () => {
+                if (logWs && logWs.readyState <= 1) return; // 已连接或正在连接
+                const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+                logWs = new WebSocket(`${proto}//${location.host}/ws/logs`);
+                logWs.onopen = () => { logWsRetry = 0; logWsConnected.value = true; };
+                logWs.onmessage = (e) => {
+                    const isAtBottom = logContainer.value ?
+                        (logContainer.value.scrollHeight - logContainer.value.scrollTop <= logContainer.value.clientHeight + 30) : true;
+                    sysLogs.value.push(e.data);
+                    if (sysLogs.value.length > 500) sysLogs.value.splice(0, sysLogs.value.length - 500);
+                    if (isAtBottom) {
+                        setTimeout(() => {
+                            if(logContainer.value) logContainer.value.scrollTop = logContainer.value.scrollHeight;
+                        }, 30);
+                    }
+                };
+                logWs.onclose = () => {
+                    logWsConnected.value = false;
+                    logWsRetry = Math.min(logWsRetry + 1, 10);
+                    setTimeout(connectLogWs, Math.min(logWsRetry * 2000, 30000));
+                };
+                logWs.onerror = () => { logWs.close(); };
             };
             const getLogColor = (line) => {
                 if (line.includes(' ERROR: ')) return 'text-red-400';
@@ -835,52 +1785,51 @@
                 if (form.value.media_path) {
                     const parts = form.value.media_path.split(/[\\/]/);
                     parts.pop();
-                    defaultPath = parts.join('\\');
+                    defaultPath = parts.join('/');
                 }
                 loadPath(defaultPath);
             };
             
             const selectFile = (fullPath) => {
-                form.value.media_path = fullPath.replace(/\\\\/g, '\\');
+                form.value.media_path = fullPath.replace(/\\/g, '/');
                 showBrowser.value = false;
             };
 
             const submitTask = async () => {
                 if(!form.value.media_path) return;
                 submitting.value = true;
-                submitResult.value = null;
-                
+
                 try {
                     const params = new URLSearchParams({
                         media_path: form.value.media_path,
                         target_lang: form.value.target_lang
                     });
-                    
+
                     const url = form.value.force ? `/api/task/force?${params}` : '/api/task';
-                    
+
                     const options = { method: 'POST', headers: {'Content-Type': 'application/json'} };
                     if(!form.value.force) {
                         options.body = JSON.stringify({
                             media_path: form.value.media_path,
                             target_lang: form.value.target_lang,
-                            force: false
+                            force: false,
+                            priority: form.value.priority
                         });
                     }
 
                     const res = await fetch(url, options);
                     if(res.ok) {
-                        submitResult.value = { success: true, message: '指令提交成功，列入总线。' };
+                        showToast('指令提交成功，已列入总线', 'success');
                         form.value.media_path = '';
                         setTimeout(fetchData, 500);
                     } else {
                         const err = await res.json();
-                        submitResult.value = { success: false, message: `提交被拒: ${err.detail || res.statusText}` };
+                        showToast(`提交被拒: ${err.detail || res.statusText}`, 'error');
                     }
                 } catch (e) {
-                    submitResult.value = { success: false, message: `网络连接迷失: ${e.message}` };
+                    showToast('网络连接异常: ' + e.message, 'error');
                 } finally {
                     submitting.value = false;
-                    setTimeout(() => { submitResult.value = null; }, 5000);
                 }
             };
 
@@ -906,28 +1855,187 @@
             };
             const toggleAutomation = async () => {
                 const newState = !autoStatus.value.enabled;
+                if (!newState) {
+                    const ok = await showConfirm('确定要关闭自动化扫描吗？关闭后不会自动检测新影片。', '关闭自动化');
+                    if (!ok) return;
+                }
                 try {
                     await fetch(`/api/automation/toggle?enabled=${newState}`, { method: 'POST' });
+                    showToast(newState ? '自动化扫描已开启' : '自动化扫描已关闭', 'success');
                     await fetchAutoStatus();
-                } catch(e) { console.error('toggle error', e); }
+                } catch(e) { showToast('操作失败', 'error'); }
             };
 
-            let pollInterval;
-            let logInterval;
-            let autoInterval;
+            // Worker toggle
+            const toggleWorker = async (worker) => {
+                const action = worker.online ? '下线' : '上线';
+                const ok = await showConfirm(`确定要将 Worker "${worker.worker_id}" ${action}吗？`, `${action} Worker`);
+                if (!ok) return;
+                try {
+                    const res = await fetch(
+                        `/api/workers/${encodeURIComponent(worker.url)}/toggle`,
+                        {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ enabled: !worker.online })
+                        }
+                    );
+                    if (res.ok) {
+                        showToast(`Worker "${worker.worker_id}" 已${action}`, 'success');
+                        setTimeout(fetchData, 1000);
+                    } else {
+                        showToast(`操作失败`, 'error');
+                    }
+                } catch(e) { showToast('网络连接异常', 'error'); }
+            };
+
+            // === 页面可见性感知轮询 ===
+            let pollInterval, autoInterval;
+            let intervalsActive = false;
+
+            const startPolling = () => {
+                if (intervalsActive) return;
+                intervalsActive = true;
+                pollInterval = setInterval(fetchData, 3000);
+                autoInterval = setInterval(fetchAutoStatus, 10000);
+                fetchHealth(); // 初始加载一次
+            };
+
+            const stopPolling = () => {
+                intervalsActive = false;
+                if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+                if (autoInterval) { clearInterval(autoInterval); autoInterval = null; }
+            };
+
+            const onVisibilityChange = () => {
+                if (document.hidden) {
+                    stopPolling();
+                } else {
+                    fetchData();
+                    startPolling();
+                }
+            };
+
+            // Subtitle preview
+            const openSubtitlePreview = async (task) => {
+                subtitlePreviewTaskId.value = task.id;
+                subtitlePreviewTitle.value = task.media_title || task.media_path;
+                subtitleEditMode.value = false;
+                showSubtitlePreview.value = true;
+                subtitleSegments.value = [];
+                subtitleRawSrt.value = '';
+                try {
+                    const res = await fetch(`/api/task/${task.id}/subtitle`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        const srt = data.srt_content || '';
+                        subtitleRawSrt.value = srt;
+                        subtitleSegments.value = parseSrtSegments(srt);
+                    }
+                } catch (e) {
+                    console.error("subtitle fetch error", e);
+                }
+            };
+
+            const parseSrtSegments = (srt) => {
+                if (!srt) return [];
+                const blocks = srt.trim().split(/\n\s*\n/);
+                const timePattern = /\d{2}:\d{2}:\d{2}[,.]\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}[,.]\d{3}/;
+                return blocks.map(block => {
+                    const lines = block.trim().split('\n');
+                    let timecode = '';
+                    let textStart = 0;
+                    for (let i = 0; i < lines.length; i++) {
+                        if (timePattern.test(lines[i])) {
+                            timecode = lines[i].trim();
+                            textStart = i + 1;
+                            break;
+                        }
+                    }
+                    return timecode ? { timecode, text: lines.slice(textStart).join('\n').trim(), selected: false } : null;
+                }).filter(Boolean);
+            };
+
+            const reoptimizeSelected = async () => {
+                const indices = subtitleSegments.value
+                    .map((s, i) => s.selected ? i : -1)
+                    .filter(i => i >= 0);
+                if (indices.length === 0) return;
+                try {
+                    const res = await fetch(`/api/task/${subtitlePreviewTaskId.value}/subtitle/reoptimize`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ segment_indices: indices }),
+                    });
+                    if (res.ok) {
+                        showToast(`已重新优化 ${indices.length} 个段落`, 'success');
+                        // Refresh
+                        await openSubtitlePreview({ id: subtitlePreviewTaskId.value, media_title: subtitlePreviewTitle.value });
+                    } else {
+                        const err = await res.json().catch(() => ({}));
+                        showToast(err.detail || '重新优化失败', 'error');
+                    }
+                } catch (e) {
+                    showToast('网络连接异常', 'error');
+                }
+            };
+
+            const saveSubtitle = async () => {
+                try {
+                    const res = await fetch(`/api/task/${subtitlePreviewTaskId.value}/subtitle`, {
+                        method: 'PUT',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ srt_content: subtitleRawSrt.value }),
+                    });
+                    if (res.ok) {
+                        showToast('字幕已保存', 'success');
+                        subtitleEditMode.value = false;
+                        subtitleSegments.value = parseSrtSegments(subtitleRawSrt.value);
+                    } else {
+                        showToast('保存失败', 'error');
+                    }
+                } catch (e) {
+                    showToast('网络连接异常', 'error');
+                }
+            };
+
+            // Worker detail
+            const openWorkerDetail = (worker) => {
+                workerDetail.value = worker;
+                showWorkerDetail.value = true;
+            };
+
             onMounted(() => {
                 fetchData();
-                fetchLogs();
+                fetchLogs(); // 初始加载一次（REST fallback）
                 fetchAutoStatus();
-                pollInterval = setInterval(fetchData, 3000);
-                logInterval = setInterval(fetchLogs, 2000);
-                autoInterval = setInterval(fetchAutoStatus, 10000);
+                startPolling();
+                connectLogWs(); // 建立 WebSocket 日志流
+                document.addEventListener('visibilitychange', onVisibilityChange);
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') {
+                        if (showSubtitlePreview.value) { showSubtitlePreview.value = false; }
+                        else if (showWorkerDetail.value) { showWorkerDetail.value = false; }
+                        else if (showSettings.value) { showSettings.value = false; }
+                        else if (showBrowser.value) { showBrowser.value = false; }
+                        else if (confirmState.value.show) { confirmResolve(false); }
+                    }
+                    // Ctrl+F: focus search box
+                    if (e.ctrlKey && e.key === 'f' && !showSettings.value) {
+                        e.preventDefault();
+                        document.getElementById('task-search')?.focus();
+                    }
+                    // Ctrl+Enter: submit task
+                    if (e.ctrlKey && e.key === 'Enter' && !showSettings.value && !showBrowser.value && !showSubtitlePreview.value) {
+                        submitTask();
+                    }
+                });
             });
 
             onUnmounted(() => {
-                if(pollInterval) clearInterval(pollInterval);
-                if(logInterval) clearInterval(logInterval);
-                if(autoInterval) clearInterval(autoInterval);
+                stopPolling();
+                if (logWs) { logWs.close(); logWs = null; }
+                document.removeEventListener('visibilitychange', onVisibilityChange);
             });
 
             return {
@@ -935,10 +2043,27 @@
                 showBrowser, browsing, browserData, openBrowser, loadPath, selectFile,
                 showLogs, sysLogs, logContainer, toggleLogs, getLogColor,
                 autoStatus, scanning, triggerScan, toggleAutomation,
-                filterStatus, expandedTask, pipelineStages,
+                onlineCount, toggleWorker,
+                showSettings, settingsTab, settingsTabs, configForm, savingSettings,
+                openSettings, addWorker, removeWorker, saveSettings,
+                filterStatus, searchQuery, onSearchInput, expandedTask, currentPage, pageSize, totalTasks, pipelineStages,
+                showSubtitlePreview, subtitlePreviewTitle, subtitlePreviewTaskId, subtitleSegments, subtitleRawSrt,
+                subtitleEditMode, selectedSegmentCount, openSubtitlePreview, reoptimizeSelected, saveSubtitle,
+                showWorkerDetail, workerDetail, openWorkerDetail,
+                selectedTasks, selectAll, selectedCount, toggleSelect, clearSelection,
+                batchRetry, batchCancel, batchDelete,
                 getFileName, formatDate, formatUptime, getStatusLabel, getStatusColor, getBarColor,
-                getStageClass, toggleDetail, retryTask,
-                fetchData, submitTask
+                getStageClass, toggleDetail, retryTask, updatePriority,
+                fetchData, submitTask,
+                // Phase 1 additions
+                toasts, showToast, confirmState, confirmResolve, showConfirm,
+                viewMode, toggleViewMode,
+                // Phase 3 additions
+                logWsConnected,
+                // Phase 6 additions
+                healthData, showHealthDetail, fetchHealth, getHealthColor,
+                // Statistics
+                statsData, workerStatsData, fetchStats
             };
         }
     }).mount('#app');

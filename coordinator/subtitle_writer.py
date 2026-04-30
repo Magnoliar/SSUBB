@@ -19,6 +19,18 @@ logger = logging.getLogger("ssubb.subtitle_writer")
 class SubtitleWriter:
     """字幕文件写入 + Emby 元数据刷新"""
 
+    # ISO 639-2/B 语言码映射 (Emby/Jellyfin 友好)
+    LANG_MAP = {
+        "zh": "chi", "en": "eng", "ja": "jpn", "ko": "kor",
+        "fr": "fre", "de": "ger", "es": "spa", "ru": "rus",
+        "pt": "por", "it": "ita", "ar": "ara", "th": "tha",
+        "vi": "vie", "hi": "hin", "tr": "tur", "pl": "pol",
+        "nl": "dut", "sv": "swe", "da": "dan", "fi": "fin",
+        "nb": "nor", "el": "gre", "he": "heb", "cs": "cze",
+        "ro": "rum", "hu": "hun", "id": "ind", "ms": "may",
+        "uk": "ukr",
+    }
+
     def __init__(
         self,
         emby_server: str = "",
@@ -60,23 +72,26 @@ class SubtitleWriter:
 
         fmt = subtitle_format or self.output_format
         mode = self.output_mode
+        lang3 = self.LANG_MAP.get(target_lang, target_lang)
 
         # 决定最终内容和文件名
         if mode == "bilingual" and original_srt:
+            # 双语模式强制 ASS（SRT 双语无样式区分，体验差）
+            if fmt != "ass":
+                logger.info(f"双语模式自动切换为 ASS 格式 (原配置: {fmt})")
+                fmt = "ass"
             final_content = self._merge_bilingual(original_srt, subtitle_content, fmt)
-            lang_tag = f"{target_lang}.bilingual"
+            subtitle_path = video.parent / f"{video.stem}.{lang3}.forced.ssubb.{fmt}"
         else:
             if fmt == "ass":
                 final_content = self._srt_to_ass(subtitle_content, target_lang)
             else:
                 final_content = subtitle_content
-            lang_tag = target_lang
-
-        subtitle_path = video.parent / f"{video.stem}.{lang_tag}.{fmt}"
+            subtitle_path = video.parent / f"{video.stem}.{lang3}.ssubb.{fmt}"
 
         # 备份已有字幕
         if subtitle_path.is_file() and self.backup_existing:
-            backup_name = f"{video.stem}.{lang_tag}.{fmt}.bak.{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            backup_name = f"{video.stem}.{lang3}.{fmt}.bak.{datetime.now().strftime('%Y%m%d%H%M%S')}"
             backup_path = video.parent / backup_name
             shutil.copy2(str(subtitle_path), str(backup_path))
             logger.info(f"已备份: {subtitle_path.name} → {backup_name}")

@@ -3,7 +3,7 @@
 # =============================================================================
 # 版本
 # =============================================================================
-VERSION = "0.5.0"
+VERSION = "0.10.0"
 PROJECT_NAME = "SSUBB"
 PROJECT_DESC = "异地分布式字幕转写翻译系统"
 
@@ -14,6 +14,7 @@ class TaskStatus:
     PENDING = "pending"                         # 等待处理
     SUBTITLE_CHECKING = "subtitle_checking"     # 正在检查已有字幕
     EXTRACTING = "extracting"                   # 正在提取音频
+    EXTRACTED = "extracted"                     # 音频已提取，等待分发
     UPLOADING = "uploading"                     # 正在上传到 Worker
     WORKER_QUEUED = "worker_queued"             # Worker 已接收，队列中
     TRANSCRIBING = "transcribing"               # 正在转写
@@ -27,18 +28,18 @@ class TaskStatus:
     SKIPPED = "skipped"                         # 已跳过 (字幕已存在且合格)
     CANCELLED = "cancelled"                     # 已取消
 
-    ALL = [PENDING, SUBTITLE_CHECKING, EXTRACTING, UPLOADING, WORKER_QUEUED,
+    ALL = [PENDING, SUBTITLE_CHECKING, EXTRACTING, EXTRACTED, UPLOADING, WORKER_QUEUED,
            TRANSCRIBING, OPTIMIZING, TRANSLATING, ALIGNING,
            WRITING_SUBTITLE, REFRESHING_EMBY,
            COMPLETED, FAILED, SKIPPED, CANCELLED]
 
     # 活跃状态 (任务尚未结束)
-    ACTIVE = [PENDING, SUBTITLE_CHECKING, EXTRACTING, UPLOADING, WORKER_QUEUED,
+    ACTIVE = [PENDING, SUBTITLE_CHECKING, EXTRACTING, EXTRACTED, UPLOADING, WORKER_QUEUED,
               TRANSCRIBING, OPTIMIZING, TRANSLATING, ALIGNING,
               WRITING_SUBTITLE, REFRESHING_EMBY]
 
     # Coordinator 本地阶段
-    COORDINATOR_STAGES = [PENDING, SUBTITLE_CHECKING, EXTRACTING, UPLOADING,
+    COORDINATOR_STAGES = [PENDING, SUBTITLE_CHECKING, EXTRACTING, EXTRACTED, UPLOADING,
                           WRITING_SUBTITLE, REFRESHING_EMBY]
 
     # Worker 执行阶段
@@ -146,6 +147,9 @@ DEFAULT_AUDIO_CHANNELS = 1
 # Worker 心跳
 HEARTBEAT_INTERVAL = 30       # 秒
 HEARTBEAT_TIMEOUT = 300       # 秒
+
+# 局域网发现
+DISCOVERY_PORT = 8789
 
 # 重试
 MAX_RETRIES = 3

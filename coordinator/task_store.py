@@ -48,6 +48,7 @@ class TaskStore:
                 source_lang  TEXT DEFAULT 'auto',
                 target_lang  TEXT DEFAULT 'zh',
                 status       TEXT DEFAULT 'pending',
+                priority     INTEGER DEFAULT 3,
                 force_mode   INTEGER DEFAULT 0,
                 skip_reason  TEXT,
                 callback_url TEXT,
@@ -67,6 +68,25 @@ class TaskStore:
 
             CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
             CREATE INDEX IF NOT EXISTS idx_tasks_media ON tasks(media_path, target_lang);
+
+            CREATE TABLE IF NOT EXISTS task_subtitles (
+                task_id      TEXT PRIMARY KEY,
+                srt_content  TEXT,
+                original_srt TEXT,
+                edited_at    TEXT,
+                edit_count   INTEGER DEFAULT 0,
+                FOREIGN KEY (task_id) REFERENCES tasks(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS scan_history (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                scan_time       TEXT NOT NULL,
+                total_videos    INTEGER DEFAULT 0,
+                missing_subtitle INTEGER DEFAULT 0,
+                already_active  INTEGER DEFAULT 0,
+                new_tasks_created INTEGER DEFAULT 0,
+                duration_seconds REAL DEFAULT 0
+            );
         """)
         conn.commit()
 
@@ -82,6 +102,7 @@ class TaskStore:
             "failed_stage": "TEXT",
             "stage_times_json": "TEXT",
             "callback_url": "TEXT",
+            "priority": "INTEGER DEFAULT 3",
         }
 
         for col_name, col_type in new_columns.items():
@@ -119,12 +140,12 @@ class TaskStore:
         conn = self._get_conn()
         conn.execute(
             """INSERT INTO tasks (id, media_path, media_title, media_type, season,
-               episode, tmdb_id, source_lang, target_lang, status, force_mode,
+               episode, tmdb_id, source_lang, target_lang, status, priority, force_mode,
                callback_url, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (task.id, task.media_path, task.media_title, task.media_type,
              task.season, task.episode, task.tmdb_id, task.source_lang,
-             task.target_lang, task.status, int(task.force_mode),
+             task.target_lang, task.status, task.priority, int(task.force_mode),
              task.callback_url, now, now)
         )
         conn.commit()
@@ -148,12 +169,12 @@ class TaskStore:
         conn = self._get_conn()
         if status:
             rows = conn.execute(
-                "SELECT * FROM tasks WHERE status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                "SELECT * FROM tasks WHERE status = ? ORDER BY priority ASC, created_at DESC LIMIT ? OFFSET ?",
                 (status, limit, offset)
             ).fetchall()
         else:
             rows = conn.execute(
-                "SELECT * FROM tasks ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                "SELECT * FROM tasks ORDER BY priority ASC, created_at DESC LIMIT ? OFFSET ?",
                 (limit, offset)
             ).fetchall()
         return [self._row_to_task(r) for r in rows]
@@ -276,6 +297,224 @@ class TaskStore:
             "SELECT status, COUNT(*) as cnt FROM tasks GROUP BY status"
         ).fetchall()
         return {row["status"]: row["cnt"] for row in rows}
+
+    def get_statistics(self, days: int = 30) -> dict:
+        """获取统计数据 (最近 N 天)"""
+        conn = self._get_conn()
+        from datetime import timedelta
+        since = (datetime.utcnow() - timedelta(days=days)).isoformat()
+
+        # 总数和成功率
+        total_row = conn.execute(
+            "SELECT COUNT(*) as cnt FROM tasks WHERE created_at >= ?", (since,)
+        ).fetchone()
+        total = total_row["cnt"] if total_row else 0
+
+        completed_row = conn.execute(
+            "SELECT COUNT(*) as cnt FROM tasks WHERE status = ? AND created_at >= ?",
+            (TaskStatus.COMPLETED, since),
+        ).fetchone()
+        completed = completed_row["cnt"] if completed_row else 0
+
+        failed_row = conn.execute(
+            "SELECT COUNT(*) as cnt FROM tasks WHERE status = ? AND created_at >= ?",
+            (TaskStatus.FAILED, since),
+        ).fetchone()
+        failed = failed_row["cnt"] if failed_row else 0
+
+        # 平均耗时 (已完成任务)
+        avg_row = conn.execute(
+            """SELECT AVG(
+                CAST(julianday(completed_at) - julianday(created_at) AS REAL) * 86400
+            ) as avg_sec FROM tasks
+            WHERE status = ? AND completed_at IS NOT NULL AND created_at >= ?""",
+            (TaskStatus.COMPLETED, since),
+        ).fetchone()
+        avg_duration = round(avg_row["avg_sec"] or 0, 1) if avg_row else 0
+
+        # 按状态分组
+        status_rows = conn.execute(
+            "SELECT status, COUNT(*) as cnt FROM tasks WHERE created_at >= ? GROUP BY status",
+            (since,),
+        ).fetchall()
+        by_status = {row["status"]: row["cnt"] for row in status_rows}
+
+        # 按天分组 (最近 7 天)
+        day_rows = conn.execute(
+            """SELECT DATE(created_at) as day, COUNT(*) as cnt FROM tasks
+               WHERE created_at >= DATE('now', '-7 days') GROUP BY DATE(created_at) ORDER BY day"""
+        ).fetchall()
+        by_day = [{"date": row["day"], "count": row["cnt"]} for row in day_rows]
+
+        return {
+            "total": total,
+            "completed": completed,
+            "failed": failed,
+            "success_rate": round(completed / total * 100, 1) if total > 0 else 0,
+            "avg_duration_sec": avg_duration,
+            "by_status": by_status,
+            "by_day": by_day,
+            "days": days,
+        }
+
+    def get_worker_statistics(self) -> dict:
+        """获取各 Worker 的统计数据"""
+        conn = self._get_conn()
+        rows = conn.execute(
+            """SELECT worker_id,
+                COUNT(*) as total,
+                SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as completed,
+                SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as failed
+               FROM tasks WHERE worker_id IS NOT NULL GROUP BY worker_id""",
+            (TaskStatus.COMPLETED, TaskStatus.FAILED),
+        ).fetchall()
+        result = {}
+        for row in rows:
+            wid = row["worker_id"]
+            total = row["total"]
+            completed = row["completed"]
+            result[wid] = {
+                "total": total,
+                "completed": completed,
+                "failed": row["failed"],
+                "success_rate": round(completed / total * 100, 1) if total > 0 else 0,
+            }
+        return result
+
+    def update_priority(self, task_id: str, priority: int):
+        """更新任务优先级"""
+        self._update_field(task_id, "priority", priority)
+
+    # =========================================================================
+    # 字幕存储
+    # =========================================================================
+
+    def save_subtitle(self, task_id: str, srt_content: str, original_srt: str = ""):
+        """保存任务的字幕内容（首次写入或覆盖）"""
+        conn = self._get_conn()
+        now = datetime.utcnow().isoformat()
+        conn.execute(
+            """INSERT INTO task_subtitles (task_id, srt_content, original_srt, edited_at)
+               VALUES (?, ?, ?, ?)
+               ON CONFLICT(task_id) DO UPDATE SET
+                 srt_content = excluded.srt_content,
+                 original_srt = COALESCE(NULLIF(excluded.original_srt, ''), task_subtitles.original_srt),
+                 edited_at = excluded.edited_at""",
+            (task_id, srt_content, original_srt, now),
+        )
+        conn.commit()
+
+    def get_subtitle(self, task_id: str) -> Optional[dict]:
+        """获取任务的字幕内容"""
+        conn = self._get_conn()
+        row = conn.execute(
+            "SELECT * FROM task_subtitles WHERE task_id = ?", (task_id,)
+        ).fetchone()
+        if row:
+            return dict(row)
+        return None
+
+    def update_subtitle_content(self, task_id: str, srt_content: str) -> bool:
+        """手动编辑字幕内容"""
+        conn = self._get_conn()
+        now = datetime.utcnow().isoformat()
+        cursor = conn.execute(
+            """UPDATE task_subtitles
+               SET srt_content = ?, edited_at = ?, edit_count = edit_count + 1
+               WHERE task_id = ?""",
+            (srt_content, now, task_id),
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+
+    # =========================================================================
+    # 扫描历史
+    # =========================================================================
+
+    def save_scan_report(self, report: dict):
+        """保存扫描报告"""
+        conn = self._get_conn()
+        conn.execute(
+            """INSERT INTO scan_history
+               (scan_time, total_videos, missing_subtitle, already_active, new_tasks_created, duration_seconds)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (
+                report.get("scan_time", datetime.utcnow().isoformat()),
+                report.get("total_videos", 0),
+                report.get("missing_subtitle", 0),
+                report.get("already_active", 0),
+                report.get("new_tasks_created", 0),
+                report.get("duration_seconds", 0),
+            ),
+        )
+        conn.commit()
+
+    def get_scan_history(self, limit: int = 10) -> list[dict]:
+        """获取最近 N 次扫描记录"""
+        conn = self._get_conn()
+        rows = conn.execute(
+            "SELECT * FROM scan_history ORDER BY id DESC LIMIT ?", (limit,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_active_tasks_with_worker(self) -> list[TaskInfo]:
+        """获取所有已分配 Worker 的活跃任务"""
+        conn = self._get_conn()
+        stages = list(TaskStatus.WORKER_STAGES)
+        placeholders = ",".join("?" for _ in stages)
+        rows = conn.execute(
+            f"SELECT * FROM tasks WHERE status IN ({placeholders}) AND worker_id IS NOT NULL",
+            stages
+        ).fetchall()
+        return [self._row_to_task(r) for r in rows]
+
+    def get_tasks_by_ids(self, task_ids: list[str]) -> list[TaskInfo]:
+        """按 ID 列表批量查询任务"""
+        if not task_ids:
+            return []
+        conn = self._get_conn()
+        placeholders = ",".join("?" for _ in task_ids)
+        rows = conn.execute(
+            f"SELECT * FROM tasks WHERE id IN ({placeholders})", task_ids
+        ).fetchall()
+        return [self._row_to_task(r) for r in rows]
+
+    def batch_update_status(
+        self,
+        task_ids: list[str],
+        status: str,
+        error_msg: Optional[str] = None,
+    ) -> int:
+        """批量更新任务状态，返回受影响行数"""
+        if not task_ids:
+            return 0
+        conn = self._get_conn()
+        now = datetime.utcnow().isoformat()
+        placeholders = ",".join("?" for _ in task_ids)
+        if error_msg:
+            conn.execute(
+                f"UPDATE tasks SET status = ?, error_msg = ?, updated_at = ? WHERE id IN ({placeholders})",
+                [status, error_msg, now] + task_ids,
+            )
+        else:
+            conn.execute(
+                f"UPDATE tasks SET status = ?, updated_at = ? WHERE id IN ({placeholders})",
+                [status, now] + task_ids,
+            )
+        conn.commit()
+        return conn.total_changes
+
+    def batch_delete(self, task_ids: list[str]) -> int:
+        """批量删除任务，返回受影响行数"""
+        if not task_ids:
+            return 0
+        conn = self._get_conn()
+        placeholders = ",".join("?" for _ in task_ids)
+        conn.execute(
+            f"DELETE FROM tasks WHERE id IN ({placeholders})", task_ids
+        )
+        conn.commit()
+        return conn.total_changes
 
     def find_existing_task(self, media_path: str, target_lang: str) -> Optional[TaskInfo]:
         """查找相同媒体+语言的活跃任务 (去重)"""

@@ -8,12 +8,14 @@ services:
     working_dir: /app
     ports:
       - "8787:8787"
+      - "8789:8789/udp"  # 局域网自动发现 (V0.7)
     environment:
       TZ: Asia/Shanghai
       # Optional environment overrides:
       # SSUBB_WORKER_URL: http://worker-host:8788
       # SSUBB_EMBY_SERVER: http://emby-host:8096
       # SSUBB_EMBY_API_KEY: your-emby-api-key
+      # SSUBB_DISCOVERY_ENABLED: "false"  # 关闭自动发现
     volumes:
       # Coordinator config and runtime data (config.yaml is auto-created in ./data)
       - ./data:/app/data
@@ -23,6 +25,8 @@ services:
       # to Coordinator by MoviePilot / Emby / manual tasks.
       - /volume1/video:/volume1/video
       - /volume1/media:/volume1/media
+    # 使用 host 网络可以获得最佳的自动发现体验（可选）
+    # network_mode: host
     network_mode: bridge
     logging:
       driver: "json-file"

@@ -9,7 +9,7 @@ import time
 from typing import Optional
 
 from shared.constants import VERSION
-from shared.models import WorkerHeartbeat
+from shared.models import WorkerHeartbeat, LLMHealthStatus
 
 logger = logging.getLogger("ssubb.health")
 
@@ -69,3 +69,8 @@ def build_heartbeat(
         current_progress=current_progress,
         uptime_seconds=time.time() - _start_time,
     )
+
+
+async def get_llm_health(llm_client) -> list[LLMHealthStatus]:
+    """检测所有 LLM provider 的连通性"""
+    return await llm_client.check_health()

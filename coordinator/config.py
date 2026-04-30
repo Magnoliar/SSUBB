@@ -67,6 +67,28 @@ class AutomationConfig(BaseModel):
     max_tasks_per_scan: int = 5
     require_worker_idle: bool = True
     preheat_next_episode: bool = True
+    timezone: str = "Asia/Shanghai"
+
+
+class DiscoveryConfig(BaseModel):
+    """局域网自动发现配置"""
+    enabled: bool = True
+    port: int = 8789
+    auto_register: bool = True
+
+
+class WebhookConfig(BaseModel):
+    """通用 Webhook 入口配置"""
+    enabled: bool = True
+    token: str = ""  # 空=不验证
+
+
+class WorkerNodeConfig(BaseModel):
+    """单个 Worker 节点配置"""
+    url: str
+    worker_id: str = ""        # 可选，自动从心跳检测
+    weight: int = 1            # 调度权重 (越高分配越多任务)
+    enabled: bool = True       # 可关闭而不删除
 
 
 class CoordinatorConfig(BaseModel):
@@ -75,12 +97,15 @@ class CoordinatorConfig(BaseModel):
     db_path: str = "./data/ssubb.db"
     audio: AudioConfig = Field(default_factory=AudioConfig)
     worker: WorkerConnectionConfig = Field(default_factory=WorkerConnectionConfig)
+    workers: list[WorkerNodeConfig] = Field(default_factory=list)
     emby: EmbyConfig = Field(default_factory=EmbyConfig)
     subtitle: SubtitleOutputConfig = Field(default_factory=SubtitleOutputConfig)
     checker: CheckerConfig = Field(default_factory=CheckerConfig)
     retry: RetryConfig = Field(default_factory=RetryConfig)
     stage_timeout: StageTimeoutConfig = Field(default_factory=StageTimeoutConfig)
     automation: AutomationConfig = Field(default_factory=AutomationConfig)
+    discovery: DiscoveryConfig = Field(default_factory=DiscoveryConfig)
+    webhook: WebhookConfig = Field(default_factory=WebhookConfig)
 
 
 def load_config(config_path: Optional[str] = None) -> CoordinatorConfig:
@@ -111,6 +136,16 @@ def load_config(config_path: Optional[str] = None) -> CoordinatorConfig:
         "db_path": os.environ.get("SSUBB_DB_PATH"),
     }
 
+    # 发现服务环境变量
+    discovery_enabled = os.environ.get("SSUBB_DISCOVERY_ENABLED")
+    if discovery_enabled is not None:
+        config_data.setdefault("discovery", {})["enabled"] = discovery_enabled.lower() not in ("false", "0", "no")
+
+    # Webhook 环境变量
+    webhook_token = os.environ.get("SSUBB_WEBHOOK_TOKEN")
+    if webhook_token is not None:
+        config_data.setdefault("webhook", {})["token"] = webhook_token
+
     for key_path, value in env_overrides.items():
         if value is not None:
             parts = key_path.split(".")
@@ -119,7 +154,17 @@ def load_config(config_path: Optional[str] = None) -> CoordinatorConfig:
                 target = target.setdefault(part, {})
             target[parts[-1]] = value
 
+    # 环境变量: SSUBB_WORKER_URLS (逗号分隔的多 Worker URL)
+    worker_urls_env = os.environ.get("SSUBB_WORKER_URLS")
+    if worker_urls_env and not config_data.get("workers"):
+        urls = [u.strip() for u in worker_urls_env.split(",") if u.strip()]
+        config_data["workers"] = [{"url": u, "weight": 1} for u in urls]
+
     config = CoordinatorConfig(**config_data)
+
+    # 向后兼容: 若 workers 为空但 worker.url 存在，自动迁移
+    if not config.workers and config.worker.url:
+        config.workers = [WorkerNodeConfig(url=config.worker.url, weight=1)]
 
     # 确保目录存在
     Path(config.audio.temp_dir).mkdir(parents=True, exist_ok=True)

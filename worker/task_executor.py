@@ -22,6 +22,10 @@ logger = logging.getLogger("ssubb.executor")
 class TaskExecutor:
     """任务流水线执行器"""
 
+    # 模块级 Whisper 模型缓存 (避免每个任务重新加载)
+    _cached_model = None
+    _cached_model_key: str = ""
+
     def __init__(self, config: WorkerConfig):
         self.config = config
         self.current_task_id: Optional[str] = None
@@ -88,11 +92,23 @@ class TaskExecutor:
             logger.info(f"[{task_id}] 翻译 → {task_config.target_lang}...")
 
             t0 = time.time()
-            translated_srt = await self._translate(
+            translated_srt, translate_stats = await self._translate(
                 srt_content, task_config, detected_lang
             )
             translate_time = time.time() - t0
             logger.info(f"[{task_id}] 翻译完成, 耗时={translate_time:.1f}s")
+
+            # 翻译完全失败 → 任务失败，触发重试
+            if translated_srt is None:
+                return WorkerTaskResult(
+                    task_id=task_id,
+                    status="failed",
+                    error="翻译 API 调用失败，所有批次均未返回有效结果",
+                    transcribe_duration=transcribe_time,
+                    translate_duration=translate_time,
+                    total_duration=time.time() - start_time,
+                    segment_count=segment_count,
+                )
 
             # =================================================================
             # Step 4: 后处理
@@ -115,6 +131,8 @@ class TaskExecutor:
                 translate_duration=translate_time,
                 total_duration=total_time,
                 segment_count=segment_count,
+                partial_translation=translate_stats.get("partial", False),
+                original_srt=srt_content,
             )
 
         except Exception as e:
@@ -134,6 +152,34 @@ class TaskExecutor:
     # 转写
     # =========================================================================
 
+    def _get_whisper_model(self):
+        """获取或创建缓存的 Whisper 模型 (单例)"""
+        import stable_whisper
+
+        model_path = self.config.transcribe.model
+        device = self.config.transcribe.device
+        compute_type = self.config.transcribe.compute_type
+        model_dir = self.config.transcribe.model_dir
+
+        # 缓存 key: 模型名 + 设备 + 精度
+        model_key = f"{model_path}|{device}|{compute_type}"
+
+        if TaskExecutor._cached_model is not None and TaskExecutor._cached_model_key == model_key:
+            logger.debug("复用缓存的 Whisper 模型")
+            return TaskExecutor._cached_model
+
+        logger.info(f"加载 Whisper 模型: {model_path} (device={device}, compute={compute_type})")
+        model = stable_whisper.load_faster_whisper(
+            model_path,
+            device=device,
+            compute_type=compute_type,
+            download_root=model_dir,
+        )
+        TaskExecutor._cached_model = model
+        TaskExecutor._cached_model_key = model_key
+        logger.info("Whisper 模型已缓存，后续任务将复用")
+        return model
+
     async def _transcribe(
         self, audio_path: str, config: TaskConfig
     ) -> Optional[tuple[str, str, int]]:
@@ -143,21 +189,7 @@ class TaskExecutor:
             (srt_content, detected_language, segment_count) 或 None
         """
         try:
-            import stable_whisper
-
-            model_path = self.config.transcribe.model
-            model_dir = self.config.transcribe.model_dir
-            device = self.config.transcribe.device
-            compute_type = self.config.transcribe.compute_type
-
-            logger.info(f"加载模型: {model_path} (device={device}, compute={compute_type})")
-
-            model = stable_whisper.load_faster_whisper(
-                model_path,
-                device=device,
-                compute_type=compute_type,
-                download_root=model_dir,
-            )
+            model = self._get_whisper_model()
 
             # 构建转写参数
             transcribe_args = {
@@ -202,15 +234,15 @@ class TaskExecutor:
 
     async def _optimize(self, srt_content: str, config: TaskConfig) -> str:
         """LLM 断句优化"""
-        if not config.optimize_enabled or not self.config.llm.api_key:
+        if not config.optimize_enabled or not self.config.llm_providers:
             return srt_content
-            
+
         from .llm_client import LLMClient
         from .optimizer import SubtitleOptimizer
-        
-        llm = LLMClient(self.config.llm)
+
+        llm = LLMClient(self.config.llm_providers)
         optimizer = SubtitleOptimizer(llm)
-        return await optimizer.optimize(srt_content, config)
+        return await optimizer.optimize(srt_content, config, self.config.optimize)
 
     # =========================================================================
     # 翻译 
@@ -218,23 +250,26 @@ class TaskExecutor:
 
     async def _translate(
         self, srt_content: str, config: TaskConfig, source_lang: str
-    ) -> Optional[str]:
-        """翻译字幕"""
+    ) -> tuple[Optional[str], dict]:
+        """翻译字幕
+
+        Returns:
+            (translated_srt, stats) 元组
+        """
+        empty_stats = {"translated_count": 0, "total_count": 0, "partial": False}
+
         if source_lang == config.target_lang:
             logger.info("源语言与目标语言相同，跳过翻译")
-            return srt_content
+            return srt_content, empty_stats
 
-        if config.translate_service != "llm" or not self.config.llm.api_key:
-            logger.warning("未启用 LLM 翻译服务或缺少 API_KEY，跳过翻译")
-            return srt_content
-            
+        if config.translate_service != "llm" or not self.config.llm_providers:
+            logger.warning("未启用 LLM 翻译服务或缺少 LLM 提供商，跳过翻译")
+            return srt_content, empty_stats
+
         from .llm_client import LLMClient
         from .translator import SubtitleTranslator
-        
-        # 组合 LLM Config (支持复写)
-        llm_config = self.config.llm
-        
-        llm = LLMClient(llm_config)
+
+        llm = LLMClient(self.config.llm_providers)
         translator = SubtitleTranslator(llm)
         return await translator.translate(srt_content, config, source_lang)
 

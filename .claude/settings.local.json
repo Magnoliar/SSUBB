@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 *)",
+      "Bash(tee /tmp/test_write.py)",
+      "Bash(tee /tmp/gen_plan.py)",
+      "Bash(python -c \"import py_compile; py_compile.compile\\('coordinator/main.py', doraise=True\\); print\\('main.py OK'\\)\")",
+      "Bash(python -c \"import py_compile; py_compile.compile\\('coordinator/config.py', doraise=True\\); print\\('config.py OK'\\)\")",
+      "Bash(python -c \"import py_compile; py_compile.compile\\('coordinator/discovery.py', doraise=True\\); print\\('discovery.py OK'\\)\")",
+      "Bash(python -c \"import py_compile; py_compile.compile\\('worker/discovery_client.py', doraise=True\\); print\\('discovery_client.py OK'\\)\")",
+      "Bash(python -c \"import py_compile; py_compile.compile\\('worker/config.py', doraise=True\\); print\\('worker/config.py OK'\\)\")",
+      "Read(//mnt/c/Users/zrhel/OneDrive/文档/**)",
+      "Bash(python -c \"from shared.models import TaskCreate, TaskInfo; print\\('models OK:', TaskCreate\\(priority=1\\).priority, TaskInfo\\(priority=5\\).priority\\)\")",
+      "Bash(python -c \"from coordinator.task_store import TaskStore; print\\('task_store OK'\\)\")",
+      "Bash(python -c \"from coordinator.main import app; print\\('main OK'\\)\")",
+      "Bash(python -c \"from shared.models import TaskCreate, TaskInfo; t = TaskCreate\\(media_path='test.mkv', priority=1\\); print\\('TaskCreate OK, priority:', t.priority\\); i = TaskInfo\\(media_path='test.mkv', priority=2\\); print\\('TaskInfo OK, priority:', i.priority\\)\")",
+      "Bash(python -c \"from coordinator.worker_registry import WorkerRegistry; print\\('worker_registry OK'\\)\")"
+    ]
+  }
+}

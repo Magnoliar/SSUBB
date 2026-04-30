@@ -24,8 +24,9 @@ from shared.models import (
     TaskConfig,
 )
 
-from .config import load_worker_config
-from .health import build_heartbeat
+from .config import load_worker_config, save_worker_config
+from .health import build_heartbeat, get_llm_health
+from .llm_client import LLMClient
 from .task_executor import TaskExecutor
 from .env_check import run_full_check, print_check_report
 from .model_manager import ModelManager
@@ -48,19 +49,27 @@ logger = logging.getLogger("ssubb.worker")
 
 config = load_worker_config()
 executor: Optional[TaskExecutor] = None
+_llm_client: Optional[LLMClient] = None  # 共享 LLM 容灾客户端（健康检查 + 可复用）
 task_queue: asyncio.Queue = asyncio.Queue()
 _worker_task: Optional[asyncio.Task] = None
+_active_tasks: dict[str, asyncio.Task] = {}  # task_id -> asyncio.Task (用于取消)
+_http_client: Optional[httpx.AsyncClient] = None
 
 
 async def _process_queue():
     """后台任务处理循环"""
+    global _active_tasks
     while True:
         task_data = await task_queue.get()
-        try:
-            task_id = task_data["task_id"]
-            audio_path = task_data["audio_path"]
-            task_config = task_data["config"]
+        task_id = task_data["task_id"]
+        audio_path = task_data["audio_path"]
+        task_config = task_data["config"]
 
+        # 注册活跃任务 (支持取消)
+        current = asyncio.current_task()
+        _active_tasks[task_id] = current
+
+        try:
             logger.info(f"[{task_id}] 开始处理...")
             result = await executor.execute(task_id, audio_path, task_config)
 
@@ -68,37 +77,46 @@ async def _process_queue():
             if config.coordinator_url:
                 await _callback_result(result)
 
-            # 清理临时音频
+        except asyncio.CancelledError:
+            logger.info(f"[{task_id}] 任务被取消")
+        except Exception as e:
+            logger.exception(f"队列处理异常: {e}")
+        finally:
+            # 清理临时音频 (无论成功/失败/取消)
             try:
                 Path(audio_path).unlink(missing_ok=True)
             except Exception:
                 pass
-
-        except Exception as e:
-            logger.exception(f"队列处理异常: {e}")
-        finally:
+            # 清理任务临时目录
+            import shutil
+            task_temp = Path(config.temp_dir) / f"{task_id}_chunks"
+            if task_temp.exists():
+                shutil.rmtree(task_temp, ignore_errors=True)
+            _active_tasks.pop(task_id, None)
             task_queue.task_done()
 
 
 async def _callback_result(result: WorkerTaskResult):
     """回调处理结果给 Coordinator"""
+    global _http_client
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.post(
-                f"{config.coordinator_url}/api/result",
-                json=result.model_dump(),
-            )
-            if response.status_code == 200:
-                logger.info(f"[{result.task_id}] 结果已回调")
-            else:
-                logger.warning(f"[{result.task_id}] 回调失败: {response.status_code}")
+        if _http_client is None:
+            _http_client = httpx.AsyncClient(timeout=30)
+        response = await _http_client.post(
+            f"{config.coordinator_url}/api/result",
+            json=result.model_dump(),
+        )
+        if response.status_code == 200:
+            logger.info(f"[{result.task_id}] 结果已回调")
+        else:
+            logger.warning(f"[{result.task_id}] 回调失败: {response.status_code}")
     except Exception as e:
         logger.error(f"[{result.task_id}] 回调异常: {e}")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global executor, _worker_task
+    global executor, _worker_task, _http_client, _llm_client
 
     # 启动环境检查
     logger.info("执行环境检查...")
@@ -109,16 +127,45 @@ async def lifespan(app: FastAPI):
         logger.warning(f"环境检查有 {len(failed)} 项必要检查未通过，部分功能可能不可用")
 
     executor = TaskExecutor(config)
+    _llm_client = LLMClient(config.llm_providers)
+    _http_client = httpx.AsyncClient(timeout=30)
     _worker_task = asyncio.create_task(_process_queue())
-    
+
+    # 自动发现：如果未配置 coordinator_url，尝试局域网发现
+    discovery_client = None
+    if not config.coordinator_url:
+        from .discovery_client import UDPDiscoveryClient
+
+        async def _on_coordinator_found(url: str):
+            """发现 Coordinator 时自动写入配置"""
+            from .config import save_worker_config
+            config.coordinator_url = url
+            cfg = config.model_dump()
+            save_worker_config(cfg)
+            logger.info(f"自动发现 Coordinator: {url}，已写入配置")
+
+        discovery_client = UDPDiscoveryClient(
+            worker_id=config.worker_id,
+            worker_port=config.port,
+            on_coordinator_discovered=_on_coordinator_found,
+        )
+        await discovery_client.start()
+        logger.info("未配置 Coordinator 地址，已启动自动发现")
+
     logger.info(f"SSUBB Worker v{VERSION} 启动")
     logger.info(f"  Worker ID: {config.worker_id}")
-    logger.info(f"  Coordinator: {config.coordinator_url or '未配置'}")
+    logger.info(f"  Coordinator: {config.coordinator_url or '未配置 (等待自动发现)'}")
     logger.info(f"  模型: {config.transcribe.model} ({config.transcribe.device})")
     logger.info(f"  翻译: {config.translate.service} → {config.translate.target_language}")
     yield
+    if discovery_client:
+        await discovery_client.stop()
     if _worker_task:
         _worker_task.cancel()
+    if _llm_client:
+        await _llm_client.close()
+    if _http_client:
+        await _http_client.aclose()
     logger.info("SSUBB Worker 关闭")
 
 
@@ -163,9 +210,15 @@ async def upload_chunk(request: Request):
     file_hash = headers.get("X-File-Hash", "")
     file_name = headers.get("X-File-Name", "audio.flac")
     task_config_str = headers.get("X-Config", "")
-    
+
     if not task_id:
         raise HTTPException(status_code=400, detail="Missing X-Task-ID")
+
+    # 文件名净化: 防止路径遍历
+    import os
+    file_name = os.path.basename(file_name)
+    if not file_name or '..' in file_name or len(file_name) > 255:
+        file_name = "audio.flac"
         
     temp_dir = Path(config.temp_dir)
     chunk_dir = temp_dir / f"{task_id}_chunks"
@@ -240,9 +293,13 @@ async def upload_chunk(request: Request):
 
 @app.delete("/api/task/{task_id}")
 async def cancel_task(task_id: str):
-    """取消任务 (仅对队列中的任务有效)"""
-    # 简单实现: 标记取消，执行器检查
-    logger.info(f"收到取消请求: {task_id}")
+    """取消正在执行的任务"""
+    task = _active_tasks.get(task_id)
+    if task and not task.done():
+        task.cancel()
+        logger.info(f"[{task_id}] 任务已取消")
+        return APIResponse(success=True, message="任务已取消")
+    logger.info(f"取消请求: {task_id} (未找到活跃任务)")
     return APIResponse(success=True, message="取消请求已记录")
 
 
@@ -322,6 +379,103 @@ async def env_check():
             for r in results
         ],
     }
+
+
+# =============================================================================
+# LLM 健康检查 API
+# =============================================================================
+
+@app.get("/api/llm/health")
+async def llm_health():
+    """所有 LLM 提供商的健康状态"""
+    if _llm_client is None:
+        return []
+    health = await get_llm_health(_llm_client)
+    return [h.model_dump() for h in health]
+
+
+# =============================================================================
+# 配置接收 API (Coordinator 推送)
+# =============================================================================
+
+@app.post("/api/task/reoptimize")
+async def reoptimize_segments(request: Request):
+    """对指定段落重新优化（供 Coordinator 调用）"""
+    body = await request.json()
+    entries = body.get("entries", [])
+    segment_indices = body.get("segment_indices", [])
+
+    if not entries or not segment_indices:
+        raise HTTPException(status_code=400, detail="entries 和 segment_indices 不能为空")
+
+    from .optimizer import SubtitleOptimizer, _build_system_prompt
+    from .srt_parser import SubtitleSegment
+    from .config import OptimizeConfig
+
+    # 使用共享的 _llm_client 实例（避免每次创建新客户端）
+    llm = _llm_client or LLMClient(config.llm_providers)
+    optimizer = SubtitleOptimizer(llm)
+
+    # 构建 SubtitleSegment 列表
+    segments = []
+    for i, entry in enumerate(entries):
+        seg = SubtitleSegment(
+            index=i + 1,
+            start_time="00:00:00,000",
+            end_time="00:00:00,000",
+            text=entry.get("text", ""),
+        )
+        segments.append(seg)
+
+    # 只优化选中的段落（带上下文）
+    target_segments = [segments[i] for i in segment_indices if i < len(segments)]
+    if not target_segments:
+        return {"repaired_segments": []}
+
+    try:
+        system_prompt = _build_system_prompt(OptimizeConfig())
+        repaired = await optimizer._optimize_chunk(target_segments, system_prompt)
+        result = [{"index": s.index, "timecode": entries[segment_indices[i]]["timecode"], "text": s.text}
+                  for i, s in enumerate(repaired)]
+        return {"repaired_segments": result}
+    except Exception as e:
+        logger.error(f"重新优化失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/config")
+async def receive_config(config_data: dict):
+    """接收 Coordinator 推送的配置更新
+
+    只更新全局配置字段：llm_providers, translate, optimize
+    不覆盖节点配置：transcribe, vram
+    """
+    global _llm_client, config
+
+    # 读取现有完整配置
+    existing = config.model_dump()
+
+    # 只更新允许的字段
+    if "llm_providers" in config_data:
+        existing["llm_providers"] = config_data["llm_providers"]
+    if "translate" in config_data:
+        existing["translate"] = {**existing.get("translate", {}), **config_data["translate"]}
+    if "optimize" in config_data:
+        existing["optimize"] = {**existing.get("optimize", {}), **config_data["optimize"]}
+
+    # 持久化
+    save_worker_config(existing)
+
+    # 热重载配置（重新赋值模块级变量，触发 Pydantic 完整验证）
+    from .config import WorkerConfig
+    config = WorkerConfig(**existing)
+
+    # 热重载 LLM 客户端
+    if config.llm_providers:
+        _llm_client = LLMClient(config.llm_providers)
+        logger.info("配置已更新，LLM 客户端已热重载")
+
+    return APIResponse(success=True, message="配置已更新")
 
 
 # =============================================================================

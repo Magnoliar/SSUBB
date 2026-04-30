@@ -9,12 +9,15 @@ import re
 from typing import List
 
 from shared.models import TaskConfig
+from .config import OptimizeConfig
 from .llm_client import LLMClient
 from .srt_parser import SRTParser, SubtitleSegment
 
 logger = logging.getLogger("ssubb.optimizer")
 
-OPTIMIZE_SYSTEM_PROMPT = """You are a professional subtitle editor.
+
+def _build_system_prompt(opt_config: OptimizeConfig) -> str:
+    return f"""You are a professional subtitle editor.
 Your task is to correct and optimize the given machine-generated subtitles.
 You will receive a JSON dictionary where the key is the index and the value is the subtitle text.
 You MUST output ONLY a valid JSON dictionary mapping the EXACT SAME keys to their optimized texts.
@@ -26,6 +29,9 @@ Guidelines:
 4. Make MINIMAL changes to the structure and length.
 5. NEVER merge or delete keys. Your output MUST have exactly the same number of keys as the input.
 6. The output must be pure JSON, without any markdown formatting like ```json.
+7. CJK text: each line should NOT exceed {opt_config.max_word_count_cjk} characters.
+8. English text: each line should NOT exceed {opt_config.max_word_count_english} words.
+9. If a line is too long, break it naturally at clause boundaries.
 """
 
 
@@ -35,7 +41,12 @@ class SubtitleOptimizer:
     def __init__(self, llm_client: LLMClient):
         self.llm = llm_client
 
-    async def optimize(self, srt_content: str, config: TaskConfig) -> str:
+    async def optimize(
+        self,
+        srt_content: str,
+        config: TaskConfig,
+        opt_config: OptimizeConfig = OptimizeConfig(),
+    ) -> str:
         """优化 SRT 内容"""
         if not config.optimize_enabled:
             return srt_content
@@ -56,11 +67,12 @@ class SubtitleOptimizer:
         ]
 
         # 3. 并发优化
+        system_prompt = _build_system_prompt(opt_config)
         semaphore = asyncio.Semaphore(3)  # 控制并发度
 
         async def _optimize_batch(batch: List[SubtitleSegment]):
             async with semaphore:
-                return await self._optimize_chunk(batch)
+                return await self._optimize_chunk(batch, system_prompt)
 
         tasks = [_optimize_batch(batch) for batch in batches]
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -77,7 +89,9 @@ class SubtitleOptimizer:
         # 5. 重建 SRT
         return SRTParser.build(final_segments)
 
-    async def _optimize_chunk(self, chunk: List[SubtitleSegment]) -> List[SubtitleSegment]:
+    async def _optimize_chunk(
+        self, chunk: List[SubtitleSegment], system_prompt: str
+    ) -> List[SubtitleSegment]:
         """优化单批次"""
         if not chunk:
             return chunk
@@ -89,7 +103,7 @@ class SubtitleOptimizer:
         user_prompt = f"Correct the following subtitles:\n{input_dict}"
 
         messages = [
-            {"role": "system", "content": OPTIMIZE_SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
 

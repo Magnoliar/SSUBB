@@ -17,6 +17,25 @@ def _gen_id() -> str:
 # 任务相关
 # =============================================================================
 
+class LLMProviderConfig(BaseModel):
+    """单个 LLM 提供商配置"""
+    api_base: str
+    api_key: str
+    model: str
+    priority: int = Field(default=1, description="数字越小优先级越高")
+    enabled: bool = True
+    label: str = Field(default="", description="可选标签，如 'DeepSeek-主力'")
+
+
+class LLMHealthStatus(BaseModel):
+    """单个 LLM 提供商健康状态"""
+    provider_label: str
+    healthy: bool
+    latency_ms: float = 0
+    last_error: str = ""
+    last_check: str = ""
+
+
 class TaskConfig(BaseModel):
     """任务处理配置 (随音频一起发送给 Worker)"""
     source_lang: str = Field(default="auto", description="源语言 (auto/en/ja/fr...)")
@@ -50,6 +69,7 @@ class TaskCreate(BaseModel):
     target_lang: str = Field(default="zh")
     audio_track: int = Field(default=-1, description="音轨索引 (-1=自动选择)")
     force: bool = Field(default=False, description="强制模式: 跳过所有检查，覆盖已有字幕")
+    priority: int = Field(default=3, ge=1, le=5, description="优先级 1(最高)-5(最低)")
     callback_url: Optional[str] = Field(default=None, description="通知回调地址 (Webhook)")
 
 
@@ -67,6 +87,7 @@ class TaskInfo(BaseModel):
     target_lang: str = "zh"
     
     status: str = "pending"
+    priority: int = 3
     force_mode: bool = False
     skip_reason: Optional[str] = None
     callback_url: Optional[str] = None
@@ -128,6 +149,8 @@ class WorkerTaskResult(BaseModel):
     segment_count: Optional[int] = None           # 字幕条数
     error: Optional[str] = None
     error_code: Optional[str] = None              # 错误分类码
+    partial_translation: bool = False              # 部分翻译失败标记
+    original_srt: Optional[str] = None             # 原始转写 SRT (用于双语合并)
 
 
 # =============================================================================
@@ -153,6 +176,7 @@ class WorkerStatus(BaseModel):
     worker_id: str
     url: str
     online: bool = False
+    weight: int = 1
     last_heartbeat: Optional[datetime] = None
     heartbeat: Optional[WorkerHeartbeat] = None
 
@@ -178,8 +202,20 @@ class SystemStatus(BaseModel):
     """系统状态"""
     version: str
     coordinator_online: bool = True
-    worker: Optional[WorkerStatus] = None
+    worker: Optional[WorkerStatus] = None        # 向后兼容别名 (指向 workers[0])
+    workers: list[WorkerStatus] = Field(default_factory=list)
     tasks_pending: int = 0
     tasks_active: int = 0
     tasks_completed: int = 0
     tasks_failed: int = 0
+
+
+class ScanHistoryEntry(BaseModel):
+    """扫描历史记录"""
+    id: int = 0
+    scan_time: str
+    total_videos: int = 0
+    missing_subtitle: int = 0
+    already_active: int = 0
+    new_tasks_created: int = 0
+    duration_seconds: float = 0

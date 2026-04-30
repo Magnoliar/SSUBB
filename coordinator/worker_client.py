@@ -152,3 +152,47 @@ class WorkerClient:
         except Exception as e:
             logger.warning(f"取消任务失败: {e}")
             return False
+
+    async def get_llm_health(self) -> list[dict]:
+        """代理请求 Worker 的 /api/llm/health"""
+        try:
+            async with httpx.AsyncClient(timeout=STATUS_TIMEOUT) as client:
+                response = await client.get(f"{self.worker_url}/api/llm/health")
+                if response.status_code == 200:
+                    return response.json()
+        except Exception as e:
+            logger.debug(f"LLM 健康查询失败: {e}")
+        return []
+
+    async def push_config(self, config_data: dict) -> bool:
+        """推送配置更新到 Worker"""
+        try:
+            async with httpx.AsyncClient(timeout=STATUS_TIMEOUT) as client:
+                response = await client.put(
+                    f"{self.worker_url}/api/config",
+                    json=config_data,
+                )
+                return response.status_code == 200
+        except Exception as e:
+            logger.warning(f"推送配置到 Worker 失败: {e}")
+            return False
+
+    async def reoptimize_segments(
+        self, entries: list[dict], segment_indices: list[int]
+    ) -> Optional[list[dict]]:
+        """请求 Worker 对指定段落重新优化"""
+        try:
+            async with httpx.AsyncClient(timeout=120) as client:
+                response = await client.post(
+                    f"{self.worker_url}/api/task/reoptimize",
+                    json={
+                        "entries": entries,
+                        "segment_indices": segment_indices,
+                    },
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    return data.get("repaired_segments")
+        except Exception as e:
+            logger.warning(f"段落重新优化请求失败: {e}")
+        return None

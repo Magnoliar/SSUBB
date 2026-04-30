@@ -9,7 +9,7 @@ cd /d "%PROJECT_ROOT%"
 
 echo ========================================================
 echo        SSUBB - Smart Subtitle Worker Node
-echo        Version: 0.5.0
+echo        Version: 0.9.0
 echo ========================================================
 echo.
 
