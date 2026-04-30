@@ -67,8 +67,6 @@
 
 ---
 
-## 当前开发重点
-
 ### V0.10：LLM 多源容灾 & 字幕编辑 & 看板重构
 - **LLM 多端点容灾**：支持配置多个 LLM 提供商（DeepSeek/OpenAI/智谱等），按优先级自动切换，单点故障不再影响全局。Worker 端 `/api/llm/health` 暴露各提供商健康状态。
 - **字幕预览与编辑**：完成任务后可在 WebUI 预览 SRT 字幕内容，支持手动编辑保存、勾选段落重新调用 LLM 优化。
@@ -84,12 +82,14 @@
 - **Worker 详情弹窗**：点击 Worker 卡片查看 GPU 利用率、显存、运行时间、LLM 提供商状态。
 - **键盘快捷键**：Ctrl+F 聚焦搜索，Ctrl+Enter 提交任务，Escape 关闭弹窗。
 
-### V0.11：生产就绪（计划中）
-- **通知系统**：任务完成/失败时通过 Webhook 推送通知（MoviePilot 已覆盖部分需求）。
-- **API 鉴权**：Coordinator API Token 认证，防止未授权访问。
-- **日志持久化**：结构化日志写入文件，支持按日期轮转。
-- **ASS 样式自定义**：ASS 字幕的字体、大小、颜色、位置可配置。
-- **多语言目标翻译**：一次转写后同时生成多种语言字幕。
+### V0.11：生产就绪
+- **API Token 认证**：Bearer Token 双重认证（`api_token` + `worker_token`），路由级豁免，WebUI 登录对话框，配置掩码。
+- **通知系统**：多渠道 Webhook 分发（Bark/PushPlus/Gotify/通用），事件过滤，WebUI 测试连通性。
+- **日志持久化**：双端 `RotatingFileHandler`，可配置轮转大小、备份数、日志目录。
+- **ASS 样式自定义**：`ass_style` + `ass_bilingual_style` 配置，支持字体、颜色、位置、边距。
+- **两阶段术语提取**：SRT LLM 提取（基线）→ 豆瓣/维基搜索（覆盖），确保专有名词翻译一致。
+- **httpx 资源管理**：WorkerClient、TaskExecutor、SubtitleWriter、Notifier 全部使用共享客户端，消除连接泄漏。
+- **代码质量清理**：修复 `@staticmethod` + `self` 关键 Bug，清理冗余 import，统一使用共享常量。
 
 ---
 

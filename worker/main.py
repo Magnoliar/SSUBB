@@ -4,8 +4,11 @@
 """
 
 import asyncio
+import hashlib
 import json
 import logging
+import os
+import shutil
 import sys
 import tempfile
 from contextlib import asynccontextmanager
@@ -13,7 +16,7 @@ from pathlib import Path
 from typing import Optional
 
 import httpx
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 
 from shared.constants import VERSION, PROJECT_NAME
 from shared.models import (
@@ -35,12 +38,38 @@ from .model_manager import ModelManager
 # 日志配置
 # =============================================================================
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+from logging.handlers import RotatingFileHandler
+
+LOG_DIR = Path("./data")
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+LOG_FILE = LOG_DIR / "worker.log"
+
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.INFO)
+
+if root_logger.hasHandlers():
+    root_logger.handlers.clear()
+
+_formatter = logging.Formatter(
+    fmt="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
-    stream=sys.stderr,
 )
+
+# 终端输出
+_console = logging.StreamHandler(sys.stderr)
+_console.setFormatter(_formatter)
+root_logger.addHandler(_console)
+
+# 文件输出 (10MB 轮转，保留 3 个备份)
+_file = RotatingFileHandler(
+    LOG_FILE,
+    maxBytes=10 * 1024 * 1024,
+    backupCount=3,
+    encoding="utf-8",
+)
+_file.setFormatter(_formatter)
+root_logger.addHandler(_file)
+
 logger = logging.getLogger("ssubb.worker")
 
 # =============================================================================
@@ -81,6 +110,14 @@ async def _process_queue():
             logger.info(f"[{task_id}] 任务被取消")
         except Exception as e:
             logger.exception(f"队列处理异常: {e}")
+            # 通知 Coordinator 任务失败，避免 Coordinator 永久等待
+            if config.coordinator_url:
+                fail_result = WorkerTaskResult(
+                    task_id=task_id,
+                    status="failed",
+                    error=f"Worker 队列处理异常: {e}",
+                )
+                await _callback_result(fail_result)
         finally:
             # 清理临时音频 (无论成功/失败/取消)
             try:
@@ -88,7 +125,6 @@ async def _process_queue():
             except Exception:
                 pass
             # 清理任务临时目录
-            import shutil
             task_temp = Path(config.temp_dir) / f"{task_id}_chunks"
             if task_temp.exists():
                 shutil.rmtree(task_temp, ignore_errors=True)
@@ -164,6 +200,8 @@ async def lifespan(app: FastAPI):
         _worker_task.cancel()
     if _llm_client:
         await _llm_client.close()
+    if executor:
+        await executor.close()
     if _http_client:
         await _http_client.aclose()
     logger.info("SSUBB Worker 关闭")
@@ -174,6 +212,46 @@ app = FastAPI(
     version=VERSION,
     lifespan=lifespan,
 )
+
+
+# =============================================================================
+# 认证中间件
+# =============================================================================
+
+# 需要认证保护的写操作路径
+_PROTECTED_PATHS = {
+    "/api/task/upload_chunk",
+    "/api/config",
+    "/api/task/reoptimize",
+}
+# DELETE 方法总是需要认证
+_PROTECTED_PREFIXES_DELETE = ("/api/task/", "/api/models/")
+
+
+@app.middleware("http")
+async def verify_worker_token(request: Request, call_next):
+    """验证 Coordinator 请求的 Token (仅保护写操作)"""
+    token = config.security.worker_token
+    if not token:
+        return await call_next(request)
+
+    method = request.method
+    path = request.url.path
+
+    needs_auth = False
+    if method == "PUT" and path == "/api/config":
+        needs_auth = True
+    elif method == "POST" and (path in _PROTECTED_PATHS or path.startswith("/api/task/upload_chunk")):
+        needs_auth = True
+    elif method == "DELETE":
+        needs_auth = True
+
+    if needs_auth:
+        req_token = request.headers.get("X-Worker-Token", "")
+        if req_token != token:
+            return HTTPException(status_code=401, detail="Unauthorized")
+
+    return await call_next(request)
 
 
 # =============================================================================
@@ -215,7 +293,6 @@ async def upload_chunk(request: Request):
         raise HTTPException(status_code=400, detail="Missing X-Task-ID")
 
     # 文件名净化: 防止路径遍历
-    import os
     file_name = os.path.basename(file_name)
     if not file_name or '..' in file_name or len(file_name) > 255:
         file_name = "audio.flac"
@@ -242,8 +319,7 @@ async def upload_chunk(request: Request):
         # 合并文件
         final_audio_path = temp_dir / f"{task_id}_{file_name}"
         logger.info(f"[{task_id}] 分块全部集齐，开始合并组装...")
-        
-        import hashlib
+
         sha256_hash = hashlib.sha256()
         
         try:
@@ -265,7 +341,6 @@ async def upload_chunk(request: Request):
             logger.info(f"[{task_id}] ✅ SHA-256 校验通过，文件完好无损 ({final_audio_path.stat().st_size/1024/1024:.1f}MB)")
             
             # 清理 chunks 目录
-            import shutil
             shutil.rmtree(chunk_dir, ignore_errors=True)
             
             # 压入任务队列
@@ -463,15 +538,19 @@ async def receive_config(config_data: dict):
     if "optimize" in config_data:
         existing["optimize"] = {**existing.get("optimize", {}), **config_data["optimize"]}
 
-    # 持久化
-    save_worker_config(existing)
-
-    # 热重载配置（重新赋值模块级变量，触发 Pydantic 完整验证）
+    # 先验证，再持久化（防止无效配置写入磁盘）
     from .config import WorkerConfig
-    config = WorkerConfig(**existing)
+    try:
+        config = WorkerConfig(**existing)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"配置验证失败: {e}")
+
+    save_worker_config(existing)
 
     # 热重载 LLM 客户端
     if config.llm_providers:
+        if _llm_client:
+            await _llm_client.close()
         _llm_client = LLMClient(config.llm_providers)
         logger.info("配置已更新，LLM 客户端已热重载")
 

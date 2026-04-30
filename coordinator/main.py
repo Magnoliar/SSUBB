@@ -11,8 +11,9 @@ from collections import deque
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, Depends
 from fastapi.responses import JSONResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
 from shared.constants import VERSION, PROJECT_NAME, TaskStatus
@@ -33,17 +34,15 @@ from .task_manager import TaskManager
 # 日志配置
 # =============================================================================
 import os
+import platform
+import re
 from pathlib import Path
+from logging.handlers import RotatingFileHandler
 
-LOG_DIR = Path("./data")
-LOG_DIR.mkdir(parents=True, exist_ok=True)
-LOG_FILE = LOG_DIR / "ssubb.log"
-
-# 配置根日志
+# 初始日志配置 (控制台)，配置加载后会补充文件日志
 root_logger = logging.getLogger()
 root_logger.setLevel(logging.INFO)
 
-# 清除已有的 handlers 避免重复
 if root_logger.hasHandlers():
     root_logger.handlers.clear()
 
@@ -52,15 +51,9 @@ formatter = logging.Formatter(
     datefmt="%Y-%m-%d %H:%M:%S"
 )
 
-# 终端输出
 console_handler = logging.StreamHandler(sys.stderr)
 console_handler.setFormatter(formatter)
 root_logger.addHandler(console_handler)
-
-# 文件输出
-file_handler = logging.FileHandler(LOG_FILE, encoding="utf-8")
-file_handler.setFormatter(formatter)
-root_logger.addHandler(file_handler)
 
 logger = logging.getLogger("ssubb.coordinator")
 
@@ -122,6 +115,22 @@ root_logger.addHandler(ws_handler)
 # =============================================================================
 
 config = load_config()
+
+# 配置文件日志 (RotatingFileHandler)
+_log_cfg = config.logging
+_log_dir = Path(_log_cfg.log_dir)
+_log_dir.mkdir(parents=True, exist_ok=True)
+_log_file = _log_dir / "ssubb.log"
+_file_handler = RotatingFileHandler(
+    _log_file,
+    maxBytes=_log_cfg.max_size_mb * 1024 * 1024,
+    backupCount=_log_cfg.backup_count,
+    encoding="utf-8",
+)
+_file_handler.setFormatter(formatter)
+root_logger.addHandler(_file_handler)
+root_logger.setLevel(getattr(logging, _log_cfg.level.upper(), logging.INFO))
+
 task_manager: Optional[TaskManager] = None
 auto_scheduler = None  # AutoScheduler 实例
 discovery_service = None  # UDPDiscoveryService 实例
@@ -129,10 +138,42 @@ SETUP_REQUIRED = not bool(config.worker.url) and not bool(config.workers)  # 如
 _config_lock = asyncio.Lock()  # 配置更新并发锁
 
 
+# =============================================================================
+# API 认证
+# =============================================================================
+
+_security_scheme = HTTPBearer(auto_error=False)
+
+
+async def verify_api_token(
+    credentials: HTTPAuthorizationCredentials = Depends(_security_scheme),
+):
+    """API Token 认证（空 token = 跳过验证，向后兼容）"""
+    if not config.security.api_token:
+        return
+    if not credentials or credentials.credentials != config.security.api_token:
+        raise HTTPException(status_code=401, detail="认证失败")
+
+
+async def verify_worker_token(request: Request):
+    """Worker 回调认证（空 token = 跳过验证）"""
+    if not config.security.worker_token:
+        return
+    token = request.headers.get("X-Worker-Token", "")
+    if token != config.security.worker_token:
+        raise HTTPException(status_code=401, detail="Worker 认证失败")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global task_manager, auto_scheduler, discovery_service
     logger.info(f"SSUBB Coordinator v{VERSION} 启动")
+
+    if not SETUP_REQUIRED:
+        if not config.security.api_token:
+            logger.warning("⚠️ API Token 未配置，所有接口均无认证保护！建议在 security.api_token 中设置强密码")
+        if not config.security.worker_token:
+            logger.warning("⚠️ Worker Token 未配置，Worker 回调无认证保护！建议在 security.worker_token 中设置强密码")
 
     if SETUP_REQUIRED:
         logger.warning("未检测到配置文件或 Worker 配置，进入 Setup 引导模式")
@@ -142,6 +183,10 @@ async def lifespan(app: FastAPI):
     yield
     if task_manager and hasattr(task_manager, 'registry'):
         await task_manager.registry.stop_heartbeat()
+    if task_manager and task_manager.notifier:
+        await task_manager.notifier.close()
+    if task_manager and task_manager.writer:
+        await task_manager.writer.close()
     if auto_scheduler:
         auto_scheduler.stop()
     if discovery_service:
@@ -163,6 +208,10 @@ def _init_services():
 
     if task_manager is None:
         task_manager = TaskManager(config, worker_registry)
+        # 初始化通知器
+        if config.notifications.enabled and config.notifications.channels:
+            from .notifier import Notifier
+            task_manager.notifier = Notifier(config.notifications.channels)
         task_manager.start_watcher()
 
         from .scanner import MediaScanner
@@ -232,7 +281,21 @@ app = FastAPI(
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",
+    dependencies=[Depends(verify_api_token)],
 )
+
+
+# CORS 中间件（必须在路由之前添加）
+@app.on_event("startup")
+async def _setup_cors():
+    from fastapi.middleware.cors import CORSMiddleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=config.security.cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 
 # =============================================================================
@@ -391,7 +454,6 @@ async def reoptimize_subtitle(task_id: str, request: Request):
 
     try:
         # 解析 SRT 条目
-        import re
         srt_content = sub["srt_content"]
         entries = []
         blocks = re.split(r"\n\s*\n", srt_content.strip())
@@ -544,14 +606,14 @@ async def update_task_priority(task_id: str, request: Request):
     return APIResponse(success=True, message=f"优先级已更新为 {priority}")
 
 
-@app.post("/api/result", tags=["Worker 回调"])
+@app.post("/api/result", tags=["Worker 回调"], dependencies=[Depends(verify_worker_token)])
 async def receive_result(result: WorkerTaskResult):
     """接收 Worker 的任务结果回调"""
     success = await task_manager.handle_result(result)
     return APIResponse(success=success, message="OK" if success else "处理失败")
 
 
-@app.post("/api/progress", tags=["Worker 回调"])
+@app.post("/api/progress", tags=["Worker 回调"], dependencies=[Depends(verify_worker_token)])
 async def receive_progress(update: WorkerProgressUpdate):
     """接收 Worker 的进度更新"""
     task_manager.update_progress(update.task_id, update.status, update.progress)
@@ -562,7 +624,7 @@ async def receive_progress(update: WorkerProgressUpdate):
 # Emby Webhook
 # =============================================================================
 
-@app.post("/emby", tags=["Webhook"])
+@app.post("/emby", tags=["Webhook"], dependencies=[])
 async def emby_webhook(request: Request):
     """接收 Emby webhook 事件
 
@@ -576,7 +638,6 @@ async def emby_webhook(request: Request):
         if not data_str:
             return APIResponse(success=False, message="空请求")
 
-        import json
         data = json.loads(data_str)
         event = data.get("Event", "")
 
@@ -620,7 +681,7 @@ async def emby_webhook(request: Request):
 # 通用 Webhook
 # =============================================================================
 
-@app.post("/api/webhook", tags=["Webhook"])
+@app.post("/api/webhook", tags=["Webhook"], dependencies=[])
 async def generic_webhook(request: Request):
     """通用 Webhook 入口
 
@@ -686,7 +747,7 @@ async def generic_webhook(request: Request):
 # 系统状态
 # =============================================================================
 
-@app.get("/api/status", response_model=SystemStatus, tags=["系统状态"])
+@app.get("/api/status", response_model=SystemStatus, tags=["系统状态"], dependencies=[])
 async def system_status():
     """系统状态检查"""
     if SETUP_REQUIRED:
@@ -718,18 +779,29 @@ async def system_status():
 
 @app.get("/api/fs", tags=["系统状态"])
 async def api_fs_browser(path: Optional[str] = None):
-    """服务器物理文件浏览器"""
-    import os
-    import platform
-    from pathlib import Path
+    """服务器物理文件浏览器（限制在已配置的扫描目录内）"""
+    from shared.constants import VIDEO_EXTENSIONS as MEDIA_EXTS
 
-    # 支持的媒体后缀
-    MEDIA_EXTS = {'.mp4', '.mkv', '.avi', '.ts', '.mov', '.wmv', '.flv', '.rmvb'}
+    # 获取允许的根目录列表
+    allowed_roots = []
+    if config.automation.scan_paths:
+        for sp in config.automation.scan_paths:
+            try:
+                allowed_roots.append(Path(sp).resolve())
+            except Exception:
+                pass
 
     # 根目录策略
     if not path:
-        if platform.system() == "Windows":
-            # 返回所有驱动器盘符
+        if allowed_roots:
+            # 返回允许的根目录列表
+            return {
+                "current_path": "",
+                "parent_path": "",
+                "dirs": [str(r) for r in allowed_roots if r.exists()],
+                "files": [],
+            }
+        elif platform.system() == "Windows":
             import string
             drives = [f"{d}:\\" for d in string.ascii_uppercase if os.path.exists(f"{d}:")]
             return {"current_path": "", "parent_path": "", "dirs": drives, "files": []}
@@ -744,20 +816,31 @@ async def api_fs_browser(path: Optional[str] = None):
     if not target.exists() or not target.is_dir():
         raise HTTPException(status_code=400, detail="Path does not exist or is not a directory")
 
+    # 范围限制: 如果配置了 scan_paths，只能浏览其子目录
+    if allowed_roots:
+        resolved = target.resolve()
+        if not any(
+            str(resolved) == str(root) or str(resolved).startswith(str(root) + os.sep)
+            for root in allowed_roots
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail=f"只能浏览已配置的扫描目录: {[str(r) for r in allowed_roots]}",
+            )
+
     dirs = []
     files = []
-    
+
     try:
         for entry in os.scandir(target):
             if entry.is_dir():
                 dirs.append(entry.name)
             elif entry.is_file() and Path(entry.name).suffix.lower() in MEDIA_EXTS:
-                # 附带文件大小 MB
                 size_mb = round(entry.stat().st_size / (1024 * 1024), 1)
                 files.append({"name": entry.name, "size_mb": size_mb})
     except PermissionError:
         raise HTTPException(status_code=403, detail="Permission denied")
-        
+
     dirs.sort()
     files.sort(key=lambda x: x["name"])
 
@@ -765,7 +848,7 @@ async def api_fs_browser(path: Optional[str] = None):
         "current_path": str(target.absolute()),
         "parent_path": str(target.parent.absolute()) if target.parent != target else "",
         "dirs": dirs,
-        "files": files
+        "files": files,
     }
 
 # =============================================================================
@@ -891,7 +974,7 @@ async def register_discovered_worker(request: Request):
     return APIResponse(success=True, message=f"Worker {url} 已注册")
 
 
-@app.get("/api/health", tags=["系统状态"])
+@app.get("/api/health", tags=["系统状态"], dependencies=[])
 async def get_health():
     """配置健康度检查"""
     checks = {}
@@ -963,8 +1046,7 @@ async def get_health():
 @app.get("/api/logs", tags=["系统状态"])
 async def api_get_logs(lines: int = 100):
     """抓取服务器最新运行日志用于控制台显示"""
-    from pathlib import Path
-    log_path = Path("./data/ssubb.log")
+    log_path = Path(config.logging.log_dir) / "ssubb.log"
     if not log_path.exists():
         return {"logs": ["尚未生成任何日志。"]}
 
@@ -979,6 +1061,12 @@ async def api_get_logs(lines: int = 100):
 @app.websocket("/ws/logs")
 async def ws_logs(websocket: WebSocket):
     """WebSocket 实时日志流"""
+    # Token 认证 (通过 query parameter: /ws/logs?token=xxx)
+    if config.security.api_token:
+        token = websocket.query_params.get("token", "")
+        if token != config.security.api_token:
+            await websocket.close(code=4001, reason="Unauthorized")
+            return
     await websocket.accept()
     history, queue = log_broadcaster.subscribe()
     try:
@@ -1036,6 +1124,8 @@ class ConfigUpdateRequest(BaseModel):
     automation: Optional[dict] = None
     checker: Optional[dict] = None
     emby: Optional[dict] = None
+    security: Optional[dict] = None
+    notifications: Optional[dict] = None
     llm_providers: Optional[list] = None
     translate: Optional[dict] = None
     optimize: Optional[dict] = None
@@ -1047,8 +1137,18 @@ async def get_config():
     cfg = config.model_dump()
     if cfg.get("emby", {}).get("api_key"):
         cfg["emby"]["api_key"] = "***"
-    for w in cfg.get("workers", []):
-        pass  # workers 无敏感字段
+    # 脱敏安全令牌
+    if cfg.get("security", {}).get("api_token"):
+        cfg["security"]["api_token"] = "***"
+    if cfg.get("security", {}).get("worker_token"):
+        cfg["security"]["worker_token"] = "***"
+    # 脱敏 LLM API Key
+    if cfg.get("llm_providers"):
+        for p in cfg["llm_providers"]:
+            if p.get("api_key"):
+                p["api_key"] = "***"
+    if cfg.get("llm", {}).get("api_key"):
+        cfg["llm"]["api_key"] = "***"
     return cfg
 
 
@@ -1073,6 +1173,15 @@ async def update_config(req: ConfigUpdateRequest):
             if req.emby.get("api_key") == "***":
                 req.emby.pop("api_key")
             cfg_dict["emby"].update(req.emby)
+        if req.security is not None:
+            # 跳过脱敏占位符
+            if req.security.get("api_token") == "***":
+                req.security.pop("api_token")
+            if req.security.get("worker_token") == "***":
+                req.security.pop("worker_token")
+            cfg_dict.setdefault("security", {}).update(req.security)
+        if req.notifications is not None:
+            cfg_dict["notifications"] = req.notifications
         if req.llm_providers is not None:
             cfg_dict["llm_providers"] = req.llm_providers
         if req.translate is not None:
@@ -1099,11 +1208,31 @@ async def update_config(req: ConfigUpdateRequest):
 
 
 # =============================================================================
+# 通知 API
+# =============================================================================
+
+@app.post("/api/notifications/test", tags=["通知"])
+async def test_notification(channel_name: str = ""):
+    """测试通知渠道 (发送测试消息)"""
+    if not task_manager or not task_manager.notifier:
+        return APIResponse(success=False, message="通知未配置或未启用")
+    notifier = task_manager.notifier
+    target_channels = [
+        c for c in notifier._channels
+        if not channel_name or c.name == channel_name
+    ]
+    if not target_channels:
+        return APIResponse(success=False, message=f"未找到渠道: {channel_name}")
+    for ch in target_channels:
+        await notifier.notify("scan_result", {"new_tasks": 0, "test": True})
+    return APIResponse(success=True, message=f"已发送测试通知到 {len(target_channels)} 个渠道")
+
+
+# =============================================================================
 # WebUI (静态文件挂载)
 # =============================================================================
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from pathlib import Path
 
 # 判断并创建静态文件目录
 STATIC_DIR = Path(__file__).parent / "static"
@@ -1112,7 +1241,7 @@ STATIC_DIR.mkdir(parents=True, exist_ok=True)
 # 挂载 /static 目录
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-@app.get("/")
+@app.get("/", dependencies=[])
 async def root_webui():
     """根路径返回酷炫 WebUI 页面或配置引导页面"""
     if SETUP_REQUIRED:
@@ -1140,7 +1269,7 @@ class SetupRequest(BaseModel):
     enable_automation: bool = False
     scan_paths: list[str] = []
 
-@app.post("/api/setup", tags=["配置"])
+@app.post("/api/setup", tags=["配置"], dependencies=[])
 async def apply_setup(req: SetupRequest):
     """保存配置并热启动系统"""
     global SETUP_REQUIRED, config

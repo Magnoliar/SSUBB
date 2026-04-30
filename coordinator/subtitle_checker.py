@@ -113,6 +113,18 @@ class SubtitleChecker:
             return False, "字幕文件不可读"
 
         # 1. 基础: 文件可读
+        suffix = sub_path.suffix.lower()
+        if suffix in (".ass", ".ssa"):
+            # ASS/SSA 格式：仅做文件大小和行数检查，不做 SRT 解析
+            try:
+                content = sub_path.read_text(encoding="utf-8", errors="replace")
+                line_count = content.count("\n")
+                if line_count < 10:
+                    return False, f"ASS 字幕行数过少 ({line_count} 行)"
+                return True, "ASS 字幕文件正常"
+            except Exception as e:
+                return False, f"ASS 字幕读取失败: {e}"
+
         try:
             subs = self._parse_srt(subtitle_path)
         except Exception as e:

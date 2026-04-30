@@ -40,6 +40,7 @@ class TaskConfig(BaseModel):
     """任务处理配置 (随音频一起发送给 Worker)"""
     source_lang: str = Field(default="auto", description="源语言 (auto/en/ja/fr...)")
     target_lang: str = Field(default="zh", description="目标语言")
+    media_title: Optional[str] = Field(default=None, description="媒体标题 (用于术语搜索)")
     
     # 转写
     whisper_model: str = Field(default="large-v3-turbo")
@@ -55,6 +56,8 @@ class TaskConfig(BaseModel):
     translate_thread_num: int = Field(default=5)
     translate_batch_size: int = Field(default=10)
     need_reflect: bool = Field(default=False, description="反思翻译 (更高质量)")
+    terminology_enabled: bool = Field(default=True, description="翻译前自动提取术语")
+    glossary: Optional[dict[str, str]] = Field(default=None, description="术语表 {原文: 译文}，可手动传入或自动提取")
 
 
 class TaskCreate(BaseModel):

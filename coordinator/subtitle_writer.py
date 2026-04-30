@@ -38,12 +38,23 @@ class SubtitleWriter:
         backup_existing: bool = True,
         output_mode: str = "single",       # single / bilingual
         output_format: str = "srt",        # srt / ass
+        ass_style=None,                    # AssStyleConfig
+        ass_bilingual_style=None,          # AssBilingualStyleConfig
     ):
         self.emby_server = emby_server.rstrip("/")
         self.emby_api_key = emby_api_key
         self.backup_existing = backup_existing
         self.output_mode = output_mode
         self.output_format = output_format
+        self.ass_style = ass_style
+        self.ass_bilingual_style = ass_bilingual_style
+        self._http: Optional[httpx.AsyncClient] = None
+
+    async def close(self):
+        """关闭 httpx 客户端"""
+        if self._http and not self._http.is_closed:
+            await self._http.aclose()
+            self._http = None
 
     def write_subtitle(
         self,
@@ -138,13 +149,19 @@ class SubtitleWriter:
 
     def _build_bilingual_ass(self, orig: list, trans: list) -> str:
         """构建双语 ASS (翻译底部大字，原文顶部小字)"""
-        header = self._ass_header(
-            "SSUBB Bilingual",
-            style_extra=[
+        bs = self.ass_bilingual_style
+        if bs:
+            orig_style = (
+                f"Style: Original,Noto Sans,{bs.font_size},"
+                f"&H00FFFFFF,&H000000FF,&H00000000,&H80000000,"
+                f"-1,0,0,0,100,100,0,0,1,1,0,{bs.alignment},10,10,{bs.margin_v},1"
+            )
+        else:
+            orig_style = (
                 "Style: Original,Noto Sans,10,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,"
-                "-1,0,0,0,100,100,0,0,1,1,0,8,10,10,10,1",
-            ],
-        )
+                "-1,0,0,0,100,100,0,0,1,1,0,8,10,10,10,1"
+            )
+        header = self._ass_header("SSUBB Bilingual", style_extra=[orig_style])
         events = []
         for i, t_entry in enumerate(trans):
             start, end = self._timecode_to_ass(t_entry["timecode"])
@@ -173,13 +190,28 @@ class SubtitleWriter:
 
         return header + "\n".join(events) + "\n"
 
-    @staticmethod
-    def _ass_header(title: str = "SSUBB", style_extra: list = None) -> str:
+    def _ass_header(self, title: str = "SSUBB", style_extra: list = None) -> str:
         """生成 ASS 文件头"""
-        styles = [
-            "Style: Default,Noto Sans,12,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,"
-            "-1,0,0,0,100,100,0,0,1,1.5,0,2,10,10,30,1",
-        ]
+        # 使用配置的样式或默认值
+        s = self.ass_style
+        if s:
+            default_style = (
+                f"Style: Default,{s.font_name},{s.font_size},"
+                f"{s.primary_colour},&H000000FF,{s.outline_colour},{s.back_colour},"
+                f"{s.bold},0,0,0,100,100,0,0,1,{s.outline_width},{s.shadow},"
+                f"{s.alignment},{s.margin_l},{s.margin_r},{s.margin_v},1"
+            )
+            play_res_x = s.play_res_x
+            play_res_y = s.play_res_y
+        else:
+            default_style = (
+                "Style: Default,Noto Sans,12,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,"
+                "-1,0,0,0,100,100,0,0,1,1.5,0,2,10,10,30,1"
+            )
+            play_res_x = 1920
+            play_res_y = 1080
+
+        styles = [default_style]
         if style_extra:
             styles.extend(style_extra)
 
@@ -187,8 +219,8 @@ class SubtitleWriter:
             "[Script Info]\n"
             f"Title: {title}\n"
             "ScriptType: v4.00+\n"
-            "PlayResX: 1920\n"
-            "PlayResY: 1080\n"
+            f"PlayResX: {play_res_x}\n"
+            f"PlayResY: {play_res_y}\n"
             "WrapStyle: 0\n"
             "ScaledBorderAndShadow: yes\n\n"
             "[V4+ Styles]\n"
@@ -255,6 +287,12 @@ class SubtitleWriter:
 
         return entries
 
+    def _get_http(self, timeout: float = 15) -> httpx.AsyncClient:
+        """获取或创建共享 httpx 客户端"""
+        if self._http is None or self._http.is_closed:
+            self._http = httpx.AsyncClient(timeout=timeout)
+        return self._http
+
     async def refresh_emby(self, video_path: str) -> bool:
         """通知 Emby 刷新元数据
 
@@ -265,33 +303,29 @@ class SubtitleWriter:
             return False
 
         try:
-            # 获取 Emby item ID
             item_id = await self._find_emby_item(video_path)
             if not item_id:
-                # 尝试全库刷新
                 logger.info("未找到精确匹配，触发库扫描")
                 return await self._trigger_library_scan()
 
-            # 刷新指定 item
-            async with httpx.AsyncClient(timeout=30) as client:
-                response = await client.post(
-                    f"{self.emby_server}/Items/{item_id}/Refresh",
-                    params={
-                        "api_key": self.emby_api_key,
-                        "Recursive": "true",
-                        "MetadataRefreshMode": "Default",
-                        "ImageRefreshMode": "None",
-                        "ReplaceAllMetadata": "false",
-                        "ReplaceAllImages": "false",
-                    },
-                )
-                if response.status_code in (200, 204):
-                    logger.info(f"Emby 元数据已刷新 (item={item_id})")
-                    return True
-                else:
-                    logger.warning(f"Emby 刷新失败: {response.status_code}")
-                    return False
-
+            client = self._get_http(30)
+            response = await client.post(
+                f"{self.emby_server}/Items/{item_id}/Refresh",
+                params={
+                    "api_key": self.emby_api_key,
+                    "Recursive": "true",
+                    "MetadataRefreshMode": "Default",
+                    "ImageRefreshMode": "None",
+                    "ReplaceAllMetadata": "false",
+                    "ReplaceAllImages": "false",
+                },
+            )
+            if response.status_code in (200, 204):
+                logger.info(f"Emby 元数据已刷新 (item={item_id})")
+                return True
+            else:
+                logger.warning(f"Emby 刷新失败: {response.status_code}")
+                return False
         except Exception as e:
             logger.warning(f"Emby 刷新异常: {e}")
             return False
@@ -300,25 +334,25 @@ class SubtitleWriter:
         """通过文件路径查找 Emby item ID"""
         video_name = Path(video_path).name
         try:
-            async with httpx.AsyncClient(timeout=15) as client:
-                response = await client.get(
-                    f"{self.emby_server}/Items",
-                    params={
-                        "api_key": self.emby_api_key,
-                        "SearchTerm": Path(video_path).stem,
-                        "Recursive": "true",
-                        "IncludeItemTypes": "Movie,Episode",
-                        "Fields": "Path",
-                        "Limit": 10,
-                    },
-                )
-                if response.status_code == 200:
-                    data = response.json()
-                    items = data.get("Items", [])
-                    for item in items:
-                        item_path = item.get("Path", "")
-                        if Path(item_path).name == video_name:
-                            return item.get("Id")
+            client = self._get_http()
+            response = await client.get(
+                f"{self.emby_server}/Items",
+                params={
+                    "api_key": self.emby_api_key,
+                    "SearchTerm": Path(video_path).stem,
+                    "Recursive": "true",
+                    "IncludeItemTypes": "Movie,Episode",
+                    "Fields": "Path",
+                    "Limit": 10,
+                },
+            )
+            if response.status_code == 200:
+                data = response.json()
+                items = data.get("Items", [])
+                for item in items:
+                    item_path = item.get("Path", "")
+                    if Path(item_path).name == video_name:
+                        return item.get("Id")
         except Exception as e:
             logger.debug(f"Emby 搜索失败: {e}")
         return None
@@ -326,12 +360,12 @@ class SubtitleWriter:
     async def _trigger_library_scan(self) -> bool:
         """触发 Emby 全库扫描"""
         try:
-            async with httpx.AsyncClient(timeout=15) as client:
-                response = await client.post(
-                    f"{self.emby_server}/Library/Refresh",
-                    params={"api_key": self.emby_api_key},
-                )
-                return response.status_code in (200, 204)
+            client = self._get_http()
+            response = await client.post(
+                f"{self.emby_server}/Library/Refresh",
+                params={"api_key": self.emby_api_key},
+            )
+            return response.status_code in (200, 204)
         except Exception as e:
             logger.warning(f"触发 Emby 库扫描失败: {e}")
             return False

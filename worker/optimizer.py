@@ -119,8 +119,11 @@ class SubtitleOptimizer:
             for seg in chunk:
                 key = str(seg.index)
                 if key in result_dict:
-                    # 简单去除空白符，防止 LLM 加了莫名其妙的回车
-                    optimized_text = re.sub(r"\s+", " ", result_dict[key]).strip()
+                    # 去除水平空白符，保留换行（LLM 可能返回多行字幕）
+                    lines = result_dict[key].split("\n")
+                    optimized_text = "\n".join(
+                        re.sub(r"[^\S\n]+", " ", line).strip() for line in lines
+                    ).strip()
                     if optimized_text:
                         seg.text = optimized_text
         else:

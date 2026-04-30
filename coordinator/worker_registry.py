@@ -38,10 +38,11 @@ class WorkerRegistry:
         self._statuses.clear()
         self._weights.clear()
 
+        worker_token = self._config.security.worker_token if self._config.security else ""
         for w in self._config.workers:
             if w.enabled and w.url:
                 url = w.url.rstrip("/")
-                self._workers[url] = WorkerClient(url)
+                self._workers[url] = WorkerClient(url, worker_token=worker_token)
                 self._weights[url] = w.weight
                 self._statuses[url] = WorkerStatus(
                     worker_id=w.worker_id or url,

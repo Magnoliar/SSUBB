@@ -132,25 +132,26 @@ class LLMClient:
                 self._add_feedback(current_messages, content, error_msg)
                 continue
 
-            # 3. 验证键值匹配
-            actual_keys = set(str(k) for k in result_dict.keys())
-            expected_keys_str = set(str(k) for k in expected_keys)
+            # 3. 验证键值匹配 (expected_keys 为空集时跳过验证，接受任意键)
+            if expected_keys:
+                actual_keys = set(str(k) for k in result_dict.keys())
+                expected_keys_str = set(str(k) for k in expected_keys)
 
-            if expected_keys_str != actual_keys:
-                missing = expected_keys_str - actual_keys
-                extra = actual_keys - expected_keys_str
-                error_parts = []
-                if missing:
-                    error_parts.append(f"Missing keys: {sorted(missing)}")
-                if extra:
-                    error_parts.append(f"Extra keys: {sorted(extra)}")
-                error_msg = (
-                    "; ".join(error_parts) +
-                    f"\nPlease return the complete valid JSON dictionary with EXACTLY ALL {len(expected_keys_str)} keys."
-                )
-                logger.warning(f"第 {attempt + 1} 次验证失败: {error_msg}")
-                self._add_feedback(current_messages, content, error_msg)
-                continue
+                if expected_keys_str != actual_keys:
+                    missing = expected_keys_str - actual_keys
+                    extra = actual_keys - expected_keys_str
+                    error_parts = []
+                    if missing:
+                        error_parts.append(f"Missing keys: {sorted(missing)}")
+                    if extra:
+                        error_parts.append(f"Extra keys: {sorted(extra)}")
+                    error_msg = (
+                        "; ".join(error_parts) +
+                        f"\nPlease return the complete valid JSON dictionary with EXACTLY ALL {len(expected_keys_str)} keys."
+                    )
+                    logger.warning(f"第 {attempt + 1} 次验证失败: {error_msg}")
+                    self._add_feedback(current_messages, content, error_msg)
+                    continue
 
             # 验证通过
             return {str(k): str(v) for k, v in result_dict.items()}

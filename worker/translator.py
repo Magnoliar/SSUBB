@@ -41,8 +41,15 @@ class SubtitleTranslator:
         srt_content: str,
         config: TaskConfig,
         source_lang: str,
+        glossary: Optional[dict[str, str]] = None,
     ) -> tuple[Optional[str], dict]:
         """将 SRT 内容翻译为目标语言
+
+        Args:
+            srt_content: SRT 字幕内容
+            config: 任务配置
+            source_lang: 源语言代码
+            glossary: 术语表 {原文: 译文}，注入 prompt 确保一致性
 
         Returns:
             (translated_srt, stats) 元组，stats 包含 translated_count / total_count / partial 标记
@@ -55,6 +62,15 @@ class SubtitleTranslator:
 
         target_lang_name = self._get_language_name(config.target_lang)
         logger.info(f"开始翻译: {source_lang} -> {target_lang_name}")
+
+        # 构建 system prompt（含术语表）
+        system_prompt = TRANSLATE_SYSTEM_PROMPT
+        if glossary:
+            glossary_lines = "\n".join(f"- {k} → {v}" for k, v in glossary.items())
+            system_prompt += f"""
+Terminology Glossary (MUST follow these translations consistently):
+{glossary_lines}
+"""
 
         # 1. 解析 SRT
         segments = SRTParser.parse(srt_content)
@@ -76,7 +92,7 @@ class SubtitleTranslator:
 
         async def _translate_batch(batch: List[SubtitleSegment]):
             async with semaphore:
-                return await self._translate_chunk(batch, target_lang_name)
+                return await self._translate_chunk(batch, target_lang_name, system_prompt)
 
         tasks = [_translate_batch(batch) for batch in batches]
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -115,7 +131,7 @@ class SubtitleTranslator:
         return SRTParser.build(final_segments), stats
 
     async def _translate_chunk(
-        self, chunk: List[SubtitleSegment], target_lang: str
+        self, chunk: List[SubtitleSegment], target_lang: str, system_prompt: str = TRANSLATE_SYSTEM_PROMPT
     ) -> tuple[List[SubtitleSegment], int]:
         """翻译单批次
 
@@ -132,7 +148,7 @@ class SubtitleTranslator:
         user_prompt = f"Target Language: {target_lang}\n\nSubtitles to translate:\n{input_dict}"
 
         messages = [
-            {"role": "system", "content": TRANSLATE_SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
 

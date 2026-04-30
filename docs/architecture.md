@@ -482,6 +482,15 @@ V0.10 已实现：
 7. **看板健康条**：紧凑的系统状态条替代 4 个统计卡片。
 8. **任务搜索 & 键盘快捷键**：搜索框实时过滤，Ctrl+F/Ctrl+Enter 快捷操作。
 
+V0.11 已实现：
+
+1. **API Token 认证**：Bearer Token 双重认证（`api_token` + `worker_token`），路由级豁免，WebUI 登录对话框。
+2. **通知系统**：多渠道 Webhook 分发（Bark/PushPlus/Gotify/通用），事件过滤，WebUI 测试连通性。
+3. **两阶段术语提取**：SRT LLM 提取（基线）→ 豆瓣/维基搜索（覆盖），确保专有名词翻译一致。
+4. **ASS 样式自定义**：`ass_style` + `ass_bilingual_style` 配置，支持字体、颜色、位置、边距。
+5. **日志持久化**：双端 `RotatingFileHandler`，可配置轮转大小和备份数。
+6. **httpx 资源管理**：WorkerClient、TaskExecutor、SubtitleWriter、Notifier 全部使用共享客户端，消除连接泄漏。
+
 ### 7.18 LLM 多端点容灾 (V0.10)
 
 Worker 端支持配置多个 LLM 提供商，按优先级自动切换：
@@ -531,3 +540,72 @@ class LLMClient:
 - **节点配置**（Worker 本地）：`transcribe`, `vram`（硬件相关，不适合全局）
 - Worker 新增 `PUT /api/config` 端点接收推送，热重载 LLM 客户端
 - 向后兼容：旧 `llm` 单配置自动迁移为 `llm_providers` 单元素列表
+
+### 7.21 API Token 认证中间件 (V0.11)
+
+Coordinator API 使用 Bearer Token 双重认证保护：
+
+```python
+# FastAPI Depends 注入
+async def verify_api_token(
+    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer(auto_error=False)),
+):
+    if not config.security.api_token:
+        return  # 未配置则跳过
+    if not credentials or credentials.credentials != config.security.api_token:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+```
+
+- **双 Token 设计**：`api_token`（用户/API 访问）+ `worker_token`（Worker 回调专用）
+- **路由级豁免**：`/`, `/docs`, `/openapi.json`, `/api/status`, `/ws/logs`, `/api/webhook` 不需要认证
+- **WebUI 集成**：`window.fetch` 拦截器自动注入 `Authorization: Bearer`，localStorage 存储 token
+- **配置掩码**：`GET /api/config` 返回 `***` 代替真实 token，`PUT` 时 `***` 被视为"不修改"
+
+### 7.22 通知分发器模式 (V0.11)
+
+`Notifier` 类实现多渠道 Webhook 通知分发：
+
+- **渠道类型**：`generic`（标准 JSON POST）、`bark`（iOS 推送）、`pushplus`（微信推送）、`gotify`（自托管推送）
+- **事件过滤**：每个渠道配置 `events` 列表（`task_completed`、`task_failed`），只接收关心的事件
+- **消息格式化**：`_format_message()` 根据事件类型生成结构化消息，`_build_body()` 按渠道类型构建请求体
+- **共享 httpx 客户端**：所有渠道复用同一个 `httpx.AsyncClient`，避免连接泄漏
+- **WebUI 测试**：`POST /api/notifications/test` 发送测试消息验证连通性
+
+### 7.23 两阶段术语提取 (V0.11)
+
+翻译前的自动术语提取采用两阶段策略，确保专有名词翻译一致：
+
+```
+SRT 输入 → [阶段1: LLM 提取] → 基线术语表
+    ↓
+[阶段2: 豆瓣 + 维基搜索] → 官方译名覆盖
+    ↓
+合并（网络结果优先）→ 注入翻译 Prompt
+```
+
+- **阶段1**：LLM 从 SRT 文本中提取人名、地名、技能名等专有名词，输出 `{原文: 译文}` dict
+- **阶段2**：通过豆瓣电影页面和中文维基百科 API 搜索官方/公认译名
+- **合并策略**：网络搜索结果优先覆盖 SRT 提取结果；网络失败时回退到阶段1结果
+- **容错设计**：两个阶段独立，任一失败不影响翻译主流程（术语表为 None 时翻译正常进行）
+- **参数传递**：`media_title` 通过 `TaskConfig` 从 Coordinator 传递到 Worker
+
+### 7.24 RotatingFileHandler 日志架构 (V0.11)
+
+双端统一使用 `RotatingFileHandler` 实现结构化日志持久化：
+
+```python
+from logging.handlers import RotatingFileHandler
+
+_file = RotatingFileHandler(
+    LOG_FILE,
+    maxBytes=config.logging.max_size_mb * 1024 * 1024,
+    backupCount=config.logging.backup_count,
+    encoding="utf-8",
+)
+```
+
+- **Coordinator**：日志文件 `data/ssubb.log`，通过 `config.logging` 配置
+- **Worker**：日志文件 `data/worker.log`，固定 10MB/3 备份
+- **终端 + 文件双输出**：`StreamHandler`（stderr）+ `RotatingFileHandler`
+- **WebUI 日志面板**：`/api/logs` 端点读取日志文件尾部，WebSocket `/ws/logs` 实时推送新日志
+- **配置可调**：`level`（DEBUG/INFO/WARNING/ERROR）、`max_size_mb`、`backup_count`、`log_dir`

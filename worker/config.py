@@ -48,6 +48,11 @@ class VRAMConfig(BaseModel):
     cleanup_delay: int = 30
 
 
+class WorkerSecurityConfig(BaseModel):
+    """Worker 安全配置"""
+    worker_token: str = ""   # 验证 Coordinator 请求的 Token（空=不验证）
+
+
 class WorkerConfig(BaseModel):
     host: str = "0.0.0.0"
     port: int = 8788
@@ -59,6 +64,7 @@ class WorkerConfig(BaseModel):
     translate: TranslateConfig = Field(default_factory=TranslateConfig)
     optimize: OptimizeConfig = Field(default_factory=OptimizeConfig)
     vram: VRAMConfig = Field(default_factory=VRAMConfig)
+    security: WorkerSecurityConfig = Field(default_factory=WorkerSecurityConfig)
     temp_dir: str = "./data/worker_temp"
 
     def model_post_init(self, __context):

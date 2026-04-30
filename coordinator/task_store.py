@@ -130,6 +130,7 @@ class TaskStore:
             tmdb_id=req.tmdb_id,
             source_lang=req.source_lang,
             target_lang=req.target_lang,
+            priority=req.priority,
             force_mode=req.force,
             callback_url=req.callback_url,
             status=TaskStatus.PENDING,

@@ -1,4 +1,4 @@
-# SSUBB 配置手册 (V0.10)
+# SSUBB 配置手册 (V0.11)
 
 ## 零配置向导 (推荐)
 
@@ -37,6 +37,8 @@
 | `SSUBB_WEBHOOK_TOKEN` | `coordinator.webhook.token` | Webhook 认证 Token |
 | `SSUBB_LLM_API_KEY` | `worker.llm.api_key` | LLM API Key |
 | `SSUBB_LLM_MODEL` | `worker.llm.model` | LLM 模型名 |
+| `SSUBB_API_TOKEN` | `coordinator.security.api_token` | Coordinator API 鉴权 Token (V0.11) |
+| `SSUBB_WORKER_TOKEN` | `coordinator.security.worker_token` | Worker 回调认证 Token (V0.11) |
 
 > **安全建议**: 生产环境建议将 `api_key` 等敏感字段通过环境变量注入，不要写在 `config.yaml` 中。
 
@@ -107,6 +109,123 @@ coordinator:
 | `target_language` | string | `zh` | 默认目标语言 |
 | `naming_format` | string | `{video_name}.{lang}.srt` | 字幕文件命名格式 |
 | `backup_existing` | bool | `true` | 覆盖前是否备份 |
+| `output_mode` | string | `single` | 输出模式 (`single` / `bilingual`) |
+| `output_format` | string | `srt` | 输出格式 (`srt` / `ass`) |
+
+### ASS 样式 (`subtitle.ass_style`) — V0.11 新增
+
+单语 ASS 字幕的样式配置。仅在 `output_format: ass` 时生效。
+
+| 配置项 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `font_name` | string | `Noto Sans` | 字体名称 |
+| `font_size` | int | `12` | 字体大小 |
+| `primary_colour` | string | `&H00FFFFFF` | 主颜色（ASS 格式） |
+| `outline_colour` | string | `&H000000FF` | 边框颜色 |
+| `back_colour` | string | `&H80000000` | 阴影颜色 |
+| `bold` | int | `-1` | 粗体 (-1=是, 0=否) |
+| `outline_width` | float | `1.5` | 边框宽度 |
+| `shadow` | int | `0` | 阴影深度 |
+| `alignment` | int | `2` | 对齐 (1-9, 2=底部居中) |
+| `margin_l` | int | `10` | 左边距 |
+| `margin_r` | int | `10` | 右边距 |
+| `margin_v` | int | `30` | 底部边距 |
+| `play_res_x` | int | `1920` | 播放分辨率 X |
+| `play_res_y` | int | `1080` | 播放分辨率 Y |
+
+### ASS 双语样式 (`subtitle.ass_bilingual_style`) — V0.11 新增
+
+双语模式下原文（顶部）的样式。翻译始终使用 `Default` 样式。
+
+| 配置项 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `font_size` | int | `10` | 原文字体大小（比译文小） |
+| `alignment` | int | `8` | 对齐 (8=顶部居中) |
+| `margin_v` | int | `10` | 顶部边距 |
+
+### 安全认证 (`security`) — V0.11 新增
+
+| 配置项 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `api_token` | string | `""` | Coordinator API 鉴权 Token（空=不验证） |
+| `worker_token` | string | `""` | Worker 回调认证 Token（空=不验证） |
+| `cors_origins` | list | `["*"]` | CORS 允许的来源列表 |
+
+示例：
+
+```yaml
+coordinator:
+  security:
+    api_token: "your-secret-api-token"
+    worker_token: "your-worker-token"
+    cors_origins:
+      - "http://localhost:8787"
+      - "http://192.168.1.10:8787"
+```
+
+> **安全建议**：生产环境务必设置 `api_token`，防止未授权访问。WebUI 登录后 token 存储在 localStorage。Worker 回调时需携带 `worker_token`，Coordinator 通过 `verify_worker_token` 中间件校验。可通过 `SSUBB_API_TOKEN` 和 `SSUBB_WORKER_TOKEN` 环境变量注入。
+
+### 通知系统 (`notifications`) — V0.11 新增
+
+任务完成/失败时通过 Webhook 推送通知。支持多渠道（Bark/PushPlus/Gotify/通用 Webhook）。
+
+| 配置项 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `enabled` | bool | `false` | 是否启用通知 |
+| `channels` | list | `[]` | 通知渠道列表 |
+
+每个渠道的配置：
+
+| 字段 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `name` | string | — | 渠道名称（如 "Bark-手机"） |
+| `url` | string | — | Webhook URL |
+| `enabled` | bool | `true` | 是否启用该渠道 |
+| `events` | list | — | 监听的事件类型（`task_completed`, `task_failed`） |
+| `headers` | dict | `{}` | 自定义 HTTP 请求头 |
+| `template` | string | `""` | 自定义消息模板（空=使用默认模板） |
+| `channel_type` | string | `generic` | 渠道类型：`generic`, `bark`, `pushplus`, `gotify` |
+
+示例：
+
+```yaml
+coordinator:
+  notifications:
+    enabled: true
+    channels:
+      - name: "Bark-手机"
+        url: "https://api.day.app/YOUR_KEY"
+        events: ["task_completed", "task_failed"]
+        channel_type: "bark"
+      - name: "PushPlus"
+        url: "https://www.pushplus.plus/send"
+        events: ["task_failed"]
+        channel_type: "pushplus"
+```
+
+> **WebUI 测试**：配置保存后可在 WebUI 通知设置面板点击"发送测试"验证连通性。`POST /api/notifications/test` 端点发送测试消息。
+
+### 日志配置 (`logging`) — V0.11 新增
+
+| 配置项 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `level` | string | `INFO` | 日志级别 (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
+| `max_size_mb` | int | `10` | 单个日志文件最大大小 (MB) |
+| `backup_count` | int | `5` | 日志备份数量 |
+| `log_dir` | string | `./data` | 日志文件目录 |
+
+示例：
+
+```yaml
+coordinator:
+  logging:
+    level: "INFO"
+    max_size_mb: 20
+    backup_count: 3
+    log_dir: "./data"
+```
+
+> **日志轮转**：使用 `RotatingFileHandler`，当日志文件达到 `max_size_mb` 时自动轮转，保留 `backup_count` 个备份。Coordinator 日志文件名 `ssubb.log`，Worker 日志文件名 `worker.log`。
 
 ### 字幕质量验证 (`checker`)
 
@@ -128,10 +247,16 @@ coordinator:
 
 | 配置项 | 类型 | 默认值 | 说明 |
 |---|---|---|---|
-| `enabled` | bool | `true` | 是否启用自动扫描 |
-| `scan_interval` | int | `3600` | 扫描间隔 (秒) |
-| `schedule_start` | string | `""` | 调度窗口开始时间 (如 `02:00`) |
-| `schedule_end` | string | `""` | 调度窗口结束时间 (如 `08:00`) |
+| `enabled` | bool | `false` | 是否启用自动扫描 |
+| `scan_paths` | list | `[]` | 扫描目录列表（留空则扫描全部媒体库） |
+| `scan_recursive` | bool | `true` | 是否递归扫描子目录 |
+| `scan_recent_days` | int | `7` | 只扫描最近 N 天修改的文件 |
+| `schedule_start` | string | `02:00` | 调度窗口开始时间 |
+| `schedule_end` | string | `06:00` | 调度窗口结束时间 |
+| `scan_interval` | int | `30` | 扫描间隔 (秒) |
+| `max_tasks_per_scan` | int | `5` | 每次扫描最多提交任务数 |
+| `require_worker_idle` | bool | `true` | 仅在 Worker 空闲时触发扫描 |
+| `preheat_next_episode` | bool | `true` | 当前任务完成后自动预热下一集 |
 | `timezone` | string | `Asia/Shanghai` | 调度时区 (V0.9 新增) |
 
 示例：
@@ -140,9 +265,13 @@ coordinator:
 coordinator:
   automation:
     enabled: true
-    scan_interval: 3600
+    scan_paths:
+      - "/media/movies"
+      - "/media/tv"
+    scan_interval: 30
     schedule_start: "02:00"
-    schedule_end: "08:00"
+    schedule_end: "06:00"
+    max_tasks_per_scan: 5
     timezone: "Asia/Shanghai"   # V0.9: 统一时区，避免 UTC 偏移问题
 ```
 
@@ -215,7 +344,12 @@ coordinator:
 | `model` | string | `large-v3-turbo` | Whisper 模型 |
 | `device` | string | `cuda` | 计算设备 |
 | `compute_type` | string | `float16` | 精度类型 |
+| `concurrent_transcriptions` | int | `1` | 并发转写数 |
 | `vad_filter` | bool | `true` | VAD 静音过滤 |
+| `vad_method` | string | `silero_v4_fw` | VAD 方法 |
+| `vad_threshold` | float | `0.5` | VAD 检测阈值 |
+| `custom_regroup` | string | `cm_sl=84_sl=42++++++1` | 自定义 regroup 策略 |
+| `detect_language_length` | int | `30` | 语言检测采样长度（段落） |
 | `model_dir` | string | `./models` | 模型缓存目录 |
 
 ### LLM (`llm`) — 向后兼容
@@ -275,6 +409,18 @@ worker:
 | `thread_num` | int | `5` | 并发数 |
 | `batch_size` | int | `10` | 每批条数 |
 | `need_reflect` | bool | `false` | 反思翻译（V0.10 生效：翻译后二次审校） |
+
+### 术语提取 (任务级参数) — V0.11 新增
+
+术语提取在翻译前自动运行，从 SRT 字幕中提取专有名词，再通过豆瓣/维基百科搜索官方译名。
+
+| 参数 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `terminology_enabled` | bool | `true` | 是否启用自动术语提取 |
+| `glossary` | dict | `{}` | 手动传入的术语表（跳过自动提取） |
+| `media_title` | string | `""` | 媒体标题（用于网络搜索官方译名） |
+
+> **两阶段提取**：第一阶段从 SRT 文本中用 LLM 提取专有名词（基线），第二阶段通过豆瓣电影页面和中文维基百科搜索官方/公认译名（高优先级覆盖）。网络搜索失败时回退到第一阶段结果。术语表注入翻译 Prompt，确保人名、地名、技能名等一致翻译。
 
 ### 字幕优化 (`optimize`)
 

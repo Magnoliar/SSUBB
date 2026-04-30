@@ -50,8 +50,11 @@ class TaskManager:
             backup_existing=config.subtitle.backup_existing,
             output_mode=config.subtitle.output_mode,
             output_format=config.subtitle.output_format,
+            ass_style=config.subtitle.ass_style,
+            ass_bilingual_style=config.subtitle.ass_bilingual_style,
         )
         self.scheduler = None  # 由 main.py 设置
+        self.notifier = None  # 由 main.py 设置 (Notifier 实例)
         self._extract_semaphore = asyncio.Semaphore(2)  # 最大并发提取数
 
     # =========================================================================
@@ -197,6 +200,19 @@ class TaskManager:
         )
         logger.error(f"[{task_id}] ❌ 失败 [{error_code}]: {error_msg}")
 
+        # 通知: 任务失败
+        if self.notifier:
+            task = self.store.get_task(task_id)
+            _safe_background_task(
+                self.notifier.notify("task_failed", {
+                    "task_id": task_id,
+                    "media_title": (task.media_title or task.media_path) if task else "未知",
+                    "error": error_msg,
+                    "error_code": error_code,
+                }),
+                f"notify-fail-{task_id}",
+            )
+
     async def _dispatch_to_worker(
         self,
         task_id: str,
@@ -328,6 +344,7 @@ class TaskManager:
                     task_config = task.config or TaskConfig(
                         source_lang=task.source_lang,
                         target_lang=task.target_lang,
+                        media_title=task.media_title,
                     )
                     if not task.config:
                         self.store.update_config(task.id, task_config)
@@ -500,7 +517,19 @@ class TaskManager:
                     f"({result.detected_language}→{task.target_lang}, "
                     f"{result.segment_count}条, {result.total_duration:.0f}s)"
                 )
-                
+
+                # 通知: 任务完成
+                if self.notifier:
+                    _safe_background_task(
+                        self.notifier.notify("task_completed", {
+                            "task_id": task_id,
+                            "media_title": task.media_title or task.media_path,
+                            "target_lang": task.target_lang,
+                            "duration": result.total_duration,
+                        }),
+                        f"notify-complete-{task_id}",
+                    )
+
                 if task.callback_url:
                     _safe_background_task(self._trigger_webhook(task, result), f"webhook-{task_id}")
 
@@ -618,7 +647,34 @@ class TaskManager:
     async def _trigger_webhook(self, task, result: WorkerTaskResult):
         """异步触发状态回调以投递系统消息"""
         import httpx
+        import ipaddress
         from pathlib import Path
+        from urllib.parse import urlparse
+
+        url = task.callback_url
+        if not url:
+            return
+
+        # SSRF 防护: 校验 URL
+        try:
+            parsed = urlparse(url)
+            if parsed.scheme not in ("http", "https"):
+                logger.warning(f"[{task.id}] callback_url 非法协议: {parsed.scheme}")
+                return
+            hostname = parsed.hostname or ""
+            # 禁止私有/回环/链路本地地址
+            try:
+                ip = ipaddress.ip_address(hostname)
+                if ip.is_private or ip.is_loopback or ip.is_link_local:
+                    logger.warning(f"[{task.id}] callback_url 禁止访问内网地址: {hostname}")
+                    return
+            except ValueError:
+                # hostname 不是 IP（是域名），允许通过
+                pass
+        except Exception:
+            logger.warning(f"[{task.id}] callback_url 格式非法: {url}")
+            return
+
         try:
             async with httpx.AsyncClient(timeout=10) as client:
                 payload = {
@@ -629,7 +685,7 @@ class TaskManager:
                     "time_cost": round(result.total_duration or 0, 1),
                     "target_lang": task.target_lang
                 }
-                res = await client.post(task.callback_url, json=payload)
+                res = await client.post(url, json=payload)
                 if res.status_code == 200:
                     logger.info(f"[{task.id}] Webhook 投递成功")
                 else:

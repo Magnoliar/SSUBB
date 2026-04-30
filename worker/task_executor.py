@@ -30,6 +30,24 @@ class TaskExecutor:
         self.config = config
         self.current_task_id: Optional[str] = None
         self.current_progress: int = 0
+        self._http: Optional[httpx.AsyncClient] = None
+        self._llm_client = None  # 共享 LLM 客户端 (惰性创建)
+
+    def _get_llm(self):
+        """获取或创建共享的 LLMClient 实例"""
+        if self._llm_client is None:
+            from .llm_client import LLMClient
+            self._llm_client = LLMClient(self.config.llm_providers)
+        return self._llm_client
+
+    async def close(self):
+        """关闭 httpx 客户端和 LLM 客户端"""
+        if self._llm_client:
+            await self._llm_client.close()
+            self._llm_client = None
+        if self._http and not self._http.is_closed:
+            await self._http.aclose()
+            self._http = None
 
     async def execute(
         self,
@@ -86,14 +104,34 @@ class TaskExecutor:
                 srt_content = await self._optimize(srt_content, task_config)
 
             # =================================================================
-            # Step 3: 翻译
+            # Step 3: 术语提取 + 翻译
             # =================================================================
             await self._report_progress(task_id, TaskStatus.TRANSLATING, 60)
-            logger.info(f"[{task_id}] 翻译 → {task_config.target_lang}...")
 
+            # 术语提取（自动或使用传入的术语表）
+            glossary = task_config.glossary
+            if task_config.terminology_enabled and not glossary:
+                logger.info(f"[{task_id}] 自动提取术语...")
+                try:
+                    from .terminology_extractor import TerminologyExtractor
+                    from .llm_client import LLMClient as _LLM
+                    term_llm = _LLM(self.config.llm_providers)
+                    extractor = TerminologyExtractor(term_llm)
+                    glossary = await extractor.extract(
+                        srt_content, task_config.target_lang, task_config.media_title
+                    )
+                    if glossary:
+                        logger.info(f"[{task_id}] 术语表: {len(glossary)} 个术语")
+                    else:
+                        glossary = None
+                except Exception as e:
+                    logger.warning(f"[{task_id}] 术语提取失败 (不影响翻译): {e}")
+                    glossary = None
+
+            logger.info(f"[{task_id}] 翻译 → {task_config.target_lang}...")
             t0 = time.time()
             translated_srt, translate_stats = await self._translate(
-                srt_content, task_config, detected_lang
+                srt_content, task_config, detected_lang, glossary
             )
             translate_time = time.time() - t0
             logger.info(f"[{task_id}] 翻译完成, 耗时={translate_time:.1f}s")
@@ -237,10 +275,9 @@ class TaskExecutor:
         if not config.optimize_enabled or not self.config.llm_providers:
             return srt_content
 
-        from .llm_client import LLMClient
         from .optimizer import SubtitleOptimizer
 
-        llm = LLMClient(self.config.llm_providers)
+        llm = self._get_llm()
         optimizer = SubtitleOptimizer(llm)
         return await optimizer.optimize(srt_content, config, self.config.optimize)
 
@@ -249,9 +286,16 @@ class TaskExecutor:
     # =========================================================================
 
     async def _translate(
-        self, srt_content: str, config: TaskConfig, source_lang: str
+        self, srt_content: str, config: TaskConfig, source_lang: str,
+        glossary: Optional[dict[str, str]] = None,
     ) -> tuple[Optional[str], dict]:
         """翻译字幕
+
+        Args:
+            srt_content: SRT 字幕内容
+            config: 任务配置
+            source_lang: 源语言代码
+            glossary: 术语表 {原文: 译文}
 
         Returns:
             (translated_srt, stats) 元组
@@ -266,12 +310,11 @@ class TaskExecutor:
             logger.warning("未启用 LLM 翻译服务或缺少 LLM 提供商，跳过翻译")
             return srt_content, empty_stats
 
-        from .llm_client import LLMClient
         from .translator import SubtitleTranslator
 
-        llm = LLMClient(self.config.llm_providers)
+        llm = self._get_llm()
         translator = SubtitleTranslator(llm)
-        return await translator.translate(srt_content, config, source_lang)
+        return await translator.translate(srt_content, config, source_lang, glossary)
 
     # =========================================================================
     # VRAM 管理
@@ -295,7 +338,7 @@ class TaskExecutor:
     async def _report_progress(self, task_id: str, status: str, progress: int):
         """向 Coordinator 报告进度"""
         self.current_progress = progress
-        
+
         if not self.config.coordinator_url:
             return
 
@@ -305,10 +348,11 @@ class TaskExecutor:
                 status=status,
                 progress=progress,
             )
-            async with httpx.AsyncClient(timeout=5) as client:
-                await client.post(
-                    f"{self.config.coordinator_url}/api/progress",
-                    json=update.model_dump(),
-                )
+            if self._http is None or self._http.is_closed:
+                self._http = httpx.AsyncClient(timeout=5)
+            await self._http.post(
+                f"{self.config.coordinator_url}/api/progress",
+                json=update.model_dump(),
+            )
         except Exception:
             pass  # 进度报告失败不影响主流程
