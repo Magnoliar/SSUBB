@@ -134,6 +134,9 @@ class TaskExecutor:
             translate_time = time.time() - t0
             logger.info(f"[{task_id}] 翻译完成, 耗时={translate_time:.1f}s")
 
+            # 后处理：去重 + 去结尾标点 + 去段内换行
+            translated_srt = self._clean_subtitle(translated_srt)
+
             # 翻译完全失败 → 任务失败，触发重试
             if translated_srt is None:
                 return WorkerTaskResult(
@@ -279,7 +282,7 @@ class TaskExecutor:
             if self.config.transcribe.vad_filter:
                 transcribe_args["vad_filter"] = True
 
-            # 自定义 regroup
+            # regroup（必须在 transcribe 时传入，后调用无效）
             regroup = self.config.transcribe.custom_regroup
             if regroup and regroup.lower() != "default":
                 transcribe_args["regroup"] = regroup
@@ -290,11 +293,12 @@ class TaskExecutor:
             # 获取检测到的语言
             detected_lang = getattr(result, "language", config.source_lang or "unknown")
 
-            # 导出为 SRT
-            srt_content = result.to_srt_vtt(filepath=None)
+            # 导出为 SRT（句子级，不要单词级时间戳）
+            srt_content = result.to_srt_vtt(filepath=None, word_level=False)
 
             # 统计段数
             segment_count = len(result.segments) if hasattr(result, "segments") else 0
+            logger.info(f"转写完成: {segment_count} 段, 语言={detected_lang}")
 
             return srt_content, detected_lang, segment_count
 
@@ -303,7 +307,48 @@ class TaskExecutor:
             return None
 
     # =========================================================================
-    # 优化 
+    # 后处理
+    # =========================================================================
+
+    @staticmethod
+    def _clean_subtitle(srt_content: str) -> str:
+        """字幕清洗：去重 + 去结尾标点 + 去段内换行"""
+        from .srt_parser import SRTParser
+
+        segments = SRTParser.parse(srt_content)
+        if not segments:
+            return srt_content
+
+        # 1. 去段内换行 + 去结尾标点
+        punct = set("。，、；：！？,.;:!?…。")
+        for seg in segments:
+            text = seg.text.replace("\n", " ").strip()
+            while text and text[-1] in punct:
+                text = text[:-1].strip()
+            seg.text = text
+
+        # 2. 去重（合并相同文本的段，保留最早的时间戳）
+        seen = {}
+        merged = []
+        for seg in segments:
+            if seg.text in seen:
+                # 延长时间轴到最晚的结束时间
+                seen[seg.text].end = max(seen[seg.text].end, seg.end)
+            else:
+                seen[seg.text] = seg
+                merged.append(seg)
+
+        # 3. 重新编号
+        for i, seg in enumerate(merged, 1):
+            seg.index = i
+
+        result = SRTParser.build(merged)
+        if len(merged) < len(segments):
+            logger.info(f"字幕清洗: {len(segments)} → {len(merged)} 段")
+        return result
+
+    # =========================================================================
+    # 优化
     # =========================================================================
 
     async def _optimize(self, srt_content: str, config: TaskConfig) -> str:
