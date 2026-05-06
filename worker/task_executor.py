@@ -114,9 +114,7 @@ class TaskExecutor:
                 logger.info(f"[{task_id}] 自动提取术语...")
                 try:
                     from .terminology_extractor import TerminologyExtractor
-                    from .llm_client import LLMClient as _LLM
-                    term_llm = _LLM(self.config.llm_providers)
-                    extractor = TerminologyExtractor(term_llm)
+                    extractor = TerminologyExtractor(self._get_llm())
                     glossary = await extractor.extract(
                         srt_content, task_config.target_lang, task_config.media_title
                     )

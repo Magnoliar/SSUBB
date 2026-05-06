@@ -290,18 +290,15 @@ app = FastAPI(
     dependencies=[Depends(verify_api_token)],
 )
 
-
-# CORS 中间件（必须在路由之前添加）
-@app.on_event("startup")
-async def _setup_cors():
-    from fastapi.middleware.cors import CORSMiddleware
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=config.security.cors_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+# CORS 中间件（在路由定义之前添加）
+from fastapi.middleware.cors import CORSMiddleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=config.security.cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # =============================================================================

@@ -6,7 +6,7 @@
 import json
 import sqlite3
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -135,7 +135,7 @@ class TaskStore:
         """创建新任务"""
         from shared.models import _gen_id
 
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         # 将 annotation 配置序列化到 config_json
         task_config = TaskConfig(
             source_lang=req.source_lang,
@@ -158,8 +158,8 @@ class TaskStore:
             callback_url=req.callback_url,
             config=task_config,
             status=TaskStatus.PENDING,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
         )
 
         conn = self._get_conn()
@@ -231,7 +231,7 @@ class TaskStore:
         **extra_fields,
     ):
         """更新任务状态"""
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         sets = ["status = ?", "progress = ?", "updated_at = ?"]
         vals = [status, progress, now]
 
@@ -298,7 +298,7 @@ class TaskStore:
     def reset_for_retry(self, task_id: str):
         """重置任务状态以便重试"""
         conn = self._get_conn()
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         conn.execute(
             """UPDATE tasks SET
                status = ?, progress = 0, error_msg = NULL, error_code = NULL,
@@ -312,7 +312,7 @@ class TaskStore:
         conn = self._get_conn()
         conn.execute(
             "UPDATE tasks SET retry_count = retry_count + 1, updated_at = ? WHERE id = ?",
-            (datetime.utcnow().isoformat(), task_id)
+            (datetime.now(timezone.utc).isoformat(), task_id)
         )
         conn.commit()
 
@@ -328,7 +328,7 @@ class TaskStore:
         """获取统计数据 (最近 N 天)"""
         conn = self._get_conn()
         from datetime import timedelta
-        since = (datetime.utcnow() - timedelta(days=days)).isoformat()
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
 
         # 总数和成功率
         total_row = conn.execute(
@@ -418,7 +418,7 @@ class TaskStore:
     def save_subtitle(self, task_id: str, srt_content: str, original_srt: str = ""):
         """保存任务的字幕内容（首次写入或覆盖）"""
         conn = self._get_conn()
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         conn.execute(
             """INSERT INTO task_subtitles (task_id, srt_content, original_srt, edited_at)
                VALUES (?, ?, ?, ?)
@@ -443,7 +443,7 @@ class TaskStore:
     def update_subtitle_content(self, task_id: str, srt_content: str) -> bool:
         """手动编辑字幕内容"""
         conn = self._get_conn()
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         cursor = conn.execute(
             """UPDATE task_subtitles
                SET srt_content = ?, edited_at = ?, edit_count = edit_count + 1
@@ -482,7 +482,7 @@ class TaskStore:
                (scan_time, total_videos, missing_subtitle, already_active, new_tasks_created, duration_seconds)
                VALUES (?, ?, ?, ?, ?, ?)""",
             (
-                report.get("scan_time", datetime.utcnow().isoformat()),
+                report.get("scan_time", datetime.now(timezone.utc).isoformat()),
                 report.get("total_videos", 0),
                 report.get("missing_subtitle", 0),
                 report.get("already_active", 0),
@@ -532,7 +532,7 @@ class TaskStore:
         if not task_ids:
             return 0
         conn = self._get_conn()
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         placeholders = ",".join("?" for _ in task_ids)
         if error_msg:
             conn.execute(
@@ -576,7 +576,7 @@ class TaskStore:
     def find_timed_out_tasks(self, stage_timeouts: dict) -> list[TaskInfo]:
         """查找超时的活跃任务"""
         conn = self._get_conn()
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         timed_out = []
 
         for status in TaskStatus.ACTIVE:
@@ -604,7 +604,7 @@ class TaskStore:
         conn = self._get_conn()
         conn.execute(
             f"UPDATE tasks SET {field} = ?, updated_at = ? WHERE id = ?",
-            (value, datetime.utcnow().isoformat(), task_id)
+            (value, datetime.now(timezone.utc).isoformat(), task_id)
         )
         conn.commit()
 

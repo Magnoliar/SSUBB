@@ -102,9 +102,12 @@
 
 ## 远期愿景
 
-### V1.0：开箱即用
-- **跨平台二进制文件**：基于 PyInstaller/Nuitka 打包，彻底消除环境安装门槛。
-- **桌面启动器**：提供 GUI 启动器，集成环境检测、配置引导、服务管理于一体。
+### V1.0：开箱即用（进行中）
+- **跨平台打包**：Coordinator (Nuitka) + Worker (PyInstaller) 构建脚本，GitHub Actions CI/CD 自动构建 + Release。支持 Windows/Linux，CUDA 11/12 变体。
+- **Worker 桌面启动器 (PySide6)**：电影级暗色主题 GUI，集成环境检测、服务管理（启动/停止/重启）、实时日志、配置编辑、系统托盘、自动更新检查。
+- **首次运行引导 (OOBE)**：无 config.yaml 时自动弹出分步向导 — 连接 Coordinator → 选择 Whisper 模型 → 配置 LLM API → 完成。
+- **自动更新**：启动时检查 GitHub Releases，语义化版本比较，下载备份替换回滚流程。
+- **标准 Python 包**：`pyproject.toml` 统一管理依赖和构建配置。
 
 ---
 

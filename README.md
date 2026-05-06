@@ -66,12 +66,24 @@ docker compose up -d
 
 ### 第二步：在 GPU 机器上启动 Worker
 
+**方式一：桌面启动器（V1.0 推荐，双击即用）**
+
+下载 `ssubb-launcher` 可执行文件（[GitHub Releases](https://github.com/Magnoliar/SSUBB/releases)），双击启动。首次运行会弹出配置向导，引导你完成所有设置。
+
+启动器功能：
+- 环境检测（GPU / CUDA / FFmpeg / 模型）
+- 一键启动/停止/重启 Worker
+- 实时日志查看
+- 配置编辑（无需手写 YAML）
+- 系统托盘常驻
+- 自动更新检查
+
+**方式二：CLI 模式（开发者 / 无 PySide6）**
+
 ```bash
-# 下载项目（和 NAS 端一样的代码）
-git clone https://github.com/你的仓库/SSUBB.git
+git clone https://github.com/Magnoliar/SSUBB.git
 cd SSUBB
 
-# 首次启动会自动引导你配置
 # Windows:
 worker\run_worker.bat
 
@@ -103,6 +115,10 @@ bash worker/run_worker.sh
 > **安全认证？** V0.11 起支持 API Token 鉴权，防止未授权访问。WebUI 登录后自动携带 Token。
 
 > **术语提取？** V0.11 起翻译前自动提取专有名词，搜索豆瓣/维基百科获取官方译名，确保人名、地名翻译一致。
+
+> **字幕注释？** V0.12 起自动生成文化注释（双关语、典故），类似字幕组的翻译备注。
+
+> **跨平台打包？** V1.0 起提供独立可执行文件，无需安装 Python 环境。
 
 ---
 

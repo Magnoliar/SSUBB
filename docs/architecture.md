@@ -176,18 +176,28 @@ sequenceDiagram
 - 把 MoviePilot 的媒体事件翻译成 SSUBB 任务请求。
 - 接收结果回调，并向 MoviePilot 发通知。
 
-### 5.4 `worker-launcher/`（未来方向）
+### 5.4 `launcher/`（V1.0 新增）
 
-如果后续推进 Worker 客户端化，建议单独引入一个 `worker-launcher/` 或类似模块，作为桌面启动器层。
+Worker 桌面启动器，PySide6/Qt GUI 应用。管理 Worker 作为子进程，复用 `worker/env_check.py`、`worker/config.py`、`worker/model_manager.py` 等模块。
 
-建议职责：
+核心模块：
 
-- 启动前环境检查
-- CUDA / 显卡 / 端口 / 网络状态检测
-- 模型下载、校验和缓存目录管理
-- Worker 配置初始化与升级
-- 启动、停止、重启 Worker 服务
-- 展示基础状态、日志和错误提示
+- `app.py`: 主窗口（HeaderBar + StatusCard + EnvCheckPanel + LogViewer）
+- `service.py`: QProcess 子进程管理（启动/停止/重启 Worker）
+- `env_check_panel.py`: 环境检测面板（GPU/CUDA/FFmpeg/模型/网络）
+- `config_ui.py`: 配置编辑对话框（分组表单，替代手写 YAML）
+- `log_viewer.py`: 实时日志面板（着色、过滤、自动滚动）
+- `oobe.py`: 首次运行引导（5 步向导：欢迎 → Coordinator → 模型 → LLM → 完成）
+- `tray.py`: 系统托盘（图标状态、右键菜单、通知气泡）
+- `updater.py`: 自动更新（GitHub Releases 检查 + 下载备份回滚）
+- `theme.py`: 电影级暗色主题（与 WebUI 视觉语言一致）
+
+关键设计决策：
+
+- 启动器和 Worker 是独立进程，启动器通过 QProcess 管理 Worker
+- 不导入 `worker.main`（有模块级副作用），只导入子模块
+- PySide6 不可用时自动 fallback 到 CLI 模式
+- 首次运行无 config.yaml 时自动弹出 OOBE 向导
 
 ## 6. 状态机 (V0.6)
 

@@ -3,7 +3,7 @@
 # =============================================================================
 # 版本
 # =============================================================================
-VERSION = "0.12.0"
+VERSION = "1.0.0"
 PROJECT_NAME = "SSUBB"
 PROJECT_DESC = "异地分布式字幕转写翻译系统"
 
@@ -41,7 +41,7 @@ class TaskStatus:
 
     # Coordinator 本地阶段
     COORDINATOR_STAGES = [PENDING, SUBTITLE_CHECKING, EXTRACTING, EXTRACTED, UPLOADING,
-                          ANNOTATING, WRITING_SUBTITLE, REFRESHING_EMBY]
+                          WRITING_SUBTITLE, REFRESHING_EMBY]
 
     # Worker 执行阶段
     WORKER_STAGES = [WORKER_QUEUED, TRANSCRIBING, OPTIMIZING, TRANSLATING, ALIGNING, ANNOTATING]

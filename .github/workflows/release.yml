@@ -1,0 +1,202 @@
+name: Build & Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g. v1.0.0)'
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  # ──────────────────────────────────────────────────────
+  # 测试
+  # ──────────────────────────────────────────────────────
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pip install -r coordinator/requirements.txt
+          pip install pytest
+
+      - name: Run tests
+        run: python -m pytest tests/ -v --tb=short
+
+  # ──────────────────────────────────────────────────────
+  # Coordinator 构建
+  # ──────────────────────────────────────────────────────
+  build-coordinator:
+    needs: test
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: ssubb-coordinator-win64
+          - os: ubuntu-latest
+            artifact: ssubb-coordinator-linux-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pip install -r coordinator/requirements.txt
+          pip install nuitka ordered-set
+
+      - name: Build with Nuitka
+        run: python scripts/build_coordinator.py --output-dir dist
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/*.zip
+
+  # ──────────────────────────────────────────────────────
+  # Worker 构建 (CUDA 12)
+  # ──────────────────────────────────────────────────────
+  build-worker-cuda12:
+    needs: test
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: ssubb-worker-win64-cuda12
+          - os: ubuntu-latest
+            artifact: ssubb-worker-linux-x64-cuda12
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pip install -r worker/requirements.txt
+          pip install pyinstaller
+
+      - name: Build with PyInstaller
+        run: python scripts/build_worker.py --output-dir dist
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/*.zip
+
+  # ──────────────────────────────────────────────────────
+  # Worker 构建 (CUDA 11)
+  # ──────────────────────────────────────────────────────
+  build-worker-cuda11:
+    needs: test
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: ssubb-worker-win64-cuda11
+          - os: ubuntu-latest
+            artifact: ssubb-worker-linux-x64-cuda11
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install CUDA 11 dependencies
+        run: |
+          pip install -r worker/requirements.txt
+          pip install torch --index-url https://download.pytorch.org/whl/cu118
+          pip install pyinstaller
+
+      - name: Build with PyInstaller
+        run: python scripts/build_worker.py --output-dir dist
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/*.zip
+
+  # ──────────────────────────────────────────────────────
+  # Launcher 构建
+  # ──────────────────────────────────────────────────────
+  build-launcher:
+    needs: test
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: ssubb-launcher-win64
+          - os: ubuntu-latest
+            artifact: ssubb-launcher-linux-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pip install -r coordinator/requirements.txt
+          pip install pyinstaller PySide6
+
+      - name: Build Launcher
+        run: python scripts/build_launcher.py --output-dir dist
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/*.zip
+
+  # ──────────────────────────────────────────────────────
+  # GitHub Release
+  # ──────────────────────────────────────────────────────
+  release:
+    needs: [build-coordinator, build-worker-cuda12, build-worker-cuda11, build-launcher]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Generate checksums
+        run: |
+          cd artifacts
+          find . -name "*.zip" -exec sha256sum {} \; > checksums.sha256
+          cat checksums.sha256
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            artifacts/**/*.zip
+            artifacts/checksums.sha256

@@ -1,4 +1,4 @@
-# SSUBB 配置手册 (V0.12)
+# SSUBB 配置手册 (V1.0)
 
 ## 零配置向导 (推荐)
 
@@ -8,7 +8,10 @@
 直接使用 Docker Compose 启动（不挂载 `config.yaml` 文件，仅挂载 `data/` 目录），启动后访问 Web 控制台（如 `http://<NAS_IP>:8787`），系统会自动弹出图形化的 **WebUI 配置向导**。填完保存后系统自动热启动。
 
 ### Worker (GPU 端)
-在 Windows/Linux 下运行 `run_worker.bat` 或 `run_worker.sh`，如果检测到没有配置文件，脚本会在终端中逐步询问你的 LLM API Key、模型等信息，并自动生成完善的 `config.yaml`。
+
+**GUI 启动器 (V1.0 推荐)**：双击 `ssubb-launcher` 可执行文件，首次运行会弹出配置向导（OOBE），引导你完成 Coordinator 地址、Whisper 模型、LLM API 等配置。之后可通过「配置」按钮随时修改。
+
+**CLI 模式**：运行 `python -m launcher --no-gui` 或 `python -m worker.setup_wizard`，终端交互式配置。
 
 ---
 
