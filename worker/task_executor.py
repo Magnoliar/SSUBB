@@ -149,6 +149,42 @@ class TaskExecutor:
                 )
 
             # =================================================================
+            # Step 3.5: 字幕注释 (可选)
+            # =================================================================
+            annotations = None
+            cultural_density = translate_stats.get("cultural_density")
+            annotation_mode = task_config.annotation
+
+            should_annotate = (
+                annotation_mode == "on"
+                or (annotation_mode == "auto" and cultural_density in ("high", "medium"))
+            )
+
+            if should_annotate:
+                await self._report_progress(task_id, TaskStatus.ANNOTATING, 85)
+                logger.info(f"[{task_id}] 生成字幕注释 (mode={annotation_mode}, density={cultural_density})...")
+                try:
+                    from .annotator import SubtitleAnnotator
+                    from .srt_parser import SRTParser as _SRTParser
+
+                    annotator = SubtitleAnnotator(self._get_llm())
+                    orig_segments = _SRTParser.parse(srt_content)
+                    trans_segments = _SRTParser.parse(translated_srt)
+
+                    annotations = await annotator.generate_annotations(
+                        original_segments=orig_segments,
+                        translated_segments=trans_segments,
+                        cultural_density=cultural_density or "low",
+                        video_duration=0,  # Worker 无视频时长信息，由 max_notes 默认值决定
+                        max_notes=0,       # 0 = 自动计算（但无 duration 时默认 3）
+                    )
+                    if annotations:
+                        logger.info(f"[{task_id}] 生成 {len(annotations)} 条注释")
+                except Exception as e:
+                    logger.warning(f"[{task_id}] 注释生成失败（不影响主流程）: {e}")
+                    annotations = None
+
+            # =================================================================
             # Step 4: 后处理
             # =================================================================
             await self._report_progress(task_id, TaskStatus.ALIGNING, 90)
@@ -171,6 +207,8 @@ class TaskExecutor:
                 segment_count=segment_count,
                 partial_translation=translate_stats.get("partial", False),
                 original_srt=srt_content,
+                annotations=annotations,
+                cultural_density=cultural_density,
             )
 
         except Exception as e:

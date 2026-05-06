@@ -145,10 +145,16 @@ _config_lock = asyncio.Lock()  # 配置更新并发锁
 _security_scheme = HTTPBearer(auto_error=False)
 
 
+_AUTH_EXEMPT_PATHS = {"/", "/api/status", "/api/health", "/docs", "/openapi.json", "/redoc", "/api/webhook"}
+
+
 async def verify_api_token(
+    request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(_security_scheme),
 ):
     """API Token 认证（空 token = 跳过验证，向后兼容）"""
+    if request.url.path in _AUTH_EXEMPT_PATHS:
+        return
     if not config.security.api_token:
         return
     if not credentials or credentials.credentials != config.security.api_token:
@@ -392,6 +398,15 @@ async def get_subtitle(task_id: str):
     if task.status != TaskStatus.COMPLETED:
         raise HTTPException(status_code=400, detail="任务尚未完成，字幕不可用")
     raise HTTPException(status_code=404, detail="字幕未找到")
+
+
+@app.get("/api/task/{task_id}/annotations", tags=["字幕管理"])
+async def get_annotations(task_id: str):
+    """获取任务的注释内容 (ASS 格式)"""
+    ann = task_manager.store.get_annotations(task_id)
+    if ann:
+        return {"ass_content": ann}
+    raise HTTPException(status_code=404, detail="注释未找到")
 
 
 @app.put("/api/task/{task_id}/subtitle", tags=["字幕管理"])
@@ -1129,6 +1144,7 @@ class ConfigUpdateRequest(BaseModel):
     llm_providers: Optional[list] = None
     translate: Optional[dict] = None
     optimize: Optional[dict] = None
+    annotation: Optional[dict] = None
 
 
 @app.get("/api/config", tags=["配置"])
@@ -1188,6 +1204,8 @@ async def update_config(req: ConfigUpdateRequest):
             cfg_dict.setdefault("translate", {}).update(req.translate)
         if req.optimize is not None:
             cfg_dict.setdefault("optimize", {}).update(req.optimize)
+        if req.annotation is not None:
+            cfg_dict.setdefault("annotation", {}).update(req.annotation)
 
         save_config(cfg_dict)
         config = load_config()

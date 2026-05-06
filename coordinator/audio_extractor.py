@@ -119,14 +119,21 @@ def probe_audio_tracks(file_path: str) -> list[AudioTrackInfo]:
         return []
 
 
-def select_best_audio_track(tracks: list[AudioTrackInfo]) -> int:
+def select_best_audio_track(
+    tracks: list[AudioTrackInfo],
+    preferred_lang: str = "eng",
+) -> int:
     """从音轨列表中选择最佳音轨
 
     优先级:
-    1. 非评论/非描述性
-    2. 默认音轨
-    3. 声道数更多的 (立体声 > 单声道，但不偏好 7.1 over 2.0)
+    1. 匹配首选语言（默认英语），排除解说轨
+    2. 非评论/非描述性，默认音轨
+    3. 声道数合适的 (2~6声道优先)
     4. 索引靠前的
+
+    Args:
+        tracks: 音轨列表
+        preferred_lang: 首选语言代码 (默认 "eng")
 
     Returns:
         最佳音轨索引
@@ -134,17 +141,39 @@ def select_best_audio_track(tracks: list[AudioTrackInfo]) -> int:
     if not tracks:
         return 0
 
-    # 过滤掉评论/描述音轨
+    # 语言别名映射
+    LANG_ALIASES = {
+        "eng": {"eng", "en", "english"},
+        "en": {"eng", "en", "english"},
+        "zh": {"zh", "chi", "chs", "cht", "chinese", "zho", "cmn"},
+        "ja": {"ja", "jpn", "japanese"},
+        "ko": {"ko", "kor", "korean"},
+        "fr": {"fr", "fre", "fra", "french"},
+        "de": {"de", "ger", "deu", "german"},
+        "es": {"es", "spa", "spanish"},
+    }
+    aliases = LANG_ALIASES.get(preferred_lang, {preferred_lang})
+
+    # 1. 精确匹配首选语言（排除解说轨）
+    lang_matches = [
+        t for t in tracks
+        if t.language.lower() in aliases and not t.is_commentary
+    ]
+    if lang_matches:
+        defaults = [t for t in lang_matches if t.is_default]
+        return (defaults or lang_matches)[0].index
+
+    # 2. 回退：非解说轨
     candidates = [t for t in tracks if not t.is_commentary]
     if not candidates:
-        candidates = tracks  # 如果全是评论，回退到全部
+        candidates = tracks  # 如果全是解说，回退到全部
 
-    # 优先默认音轨
+    # 3. 优先默认音轨
     defaults = [t for t in candidates if t.is_default]
     if defaults:
         return defaults[0].index
 
-    # 否则选声道数合适的 (2~6声道优先，太多声道可能是环绕声效轨)
+    # 4. 声道数合适的 (2~6声道优先)
     def channel_score(t: AudioTrackInfo) -> int:
         if 2 <= t.channels <= 6:
             return 0
@@ -164,6 +193,7 @@ def extract_audio(
     sample_rate: int = 16000,
     channels: int = 1,
     audio_track_index: int = -1,
+    preferred_lang: str = "eng",
 ) -> Optional[str]:
     """从视频提取音频
 
@@ -174,6 +204,7 @@ def extract_audio(
         sample_rate: 采样率 (默认 16kHz)
         channels: 声道数 (默认 1 单声道)
         audio_track_index: 音轨索引 (-1=自动选择)
+        preferred_lang: 首选音轨语言 (默认英语)
 
     Returns:
         输出音频文件路径，失败返回 None
@@ -186,7 +217,7 @@ def extract_audio(
     # 自动选择最佳音轨
     if audio_track_index < 0:
         tracks = probe_audio_tracks(input_file)
-        audio_track_index = select_best_audio_track(tracks)
+        audio_track_index = select_best_audio_track(tracks, preferred_lang)
         if tracks:
             selected = next((t for t in tracks if t.index == audio_track_index), None)
             if selected:

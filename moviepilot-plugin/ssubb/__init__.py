@@ -35,7 +35,7 @@ class SSUBBPlugin(_PluginBase):
     # 插件图标
     plugin_icon = "subtitle.png"
     # 插件版本
-    plugin_version = "0.4.0"
+    plugin_version = "0.5.0"
     # 插件作者
     plugin_author = "SSUBB"
     # 作者主页
@@ -56,6 +56,9 @@ class SSUBBPlugin(_PluginBase):
     _force_mode = False
     _local_path = ""
     _remote_path = ""
+    _api_token = ""
+    _annotation = "off"
+    _priority = 3
 
     def init_plugin(self, config: dict = None):
         if config:
@@ -63,13 +66,16 @@ class SSUBBPlugin(_PluginBase):
             self._coordinator_url = config.get("coordinator_url", "").rstrip("/")
             if self._coordinator_url and not self._coordinator_url.startswith("http"):
                 self._coordinator_url = "http://" + self._coordinator_url
-            
+
             self._auto_on_transfer = config.get("auto_on_transfer", True)
             self._target_lang = config.get("target_lang", "zh")
             self._source_lang = config.get("source_lang", "auto")
             self._force_mode = config.get("force_mode", False)
             self._local_path = config.get("local_path", "")
             self._remote_path = config.get("remote_path", "")
+            self._api_token = config.get("api_token", "")
+            self._annotation = config.get("annotation", "off")
+            self._priority = config.get("priority", 3)
 
     def get_state(self) -> bool:
         return self._enabled
@@ -229,6 +235,65 @@ class SSUBBPlugin(_PluginBase):
                             },
                         ]
                     },
+                    # ---- 高级选项 ----
+                    {
+                        'component': 'VRow',
+                        'content': [
+                            {
+                                'component': 'VCol',
+                                'props': {'cols': 12, 'md': 4},
+                                'content': [{
+                                    'component': 'VTextField',
+                                    'props': {
+                                        'model': 'api_token',
+                                        'label': 'API 访问令牌',
+                                        'type': 'password',
+                                        'placeholder': '留空则不验证',
+                                        'hint': 'Coordinator 配置的 api_token',
+                                        'persistent-hint': True,
+                                    }
+                                }]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {'cols': 12, 'md': 4},
+                                'content': [{
+                                    'component': 'VSelect',
+                                    'props': {
+                                        'model': 'annotation',
+                                        'label': '字幕注释',
+                                        'items': [
+                                            {'title': '关闭', 'value': 'off'},
+                                            {'title': '自动 (推荐)', 'value': 'auto'},
+                                            {'title': '始终开启', 'value': 'on'},
+                                        ],
+                                        'hint': '自动生成文化注释 (双关/典故等)',
+                                        'persistent-hint': True,
+                                    }
+                                }]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {'cols': 12, 'md': 4},
+                                'content': [{
+                                    'component': 'VSelect',
+                                    'props': {
+                                        'model': 'priority',
+                                        'label': '任务优先级',
+                                        'items': [
+                                            {'title': '1 - 最高', 'value': 1},
+                                            {'title': '2 - 较高', 'value': 2},
+                                            {'title': '3 - 普通', 'value': 3},
+                                            {'title': '4 - 较低', 'value': 4},
+                                            {'title': '5 - 最低', 'value': 5},
+                                        ],
+                                        'hint': '数字越小越优先处理',
+                                        'persistent-hint': True,
+                                    }
+                                }]
+                            },
+                        ]
+                    },
                     # ---- 使用说明 ----
                     {
                         'component': 'VRow',
@@ -263,6 +328,9 @@ class SSUBBPlugin(_PluginBase):
             "force_mode": False,
             "local_path": "",
             "remote_path": "",
+            "api_token": "",
+            "annotation": "off",
+            "priority": 3,
         }
 
     def _on_coordinator_callback(self, payload: dict) -> dict:
@@ -453,7 +521,9 @@ class SSUBBPlugin(_PluginBase):
             "source_lang": self._source_lang,
             "target_lang": self._target_lang,
             "force": force,
-            "callback_url": callback_url
+            "callback_url": callback_url,
+            "annotation": self._annotation,
+            "priority": self._priority,
         }
         if tmdb_id:
             payload["tmdb_id"] = tmdb_id
@@ -463,7 +533,10 @@ class SSUBBPlugin(_PluginBase):
             payload["episode"] = episode
 
         try:
-            res = RequestUtils().post(req_url, json=payload)
+            headers = {}
+            if self._api_token:
+                headers["Authorization"] = f"Bearer {self._api_token}"
+            res = RequestUtils().post(req_url, json=payload, headers=headers)
             if res and res.status_code == 200:
                 result = res.json()
                 task_id = result.get("id", "unknown")

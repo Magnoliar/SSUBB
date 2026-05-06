@@ -63,6 +63,7 @@ class SubtitleWriter:
         target_lang: str = "zh",
         subtitle_format: str = "",
         original_srt: str = "",
+        annotation_content: str = "",
     ) -> Optional[str]:
         """将字幕内容写入媒体目录
 
@@ -72,6 +73,7 @@ class SubtitleWriter:
             target_lang: 目标语言标签
             subtitle_format: 字幕格式 (空=使用配置默认值)
             original_srt: 原始语言字幕 (SRT)，用于双语模式
+            annotation_content: 注释 ASS 内容 (已包含样式和 Dialogue 行)
 
         Returns:
             字幕文件路径
@@ -111,10 +113,20 @@ class SubtitleWriter:
         try:
             subtitle_path.write_text(final_content, encoding="utf-8")
             logger.info(f"字幕已写入: {subtitle_path.name} ({mode}/{fmt})")
-            return str(subtitle_path)
         except Exception as e:
             logger.exception(f"写入字幕失败: {e}")
             return None
+
+        # 写入带注释的 ASS 文件（仅 ASS 格式 + 有注释内容时）
+        if annotation_content and fmt == "ass":
+            annotated_path = video.parent / f"{video.stem}.{lang3}.annotated.ssubb.ass"
+            try:
+                annotated_path.write_text(annotation_content, encoding="utf-8")
+                logger.info(f"注释字幕已写入: {annotated_path.name}")
+            except Exception as e:
+                logger.warning(f"写入注释字幕失败（不影响主流程）: {e}")
+
+        return str(subtitle_path)
 
     # =========================================================================
     # 双语合并

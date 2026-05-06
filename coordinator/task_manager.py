@@ -409,6 +409,30 @@ class TaskManager:
             # 保存字幕到数据库（供预览/编辑）
             self.store.save_subtitle(task_id, result.subtitle_srt, result.original_srt or "")
 
+            # 注释处理: 保存到数据库，auto 模式检查质量阈值
+            annotation_content = None
+            annotation_mode = self._get_annotation_mode(task)
+            if result.annotations and annotation_mode != "off":
+                # auto 模式: 质量不达标则跳过注释
+                if annotation_mode == "auto":
+                    quality_score = 0
+                    try:
+                        from .audio_extractor import get_video_duration
+                        vid_dur = get_video_duration(task.media_path)
+                        quality = self.checker.score_subtitle(result.subtitle_srt, vid_dur)
+                        quality_score = quality.get("score", 0) if quality else 0
+                    except Exception:
+                        pass
+                    if quality_score < self.config.annotation.quality_threshold:
+                        logger.info(f"[{task_id}] 质量 {quality_score} < 阈值 {self.config.annotation.quality_threshold}，跳过注释")
+                        annotation_mode = "skip"
+
+                if annotation_mode != "skip":
+                    annotation_content = self._build_annotation_ass(task, result)
+                    if annotation_content:
+                        self.store.save_annotations(task_id, annotation_content)
+                        logger.info(f"[{task_id}] 注释已保存 ({len(result.annotations)} 条)")
+
             # 写入字幕
             self.store.update_status(task_id, TaskStatus.WRITING_SUBTITLE, progress=90)
             t0 = time.time()
@@ -418,6 +442,7 @@ class TaskManager:
                 subtitle_content=result.subtitle_srt,
                 target_lang=task.target_lang,
                 original_srt=result.original_srt or "",
+                annotation_content=annotation_content,
             )
 
             self.store.update_stage_time(task_id, "writing_subtitle", time.time() - t0)
@@ -437,6 +462,8 @@ class TaskManager:
                     "translate_duration": result.translate_duration,
                     "total_duration": result.total_duration,
                     "subtitle_path": subtitle_path,
+                    "cultural_density": result.cultural_density,
+                    "annotation_count": len(result.annotations) if result.annotations else 0,
                 }
                 self.store.update_result_summary(task_id, summary)
 
@@ -560,6 +587,47 @@ class TaskManager:
             if task.callback_url:
                 _safe_background_task(self._trigger_webhook(task, result), f"webhook-{task_id}")
             return False
+
+    def _get_annotation_mode(self, task: TaskInfo) -> str:
+        """获取注释模式 (优先任务配置，其次全局配置)"""
+        if task.config and task.config.annotation:
+            return task.config.annotation
+        return self.config.annotation.mode
+
+    def _build_annotation_ass(
+        self, task: TaskInfo, result: WorkerTaskResult
+    ) -> Optional[str]:
+        """将注释列表转换为 ASS 格式字符串"""
+        if not result.annotations:
+            return None
+
+        from .subtitle_writer import SubtitleWriter as _Writer
+        # 构建最小 ASS: 仅包含 Annotation 样式和注释 Dialogue 行
+        style = self.config.subtitle.ass_style
+        ass_lines = [
+            "[Script Info]",
+            f"Title: {task.media_title or 'SSUBB Annotations'}",
+            "ScriptType: v4.00+",
+            f"PlayResX: {style.play_res_x}",
+            f"PlayResY: {style.play_res_y}",
+            "",
+            "[V4+ Styles]",
+            "Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding",
+            f"Style: Annotation,Noto Sans,10,&H00FFFFFF,&H000000FF,&H000000FF,&H80000000,-1,0,0,0,100,100,0,0,1,1.5,0,8,10,10,30,1",
+            "",
+            "[Events]",
+            "Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text",
+        ]
+
+        for ann in result.annotations:
+            start = ann.get("start_time", "00:00:00,000").replace(",", ".")
+            end = ann.get("end_time", "00:00:00,000").replace(",", ".")
+            text = ann.get("text", "").replace("\n", "\\N")
+            ass_lines.append(
+                f"Dialogue: 1,{start},{end},Annotation,,0,0,0,,{{\\fad(300,300)}}{text}"
+            )
+
+        return "\n".join(ass_lines)
 
     async def _auto_repair_subtitles(
         self, task_id: str, srt_content: str, original_srt: str

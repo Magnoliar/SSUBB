@@ -1,4 +1,4 @@
-# SSUBB 配置手册 (V0.11)
+# SSUBB 配置手册 (V0.12)
 
 ## 零配置向导 (推荐)
 
@@ -143,6 +143,22 @@ coordinator:
 | `alignment` | int | `8` | 对齐 (8=顶部居中) |
 | `margin_v` | int | `10` | 顶部边距 |
 
+### 字幕注释 (`annotation`) — V0.12 新增
+
+自动生成文化注释（类似字幕组的翻译备注），标注双关语、文化典故、跨作品引用等内容。
+
+| 配置项 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `mode` | string | `off` | 注释模式: `off`(关闭) / `auto`(自动) / `on`(始终开启) |
+| `quality_threshold` | int | `75` | auto 模式下触发注释的质量阈值 (0-100) |
+
+**注释模式说明**:
+- `off`: 不生成注释（默认，零额外开销）
+- `auto`: 翻译时自动评估文化密度，高/中等复杂度 + 质量评分达标时自动生成注释
+- `on`: 始终生成注释
+
+注释以独立 ASS 文件输出 (`{stem}.annotated.ssubb.ass`)，播放器中可与基础字幕切换。
+
 ### 安全认证 (`security`) — V0.11 新增
 
 | 配置项 | 类型 | 默认值 | 说明 |
@@ -150,6 +166,8 @@ coordinator:
 | `api_token` | string | `""` | Coordinator API 鉴权 Token（空=不验证） |
 | `worker_token` | string | `""` | Worker 回调认证 Token（空=不验证） |
 | `cors_origins` | list | `["*"]` | CORS 允许的来源列表 |
+
+> **认证豁免路径**（V0.12 修复）：以下路径不需要认证：`/`、`/api/status`、`/api/health`、`/docs`、`/openapi.json`、`/redoc`、`/api/webhook`。首次访问时 WebUI 自动弹出登录对话框。
 
 示例：
 

@@ -9,64 +9,116 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;800&display=swap');
-        
-        body {
-            font-family: 'Inter', sans-serif;
-            background: #0d0f12;
-            color: #eceff4;
-            min-height: 100vh;
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Outfit:wght@300;400;500;600;700;800&display=swap');
+
+        :root {
+            --bg-void: #06070a;
+            --bg-surface: #0c0e13;
+            --bg-panel: rgba(14, 17, 24, 0.85);
+            --bg-elevated: rgba(22, 26, 36, 0.9);
+            --border-subtle: rgba(255, 255, 255, 0.04);
+            --border-dim: rgba(255, 255, 255, 0.08);
+            --text-primary: #e8eaed;
+            --text-secondary: #8b919a;
+            --text-muted: #4a4f57;
+            --accent-amber: #f5a623;
+            --accent-amber-dim: rgba(245, 166, 35, 0.15);
+            --accent-amber-glow: rgba(245, 166, 35, 0.4);
+            --accent-cyan: #3ecfcf;
+            --accent-cyan-dim: rgba(62, 207, 207, 0.12);
+            --accent-red: #e54b4b;
+            --accent-green: #4ade80;
+            --accent-blue: #6b8afd;
         }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg-void);
+            color: var(--text-primary);
+            min-height: 100vh;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* Film grain overlay */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+            pointer-events: none;
+            z-index: 9999;
+            opacity: 0.5;
+        }
+
+        /* Atmospheric vignette */
+        body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: radial-gradient(ellipse at 50% 0%, transparent 50%, rgba(0,0,0,0.4) 100%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        #app { position: relative; z-index: 1; }
 
         [v-cloak] { display: none; }
 
         .glass-panel {
-            background: rgba(25, 30, 36, 0.6);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 16px;
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            background: var(--bg-panel);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--border-dim);
+            border-radius: 4px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255,255,255,0.02);
         }
 
         .glow-text {
-            text-shadow: 0 0 16px rgba(56, 189, 248, 0.5);
+            text-shadow: 0 0 20px var(--accent-amber-glow), 0 0 40px rgba(245,166,35,0.15);
         }
 
         .gradient-text {
-            background: linear-gradient(135deg, #38bdf8 0%, #818cf8 100%);
+            background: linear-gradient(135deg, var(--accent-amber) 0%, #e8893a 100%);
             -webkit-background-clip: text;
             background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
-        /* 状态指示灯动画 */
+        /* Monospace accent */
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+            letter-spacing: -0.02em;
+        }
+
+        /* Status indicators — film-strip style */
         .status-dot {
-            height: 10px;
-            width: 10px;
-            border-radius: 50%;
+            height: 8px;
+            width: 8px;
+            border-radius: 1px;
             display: inline-block;
+            transform: rotate(45deg);
         }
         .status-dot.online {
-            background-color: #10b981;
-            box-shadow: 0 0 8px #10b981;
+            background-color: var(--accent-green);
+            box-shadow: 0 0 10px var(--accent-green);
             animation: pulse-green 2s infinite;
         }
         .status-dot.offline {
-            background-color: #ef4444;
-            box-shadow: 0 0 8px #ef4444;
+            background-color: var(--accent-red);
+            box-shadow: 0 0 6px var(--accent-red);
         }
 
         @keyframes pulse-green {
-            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
-            70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
-            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+            0% { transform: rotate(45deg) scale(0.9); box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.6); }
+            70% { transform: rotate(45deg) scale(1); box-shadow: 0 0 0 5px rgba(74, 222, 128, 0); }
+            100% { transform: rotate(45deg) scale(0.9); box-shadow: 0 0 0 0 rgba(74, 222, 128, 0); }
         }
 
-        /* 进度条动画 */
+        /* Progress bar — cinematic sweep */
         .progress-bar-fill {
-            transition: width 0.5s ease-out;
-            background: linear-gradient(90deg, #38bdf8, #818cf8);
+            transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+            background: linear-gradient(90deg, var(--accent-amber), #e8893a);
             position: relative;
             overflow: hidden;
         }
@@ -74,49 +126,54 @@
             content: "";
             position: absolute;
             top: 0; left: 0; bottom: 0; right: 0;
-            background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.2) 50%, rgba(255,255,255,0) 100%);
+            background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.25) 50%, rgba(255,255,255,0) 100%);
             transform: translateX(-100%);
-            animation: shimmer 2s infinite;
+            animation: shimmer 1.8s infinite;
         }
         @keyframes shimmer {
             100% { transform: translateX(100%); }
         }
 
-        /* 表格微动画 */
-        tr { transition: background-color 0.2s; }
-        tr:hover { background-color: rgba(255, 255, 255, 0.03); }
+        /* Table rows */
+        tr { transition: background-color 0.15s ease; }
+        tr:hover { background-color: rgba(245, 166, 35, 0.03); }
 
+        /* Buttons */
         .btn-primary {
-            background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
-            transition: all 0.3s;
+            background: linear-gradient(135deg, var(--accent-amber) 0%, #e8893a 100%);
+            color: #0a0b0d;
+            font-weight: 600;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
         }
         .btn-primary:hover {
-            box-shadow: 0 0 15px rgba(79, 70, 229, 0.5);
+            box-shadow: 0 0 20px var(--accent-amber-glow);
             transform: translateY(-1px);
         }
 
         .btn-retry {
-            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-            transition: all 0.3s;
+            background: linear-gradient(135deg, #c44 0%, #a33 100%);
+            color: #fff;
+            font-weight: 500;
+            transition: all 0.2s ease;
         }
         .btn-retry:hover {
-            box-shadow: 0 0 12px rgba(245, 158, 11, 0.5);
+            box-shadow: 0 0 14px rgba(204, 68, 68, 0.5);
             transform: translateY(-1px);
         }
 
-        /* 任务详情滑出 */
+        /* Detail panel slide */
         .detail-panel {
             max-height: 0;
             overflow: hidden;
-            transition: max-height 0.4s ease-out, opacity 0.3s;
+            transition: max-height 0.5s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s;
             opacity: 0;
         }
         .detail-panel.open {
-            max-height: 600px;
+            max-height: 700px;
             opacity: 1;
         }
 
-        /* 阶段流水线 */
+        /* Stage pipeline — film-frame markers */
         .stage-pipeline {
             display: flex;
             align-items: center;
@@ -125,116 +182,135 @@
         }
         .stage-node {
             padding: 3px 8px;
-            border-radius: 6px;
+            border-radius: 2px;
             font-size: 10px;
             font-weight: 500;
             white-space: nowrap;
             transition: all 0.2s;
+            font-family: 'JetBrains Mono', monospace;
+            letter-spacing: -0.03em;
         }
-        .stage-node.done { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
-        .stage-node.active { background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.5); animation: pulse-blue 1.5s infinite; }
-        .stage-node.pending { background: rgba(100, 116, 139, 0.15); color: #64748b; border: 1px solid rgba(100, 116, 139, 0.2); }
-        .stage-node.failed { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
-        .stage-arrow { color: #475569; font-size: 10px; }
+        .stage-node.done { background: rgba(74, 222, 128, 0.12); color: var(--accent-green); border: 1px solid rgba(74, 222, 128, 0.25); }
+        .stage-node.active { background: var(--accent-amber-dim); color: var(--accent-amber); border: 1px solid rgba(245, 166, 35, 0.4); animation: pulse-amber 1.5s infinite; }
+        .stage-node.pending { background: rgba(100, 116, 139, 0.08); color: var(--text-muted); border: 1px solid rgba(100, 116, 139, 0.12); }
+        .stage-node.failed { background: rgba(229, 75, 75, 0.12); color: var(--accent-red); border: 1px solid rgba(229, 75, 75, 0.25); }
+        .stage-arrow { color: var(--text-muted); font-size: 10px; }
 
-        /* 垂直时间线 */
+        /* Vertical timeline */
         .timeline { position: relative; padding-left: 24px; }
-        .timeline::before { content: ''; position: absolute; left: 7px; top: 4px; bottom: 4px; width: 2px; background: rgba(100,116,139,0.3); border-radius: 1px; }
+        .timeline::before { content: ''; position: absolute; left: 7px; top: 4px; bottom: 4px; width: 1px; background: var(--border-dim); }
         .timeline-node { position: relative; padding: 6px 0 6px 16px; }
         .timeline-node::before {
             content: ''; position: absolute; left: -20px; top: 12px;
-            width: 10px; height: 10px; border-radius: 50%;
-            border: 2px solid; z-index: 1;
+            width: 8px; height: 8px; border-radius: 1px; transform: rotate(45deg);
+            border: 1.5px solid; z-index: 1;
         }
-        .timeline-node.done::before { background: #10b981; border-color: #10b981; }
-        .timeline-node.active::before { background: #38bdf8; border-color: #38bdf8; box-shadow: 0 0 8px rgba(56,189,248,0.5); animation: pulse-blue 1.5s infinite; }
-        .timeline-node.pending::before { background: transparent; border-color: #475569; }
-        .timeline-node.failed::before { background: #ef4444; border-color: #ef4444; }
+        .timeline-node.done::before { background: var(--accent-green); border-color: var(--accent-green); }
+        .timeline-node.active::before { background: var(--accent-amber); border-color: var(--accent-amber); box-shadow: 0 0 10px var(--accent-amber-glow); animation: pulse-amber 1.5s infinite; }
+        .timeline-node.pending::before { background: transparent; border-color: var(--text-muted); }
+        .timeline-node.failed::before { background: var(--accent-red); border-color: var(--accent-red); }
 
-        @keyframes pulse-blue {
-            0%, 100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.4); }
-            50% { box-shadow: 0 0 0 4px rgba(56, 189, 248, 0); }
+        @keyframes pulse-amber {
+            0%, 100% { box-shadow: 0 0 0 0 var(--accent-amber-glow); }
+            50% { box-shadow: 0 0 0 4px rgba(245, 166, 35, 0); }
         }
-        
-        /* 滚动条美化 */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.14); }
 
-        /* Toast 通知 */
+        /* Toast */
         .toast-container {
-            position: fixed; top: 16px; right: 16px; z-index: 100;
+            position: fixed; top: 20px; right: 20px; z-index: 100;
             display: flex; flex-direction: column; gap: 8px;
             pointer-events: none;
         }
         .toast {
             pointer-events: auto;
-            background: rgba(25, 30, 36, 0.9); backdrop-filter: blur(12px);
-            border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;
+            background: var(--bg-elevated); backdrop-filter: blur(20px);
+            border: 1px solid var(--border-dim); border-radius: 3px;
             padding: 12px 20px; min-width: 280px; max-width: 400px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-            animation: toast-in 0.35s cubic-bezier(0.21,1.02,0.73,1) forwards;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            animation: toast-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
             display: flex; align-items: center; gap: 10px; font-size: 13px;
         }
-        .toast.fade-out { animation: toast-out 0.3s ease forwards; }
-        .toast-success { border-left: 3px solid #10b981; }
-        .toast-error { border-left: 3px solid #ef4444; }
-        .toast-warning { border-left: 3px solid #f59e0b; }
-        .toast-info { border-left: 3px solid #38bdf8; }
-        .toast-success .toast-icon { color: #10b981; }
-        .toast-error .toast-icon { color: #ef4444; }
-        .toast-warning .toast-icon { color: #f59e0b; }
-        .toast-info .toast-icon { color: #38bdf8; }
+        .toast.fade-out { animation: toast-out 0.25s ease forwards; }
+        .toast-success { border-left: 3px solid var(--accent-green); }
+        .toast-error { border-left: 3px solid var(--accent-red); }
+        .toast-warning { border-left: 3px solid var(--accent-amber); }
+        .toast-info { border-left: 3px solid var(--accent-cyan); }
+        .toast-success .toast-icon { color: var(--accent-green); }
+        .toast-error .toast-icon { color: var(--accent-red); }
+        .toast-warning .toast-icon { color: var(--accent-amber); }
+        .toast-info .toast-icon { color: var(--accent-cyan); }
         @keyframes toast-in {
-            from { opacity: 0; transform: translateX(60px); }
-            to { opacity: 1; transform: translateX(0); }
+            from { opacity: 0; transform: translateX(40px) scale(0.96); }
+            to { opacity: 1; transform: translateX(0) scale(1); }
         }
         @keyframes toast-out {
-            to { opacity: 0; transform: translateX(60px); }
+            to { opacity: 0; transform: translateX(40px) scale(0.96); }
         }
 
-        /* 确认对话框 */
+        /* Confirm dialog */
         .confirm-overlay {
             position: fixed; inset: 0; z-index: 200;
-            background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+            background: rgba(0,0,0,0.7); backdrop-filter: blur(6px);
             display: flex; align-items: center; justify-content: center;
             animation: fade-in 0.2s ease;
         }
         .confirm-dialog {
-            background: rgba(25, 30, 36, 0.95); backdrop-filter: blur(16px);
-            border: 1px solid rgba(255,255,255,0.1); border-radius: 16px;
-            padding: 24px; min-width: 340px; max-width: 440px;
-            box-shadow: 0 16px 48px rgba(0,0,0,0.5);
-            animation: scale-in 0.25s cubic-bezier(0.21,1.02,0.73,1);
+            background: var(--bg-elevated); backdrop-filter: blur(24px);
+            border: 1px solid var(--border-dim); border-radius: 4px;
+            padding: 28px; min-width: 340px; max-width: 440px;
+            box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+            animation: scale-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         }
         @keyframes fade-in { from { opacity: 0; } }
         @keyframes scale-in {
-            from { opacity: 0; transform: scale(0.9); }
+            from { opacity: 0; transform: scale(0.92); }
             to { opacity: 1; transform: scale(1); }
         }
 
-        /* 移动端适配 */
+        /* Stagger entrance for children */
+        .stagger-in > * {
+            animation: fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+        }
+        .stagger-in > *:nth-child(1) { animation-delay: 0.05s; }
+        .stagger-in > *:nth-child(2) { animation-delay: 0.1s; }
+        .stagger-in > *:nth-child(3) { animation-delay: 0.15s; }
+        .stagger-in > *:nth-child(4) { animation-delay: 0.2s; }
+        .stagger-in > *:nth-child(5) { animation-delay: 0.25s; }
+        @keyframes fade-up {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Section label */
+        .section-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            font-weight: 500;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        /* Mobile */
         @media (max-width: 767px) {
-            /* 任务表格改为卡片布局 */
             .task-table thead { display: none; }
-            .task-table tbody tr { display: block; margin-bottom: 8px; border-radius: 12px; background: rgba(25,30,36,0.4); border: 1px solid rgba(255,255,255,0.05); }
+            .task-table tbody tr { display: block; margin-bottom: 8px; border-radius: 4px; background: var(--bg-panel); border: 1px solid var(--border-dim); }
             .task-table tbody tr td { display: block; padding: 8px 16px !important; width: 100% !important; }
             .task-table tbody tr td:nth-child(1) { display: none; }
             .task-table tbody tr td:nth-child(2) { padding-top: 12px !important; }
             .task-table tbody tr td:nth-child(4) { padding-bottom: 12px !important; }
             .task-table tbody tr td:nth-child(5) { display: none; }
-            .task-table tbody tr.detail-row { background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.03); }
+            .task-table tbody tr.detail-row { background: rgba(0,0,0,0.3); border: 1px solid var(--border-subtle); }
             .task-table tbody tr.detail-row td { padding: 12px 16px !important; }
-
-            /* 响应式高度 */
             .task-list-container { height: auto !important; max-height: 50vh; }
-
-            /* 触控目标最小 44px */
             button, select, input, a { min-height: 44px; }
             .stage-node { min-height: 32px; display: inline-flex; align-items: center; }
-
-            /* 侧边栏堆叠 */
             .right-panel { order: -1; }
         }
     </style>
@@ -243,93 +319,88 @@
 
 <div id="app" class="max-w-7xl mx-auto" v-cloak>
     <!-- Header -->
-    <header class="flex flex-col md:flex-row justify-between items-center mb-8 glass-panel p-6">
+    <header class="flex flex-col md:flex-row justify-between items-center mb-6 glass-panel px-6 py-5">
         <div class="flex items-center space-x-4 mb-4 md:mb-0">
-            <div class="p-3 bg-gray-800 rounded-xl shadow-inner border border-gray-700">
-                <i class="fa-solid fa-closed-captioning text-3xl gradient-text"></i>
+            <div class="p-2.5 border border-[var(--border-dim)] rounded-sm">
+                <i class="fa-solid fa-closed-captioning text-2xl gradient-text"></i>
             </div>
             <div>
-                <h1 class="text-2xl font-bold tracking-wider">SSUBB <span class="font-light text-gray-400 text-base">v{{ sysInfo.version || '0.1.0' }}</span></h1>
-                <p class="text-sm text-gray-400">分布式人工智能字幕处理大观</p>
+                <h1 class="text-xl font-bold tracking-wide">
+                    <span class="gradient-text">SSUBB</span>
+                    <span class="mono font-light text-[var(--text-muted)] text-xs ml-2">v{{ sysInfo.version || '0.1.0' }}</span>
+                </h1>
+                <p class="text-xs text-[var(--text-muted)] tracking-wider uppercase mt-0.5">Distributed Subtitle Intelligence</p>
             </div>
         </div>
-        
+
         <div class="flex items-center space-x-3">
             <!-- 配置健康度 -->
             <div v-if="healthData && healthData.score < 100" class="relative">
-                <button @click="showHealthDetail = !showHealthDetail" class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-700 hover:border-gray-500 transition-all text-xs"
+                <button @click="showHealthDetail = !showHealthDetail" class="flex items-center gap-2 px-3 py-1.5 rounded-sm border border-[var(--border-dim)] hover:border-[var(--accent-amber)] transition-all text-xs"
                     :title="'配置完成度: ' + healthData.score + '%'">
-                    <svg class="w-5 h-5" viewBox="0 0 36 36">
+                    <svg class="w-4 h-4" viewBox="0 0 36 36">
                         <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                             fill="none" :stroke="'rgba(100,116,139,0.3)'" stroke-width="3"/>
                         <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                             fill="none" :stroke="getHealthColor(healthData.score)" stroke-width="3"
                             :stroke-dasharray="healthData.score + ', 100'" stroke-linecap="round"/>
                     </svg>
-                    <span class="text-gray-400">{{ healthData.score }}%</span>
+                    <span class="mono text-[var(--text-secondary)]">{{ healthData.score }}%</span>
                 </button>
                 <!-- 健康度详情弹出 -->
-                <div v-if="showHealthDetail" class="absolute right-0 top-full mt-2 w-80 glass-panel p-4 z-50 border border-gray-700">
-                    <h4 class="text-sm font-medium text-gray-300 mb-3">配置健康度</h4>
+                <div v-if="showHealthDetail" class="absolute right-0 top-full mt-2 w-80 glass-panel p-4 z-50">
+                    <h4 class="section-label mb-3">CONFIG HEALTH</h4>
                     <div v-for="(check, key) in healthData.checks" :key="key" class="flex items-start gap-2 mb-2 text-xs">
-                        <i :class="check.pass ? 'fa-solid fa-circle-check text-green-400' : 'fa-solid fa-circle-xmark text-red-400'" class="mt-0.5"></i>
-                        <span class="text-gray-300">{{ check.message }}</span>
+                        <i :class="check.pass ? 'fa-solid fa-circle-check text-[var(--accent-green)]' : 'fa-solid fa-circle-xmark text-[var(--accent-red)]'" class="mt-0.5"></i>
+                        <span class="text-[var(--text-secondary)]">{{ check.message }}</span>
                     </div>
-                    <div v-if="healthData.suggestions.length" class="mt-3 pt-3 border-t border-gray-700">
-                        <div v-for="s in healthData.suggestions" :key="s" class="text-[11px] text-amber-400 mb-1">
+                    <div v-if="healthData.suggestions.length" class="mt-3 pt-3 border-t border-[var(--border-dim)]">
+                        <div v-for="s in healthData.suggestions" :key="s" class="text-[11px] text-[var(--accent-amber)] mb-1">
                             <i class="fa-solid fa-lightbulb mr-1"></i>{{ s }}
                         </div>
                     </div>
                 </div>
             </div>
             <!-- 认证状态 -->
-            <button @click="openLogin" class="p-2 rounded-lg border transition-all text-xs"
-                :class="isAuthenticated ? 'border-green-500/50 text-green-400 bg-green-900/20' : 'border-gray-700 text-gray-400 hover:text-white hover:border-gray-500'"
+            <button @click="openLogin" class="p-2 rounded-sm border transition-all text-xs"
+                :class="isAuthenticated ? 'border-[var(--accent-green)]/50 text-[var(--accent-green)] bg-[var(--accent-green)]/10' : 'border-[var(--border-dim)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--accent-amber)]'"
                 :title="isAuthenticated ? '已认证 (点击更换)' : '未认证 (点击登录)'">
                 <i :class="isAuthenticated ? 'fa-solid fa-lock' : 'fa-solid fa-lock-open'"></i>
             </button>
             <!-- 简单/高级模式切换 -->
-            <button @click="toggleViewMode" class="p-2 rounded-lg border transition-all text-xs"
-                :class="viewMode === 'advanced' ? 'border-blue-500/50 text-blue-400 bg-blue-900/20' : 'border-gray-700 text-gray-400 hover:text-white hover:border-gray-500'"
+            <button @click="toggleViewMode" class="p-2 rounded-sm border transition-all text-xs"
+                :class="viewMode === 'advanced' ? 'border-[var(--accent-cyan)]/50 text-[var(--accent-cyan)] bg-[var(--accent-cyan)]/10' : 'border-[var(--border-dim)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--accent-amber)]'"
                 :title="viewMode === 'advanced' ? '切换到简单模式' : '切换到高级模式'">
                 <i :class="viewMode === 'advanced' ? 'fa-solid fa-wrench' : 'fa-solid fa-eye'"></i>
             </button>
+            <!-- 设置 -->
+            <button @click="openSettings" class="p-2 rounded-sm border border-[var(--border-dim)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--accent-amber)] transition-all text-xs" title="设置">
+                <i class="fa-solid fa-gear"></i>
+            </button>
         </div>
-        <div class="flex space-x-6 mt-4 md:mt-0">
-            <div class="text-center" title="Coordinator 任务调度节点状态">
-                <div class="text-xs text-gray-400 uppercase tracking-wider mb-1">Coordinator (NAS)</div>
-                <div class="flex items-center space-x-2 font-medium">
-                    <span class="status-dot online"></span>
-                    <span class="glow-text text-green-400">ONLINE</span>
-                </div>
+
+        <!-- Node Status Strip -->
+        <div class="flex items-center gap-6 mt-4 md:mt-0">
+            <div class="flex items-center gap-2" title="Coordinator 任务调度节点状态">
+                <span class="status-dot online"></span>
+                <span class="mono text-xs text-[var(--accent-green)] glow-text">COORDINATOR</span>
             </div>
             <template v-for="(w, idx) in (sysInfo.workers || [])" :key="w.url">
-                <div class="w-px bg-gray-700"></div>
-                <div class="text-center">
-                    <div class="text-xs text-gray-400 uppercase tracking-wider mb-1">{{ w.worker_id || 'Worker' }}</div>
-                    <div class="flex items-center space-x-2 font-medium" v-if="w.online">
-                        <span class="status-dot online"></span>
-                        <span class="glow-text text-green-400">{{ w.heartbeat?.gpu_name || w.worker_id }}</span>
-                    </div>
-                    <div class="flex items-center space-x-2 font-medium text-red-400" v-else>
-                        <span class="status-dot offline"></span>
-                        <span>OFFLINE</span>
-                    </div>
+                <div class="w-px h-4 bg-[var(--border-dim)]"></div>
+                <div class="flex items-center gap-2">
+                    <span :class="w.online ? 'status-dot online' : 'status-dot offline'"></span>
+                    <span class="mono text-xs" :class="w.online ? 'text-[var(--accent-green)]' : 'text-[var(--accent-red)]'">
+                        {{ w.online ? (w.heartbeat?.gpu_name || w.worker_id || 'WORKER') : 'OFFLINE' }}
+                    </span>
                 </div>
             </template>
-            <!-- 单 Worker 兼容 fallback -->
             <template v-if="!(sysInfo.workers?.length) && sysInfo.worker">
-                <div class="w-px bg-gray-700"></div>
-                <div class="text-center flex-1">
-                    <div class="text-xs text-gray-400 uppercase tracking-wider mb-1">Worker (GPU)</div>
-                    <div class="flex items-center space-x-2 font-medium" v-if="sysInfo.worker.online">
-                        <span class="status-dot online"></span>
-                        <span class="glow-text text-green-400">{{ sysInfo.worker.heartbeat?.gpu_name || 'NVIDIA GPU' }}</span>
-                    </div>
-                    <div class="flex items-center space-x-2 font-medium text-red-400" v-else>
-                        <span class="status-dot offline"></span>
-                        <span>OFFLINE</span>
-                    </div>
+                <div class="w-px h-4 bg-[var(--border-dim)]"></div>
+                <div class="flex items-center gap-2">
+                    <span :class="sysInfo.worker.online ? 'status-dot online' : 'status-dot offline'"></span>
+                    <span class="mono text-xs" :class="sysInfo.worker.online ? 'text-[var(--accent-green)]' : 'text-[var(--accent-red)]'">
+                        {{ sysInfo.worker.online ? (sysInfo.worker.heartbeat?.gpu_name || 'GPU WORKER') : 'OFFLINE' }}
+                    </span>
                 </div>
             </template>
         </div>
@@ -339,24 +410,24 @@
     <div class="glass-panel px-5 py-3 mb-6 flex flex-wrap items-center gap-4 text-xs" role="region" aria-label="系统健康状态">
         <div class="flex items-center gap-1.5">
             <span class="status-dot online"></span>
-            <span class="text-gray-300">Coordinator</span>
+            <span class="text-[var(--text-primary)]">Coordinator</span>
         </div>
         <template v-for="w in (sysInfo.workers || [])" :key="w.url">
             <div class="flex items-center gap-1.5 cursor-pointer hover:opacity-80" @click="openWorkerDetail(w)" :title="w.worker_id || w.url">
                 <span class="status-dot" :class="w.online ? 'online' : 'offline'"></span>
-                <span class="text-gray-300">{{ w.worker_id || w.url }}</span>
-                <span v-if="w.heartbeat && w.heartbeat.gpu_utilization != null" class="text-gray-500">({{ w.heartbeat.gpu_utilization }}%)</span>
+                <span class="text-[var(--text-primary)]">{{ w.worker_id || w.url }}</span>
+                <span v-if="w.heartbeat && w.heartbeat.gpu_utilization != null" class="text-[var(--text-muted)]">({{ w.heartbeat.gpu_utilization }}%)</span>
             </div>
         </template>
         <div class="flex items-center gap-1.5" v-if="!sysInfo.workers || sysInfo.workers.length === 0">
             <span class="status-dot offline"></span>
-            <span class="text-gray-500">无 Worker</span>
+            <span class="text-[var(--text-muted)]">无 Worker</span>
         </div>
-        <div class="ml-auto flex items-center gap-4 text-gray-400">
-            <span title="排队中"><i class="fa-solid fa-hourglass-half text-yellow-500 mr-1"></i>{{ sysInfo.tasks_pending || 0 }}</span>
-            <span title="计算中"><i class="fa-solid fa-microchip text-blue-400 mr-1"></i>{{ sysInfo.tasks_active || 0 }}</span>
-            <span title="已完成"><i class="fa-solid fa-check text-green-400 mr-1"></i>{{ sysInfo.tasks_completed || 0 }}</span>
-            <span title="失败"><i class="fa-solid fa-xmark text-red-400 mr-1"></i>{{ sysInfo.tasks_failed || 0 }}</span>
+        <div class="ml-auto flex items-center gap-4 text-[var(--text-secondary)]">
+            <span title="排队中"><i class="fa-solid fa-hourglass-half text-[var(--accent-amber)] mr-1"></i>{{ sysInfo.tasks_pending || 0 }}</span>
+            <span title="计算中"><i class="fa-solid fa-microchip text-[var(--accent-cyan)] mr-1"></i>{{ sysInfo.tasks_active || 0 }}</span>
+            <span title="已完成"><i class="fa-solid fa-check text-[var(--accent-green)] mr-1"></i>{{ sysInfo.tasks_completed || 0 }}</span>
+            <span title="失败"><i class="fa-solid fa-xmark text-[var(--accent-red)] mr-1"></i>{{ sysInfo.tasks_failed || 0 }}</span>
         </div>
     </div>
 
@@ -365,13 +436,13 @@
         
         <!-- Task List -->
         <div class="lg:col-span-2 glass-panel flex flex-col h-[640px] overflow-hidden task-list-container">
-            <div class="px-6 py-4 border-b border-gray-700/50 flex justify-between items-center bg-gray-800/30">
-                <h2 class="font-semibold text-lg"><i class="fa-solid fa-list-ul mr-2 text-blue-400"></i>近况队列看板</h2>
+            <div class="px-6 py-4 border-b border-[var(--border-dim)] flex justify-between items-center bg-[var(--bg-panel)]">
+                <h2 class="font-semibold text-lg"><i class="fa-solid fa-list-ul mr-2 text-[var(--accent-cyan)]"></i>近况队列看板</h2>
                 <div class="flex items-center space-x-3">
                     <!-- 搜索 -->
-                    <input id="task-search" v-model="searchQuery" placeholder="搜索影片名称..." class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-gray-300 w-40 focus:outline-none focus:border-blue-500 focus:w-56 transition-all" @input="onSearchInput" />
+                    <input id="task-search" v-model="searchQuery" placeholder="搜索影片名称..." class="bg-[var(--bg-surface)] border border-[var(--border-dim)] rounded-sm px-3 py-1.5 text-xs text-[var(--text-primary)] w-40 focus:outline-none focus:border-[var(--accent-amber)] focus:w-56 transition-all" @input="onSearchInput" />
                     <!-- 状态筛选 -->
-                    <select v-model="filterStatus" class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-blue-500">
+                    <select v-model="filterStatus" class="bg-[var(--bg-surface)] border border-[var(--border-dim)] rounded-sm px-3 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-amber)]">
                         <option value="">全部状态</option>
                         <option value="pending">排队中</option>
                         <option value="extracting">提取音频</option>
@@ -384,25 +455,25 @@
                         <option value="failed">已失败</option>
                         <option value="skipped">已跳过</option>
                     </select>
-                    <button @click="fetchData" class="text-gray-400 hover:text-white transition-colors" title="刷新">
+                    <button @click="fetchData" class="text-[var(--text-secondary)] hover:text-white transition-colors" title="刷新">
                         <i class="fa-solid fa-rotate-right" :class="{'fa-spin': loading}"></i>
                     </button>
-                    <button @click="openSettings" class="text-gray-400 hover:text-white transition-colors" title="设置">
+                    <button @click="openSettings" class="text-[var(--text-secondary)] hover:text-white transition-colors" title="设置">
                         <i class="fa-solid fa-gear text-lg"></i>
                     </button>
                 </div>
             </div>
             
             <div class="flex-1 overflow-y-auto w-full p-0 relative">
-                <div v-if="tasks.length === 0 && !loading" class="absolute inset-0 flex flex-col items-center justify-center text-gray-500">
+                <div v-if="tasks.length === 0 && !loading" class="absolute inset-0 flex flex-col items-center justify-center text-[var(--text-muted)]">
                     <i class="fa-solid fa-box-open text-4xl mb-3"></i>
                     <p>当前没有任何任务</p>
                 </div>
                 
                 <table class="w-full text-left border-collapse task-table" v-if="tasks.length > 0" role="table" aria-label="任务列表">
-                    <thead class="sticky top-0 bg-gray-800/90 backdrop-blur z-10 text-xs text-gray-400 uppercase">
+                    <thead class="sticky top-0 bg-[var(--bg-panel)] backdrop-blur z-10 text-xs text-[var(--text-secondary)] uppercase">
                         <tr>
-                            <th class="px-2 py-3 w-8"><input type="checkbox" v-model="selectAll" class="form-checkbox h-3.5 w-3.5 text-blue-600 bg-gray-900 border-gray-600 rounded"></th>
+                            <th class="px-2 py-3 w-8"><input type="checkbox" v-model="selectAll" class="form-checkbox h-3.5 w-3.5 text-[var(--accent-amber)] bg-[var(--bg-void)] border-[var(--border-dim)] rounded"></th>
                             <th class="px-6 py-3 font-medium">影片名称</th>
                             <th class="px-6 py-3 font-medium">状态 / 进度</th>
                             <th class="px-6 py-3 font-medium">时间</th>
@@ -411,57 +482,57 @@
                     </thead>
                     <tbody class="text-sm">
                         <template v-for="task in tasks" :key="task.id">
-                            <tr class="border-b border-gray-700/30 cursor-pointer" @click="toggleDetail(task.id)">
+                            <tr class="border-b border-[var(--border-subtle)] cursor-pointer" @click="toggleDetail(task.id)">
                                 <td class="px-2 py-4 w-8" @click.stop>
-                                    <input type="checkbox" :checked="selectedTasks.has(task.id)" @change="toggleSelect(task.id)" class="form-checkbox h-3.5 w-3.5 text-blue-600 bg-gray-900 border-gray-600 rounded">
+                                    <input type="checkbox" :checked="selectedTasks.has(task.id)" @change="toggleSelect(task.id)" class="form-checkbox h-3.5 w-3.5 text-[var(--accent-amber)] bg-[var(--bg-void)] border-[var(--border-dim)] rounded">
                                 </td>
                                 <td class="px-6 py-4 w-4/12">
                                     <div class="font-medium text-white truncate w-48 lg:w-64 flex items-center gap-1.5" :title="task.media_title || getFileName(task.media_path)">
-                                        <span v-if="task.priority <= 2" class="inline-block w-2 h-2 rounded-full bg-red-500 flex-shrink-0" :title="'优先级: ' + task.priority"></span>
-                                        <span v-else-if="task.priority === 3" class="inline-block w-2 h-2 rounded-full bg-yellow-500 flex-shrink-0" :title="'优先级: ' + task.priority"></span>
-                                        <span v-else class="inline-block w-2 h-2 rounded-full bg-gray-500 flex-shrink-0" :title="'优先级: ' + task.priority"></span>
+                                        <span v-if="task.priority <= 2" class="inline-block w-2 h-2 rounded-full bg-[var(--accent-red)] flex-shrink-0" :title="'优先级: ' + task.priority"></span>
+                                        <span v-else-if="task.priority === 3" class="inline-block w-2 h-2 rounded-full bg-[var(--accent-amber)] flex-shrink-0" :title="'优先级: ' + task.priority"></span>
+                                        <span v-else class="inline-block w-2 h-2 rounded-full bg-[var(--text-muted)] flex-shrink-0" :title="'优先级: ' + task.priority"></span>
                                         {{ task.media_title || getFileName(task.media_path) }}
                                     </div>
-                                    <div v-if="viewMode === 'advanced'" class="text-xs text-gray-500 mt-1 truncate max-w-xs font-mono">{{ task.id }}</div>
+                                    <div v-if="viewMode === 'advanced'" class="text-xs text-[var(--text-muted)] mt-1 truncate max-w-xs font-mono">{{ task.id }}</div>
                                 </td>
                                 <td class="px-6 py-4 w-4/12">
                                     <div class="flex justify-between text-xs mb-1">
                                         <span :class="getStatusColor(task.status)">{{ getStatusLabel(task.status) }}</span>
-                                        <span class="text-gray-400 text-[10px]"><span v-if="task.target_lang">{{ task.source_lang }}→{{ task.target_lang }}</span></span>
+                                        <span class="text-[var(--text-secondary)] text-[10px]"><span v-if="task.target_lang">{{ task.source_lang }}→{{ task.target_lang }}</span></span>
                                     </div>
-                                    <div class="w-full bg-gray-700 rounded-full h-1.5 mb-1 overflow-hidden">
+                                    <div class="w-full bg-[var(--bg-elevated)] rounded-full h-1.5 mb-1 overflow-hidden">
                                         <div class="h-1.5 rounded-full progress-bar-fill" :style="`width: ${task.progress || 0}%`" :class="getBarColor(task.status)"></div>
                                     </div>
-                                    <div class="text-[10px] text-gray-400 truncate" :title="task.error_msg" v-if="task.error_msg">
-                                        <span v-if="task.error_code && viewMode === 'advanced'" class="bg-red-900/30 text-red-400 px-1 rounded mr-1">{{ task.error_code }}</span>
+                                    <div class="text-[10px] text-[var(--text-secondary)] truncate" :title="task.error_msg" v-if="task.error_msg">
+                                        <span v-if="task.error_code && viewMode === 'advanced'" class="bg-[var(--accent-red)]/10 text-[var(--accent-red)] px-1 rounded mr-1">{{ task.error_code }}</span>
                                         {{ task.error_msg }}
                                     </div>
                                 </td>
                                 <td class="px-6 py-4 w-3/12 whitespace-nowrap">
-                                    <div class="text-gray-300">{{ formatDate(task.updated_at || task.created_at) }}</div>
+                                    <div class="text-[var(--text-primary)]">{{ formatDate(task.updated_at || task.created_at) }}</div>
                                 </td>
                                 <td class="px-4 py-4 w-1/12 text-center">
-                                    <i class="fa-solid fa-chevron-down text-gray-500 transition-transform duration-300" :class="{'rotate-180': expandedTask === task.id}"></i>
+                                    <i class="fa-solid fa-chevron-down text-[var(--text-muted)] transition-transform duration-300" :class="{'rotate-180': expandedTask === task.id}"></i>
                                 </td>
                             </tr>
                             <!-- Detail Panel -->
                             <tr v-if="expandedTask === task.id" class="detail-row">
-                                <td colspan="5" class="px-6 pb-4 bg-gray-900/40">
+                                <td colspan="5" class="px-6 pb-4 bg-[var(--bg-void)]">
                                     <div class="pt-3 space-y-4">
                                         <!-- 阶段流水线 -->
                                         <div v-if="viewMode === 'advanced'">
-                                            <div class="text-xs text-gray-400 font-medium mb-2"><i class="fa-solid fa-timeline mr-1"></i>处理流水线</div>
+                                            <div class="text-xs text-[var(--text-secondary)] font-medium mb-2"><i class="fa-solid fa-timeline mr-1"></i>处理流水线</div>
                                             <div class="timeline">
                                                 <div v-for="stage in pipelineStages" :key="stage.key"
                                                      class="timeline-node" :class="getStageClass(task, stage.key)">
                                                     <div class="flex items-center gap-2">
                                                         <span class="text-xs font-medium" :class="{
-                                                            'text-green-400': getStageClass(task, stage.key) === 'done',
-                                                            'text-blue-400': getStageClass(task, stage.key) === 'active',
-                                                            'text-gray-500': getStageClass(task, stage.key) === 'pending',
-                                                            'text-red-400': getStageClass(task, stage.key) === 'failed',
+                                                            'text-[var(--accent-green)]': getStageClass(task, stage.key) === 'done',
+                                                            'text-[var(--accent-cyan)]': getStageClass(task, stage.key) === 'active',
+                                                            'text-[var(--text-muted)]': getStageClass(task, stage.key) === 'pending',
+                                                            'text-[var(--accent-red)]': getStageClass(task, stage.key) === 'failed',
                                                         }">{{ stage.label }}</span>
-                                                        <span v-if="task.stage_times && task.stage_times[stage.key]" class="text-[10px] text-gray-500 font-mono">
+                                                        <span v-if="task.stage_times && task.stage_times[stage.key]" class="text-[10px] text-[var(--text-muted)] font-mono">
                                                             {{ task.stage_times[stage.key].toFixed(1) }}s
                                                         </span>
                                                     </div>
@@ -470,7 +541,7 @@
                                         </div>
                                         <!-- 简单模式: 水平流水线 -->
                                         <div v-else>
-                                            <div class="text-xs text-gray-400 font-medium mb-2"><i class="fa-solid fa-timeline mr-1"></i>处理进度</div>
+                                            <div class="text-xs text-[var(--text-secondary)] font-medium mb-2"><i class="fa-solid fa-timeline mr-1"></i>处理进度</div>
                                             <div class="stage-pipeline">
                                                 <template v-for="(stage, idx) in pipelineStages" :key="stage.key">
                                                     <div class="stage-node" :class="getStageClass(task, stage.key)">{{ stage.label }}</div>
@@ -481,83 +552,105 @@
 
                                         <!-- 详情信息 -->
                                         <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                                            <div v-if="viewMode === 'advanced'" class="bg-gray-800/50 rounded-lg p-3">
-                                                <div class="text-gray-500 mb-1">任务 ID</div>
-                                                <div class="text-gray-300 font-mono">{{ task.id }}</div>
+                                            <div v-if="viewMode === 'advanced'" class="bg-[var(--bg-elevated)] rounded-sm p-3">
+                                                <div class="text-[var(--text-muted)] mb-1">任务 ID</div>
+                                                <div class="text-[var(--text-primary)] font-mono">{{ task.id }}</div>
                                             </div>
-                                            <div v-if="viewMode === 'advanced'" class="bg-gray-800/50 rounded-lg p-3">
-                                                <div class="text-gray-500 mb-1">重试次数</div>
-                                                <div class="text-gray-300">{{ task.retry_count }} 次</div>
+                                            <div v-if="viewMode === 'advanced'" class="bg-[var(--bg-elevated)] rounded-sm p-3">
+                                                <div class="text-[var(--text-muted)] mb-1">重试次数</div>
+                                                <div class="text-[var(--text-primary)]">{{ task.retry_count }} 次</div>
                                             </div>
-                                            <div class="bg-gray-800/50 rounded-lg p-3" v-if="task.result_summary?.detected_language">
-                                                <div class="text-gray-500 mb-1">检测语言</div>
-                                                <div class="text-gray-300">{{ task.result_summary.detected_language }}</div>
+                                            <div class="bg-[var(--bg-elevated)] rounded-sm p-3" v-if="task.result_summary?.detected_language">
+                                                <div class="text-[var(--text-muted)] mb-1">检测语言</div>
+                                                <div class="text-[var(--text-primary)]">{{ task.result_summary.detected_language }}</div>
                                             </div>
-                                            <div class="bg-gray-800/50 rounded-lg p-3" v-if="task.result_summary?.segment_count">
-                                                <div class="text-gray-500 mb-1">字幕条数</div>
-                                                <div class="text-gray-300">{{ task.result_summary.segment_count }} 条</div>
+                                            <div class="bg-[var(--bg-elevated)] rounded-sm p-3" v-if="task.result_summary?.segment_count">
+                                                <div class="text-[var(--text-muted)] mb-1">字幕条数</div>
+                                                <div class="text-[var(--text-primary)]">{{ task.result_summary.segment_count }} 条</div>
                                             </div>
-                                            <div class="bg-gray-800/50 rounded-lg p-3" v-if="task.result_summary?.total_duration">
-                                                <div class="text-gray-500 mb-1">总耗时</div>
-                                                <div class="text-gray-300">{{ task.result_summary.total_duration.toFixed(1) }}s</div>
+                                            <div class="bg-[var(--bg-elevated)] rounded-sm p-3" v-if="task.result_summary?.total_duration">
+                                                <div class="text-[var(--text-muted)] mb-1">总耗时</div>
+                                                <div class="text-[var(--text-primary)]">{{ task.result_summary.total_duration.toFixed(1) }}s</div>
                                             </div>
-                                            <div class="bg-gray-800/50 rounded-lg p-3" v-if="task.result_summary?.quality_score !== undefined">
-                                                <div class="text-gray-500 mb-1">质量评分</div>
+                                            <div class="bg-[var(--bg-elevated)] rounded-sm p-3" v-if="task.result_summary?.quality_score !== undefined">
+                                                <div class="text-[var(--text-muted)] mb-1">质量评分</div>
                                                 <div class="flex items-center gap-2">
                                                     <span :class="{
-                                                        'text-green-400': task.result_summary.quality_grade === 'A',
-                                                        'text-blue-400': task.result_summary.quality_grade === 'B',
-                                                        'text-yellow-400': task.result_summary.quality_grade === 'C',
+                                                        'text-[var(--accent-green)]': task.result_summary.quality_grade === 'A',
+                                                        'text-[var(--accent-cyan)]': task.result_summary.quality_grade === 'B',
+                                                        'text-[var(--accent-amber)]': task.result_summary.quality_grade === 'C',
                                                         'text-orange-400': task.result_summary.quality_grade === 'D',
-                                                        'text-red-400': task.result_summary.quality_grade === 'F',
+                                                        'text-[var(--accent-red)]': task.result_summary.quality_grade === 'F',
                                                     }" class="font-bold text-lg">{{ task.result_summary.quality_grade }}</span>
-                                                    <span class="text-gray-300 text-xs">({{ task.result_summary.quality_score }}/100)</span>
+                                                    <span class="text-[var(--text-primary)] text-xs">({{ task.result_summary.quality_score }}/100)</span>
                                                 </div>
                                             </div>
-                                            <div class="bg-gray-800/50 rounded-lg p-3" v-if="task.failed_stage">
-                                                <div class="text-gray-500 mb-1">失败阶段</div>
-                                                <div class="text-red-400">{{ getStatusLabel(task.failed_stage) }}</div>
+                                            <div class="bg-[var(--bg-elevated)] rounded-sm p-3" v-if="task.result_summary?.cultural_density">
+                                                <div class="text-[var(--text-muted)] mb-1">文化密度</div>
+                                                <span :class="{
+                                                    'text-[var(--accent-red)] bg-[var(--accent-red)]/10': task.result_summary.cultural_density === 'high',
+                                                    'text-[var(--accent-amber)] bg-[var(--accent-amber)]/10': task.result_summary.cultural_density === 'medium',
+                                                    'text-[var(--accent-green)] bg-[var(--accent-green)]/10': task.result_summary.cultural_density === 'low',
+                                                }" class="text-xs px-2 py-0.5 rounded-full font-medium">
+                                                    {{ {high: '高', medium: '中', low: '低'}[task.result_summary.cultural_density] || task.result_summary.cultural_density }}
+                                                </span>
+                                            </div>
+                                            <div class="bg-[var(--bg-elevated)] rounded-sm p-3" v-if="task.result_summary?.annotation_count > 0">
+                                                <div class="text-[var(--text-muted)] mb-1">注释数</div>
+                                                <div class="text-[var(--accent-amber)] font-medium">{{ task.result_summary.annotation_count }} 条</div>
                                             </div>
                                         </div>
 
-                                        <!-- 错误详情 (高级模式) -->
-                                        <div v-if="task.error_msg && viewMode === 'advanced'" class="bg-red-900/20 border border-red-800/30 rounded-lg p-3">
-                                            <div class="text-xs font-medium text-red-400 mb-1"><i class="fa-solid fa-circle-exclamation mr-1"></i>错误详情</div>
-                                            <div class="text-xs text-red-300/80">
-                                                <span v-if="task.error_code" class="font-mono bg-red-900/40 px-1.5 py-0.5 rounded mr-2">{{ task.error_code }}</span>
+                                        <!-- 错误详情 -->
+                                        <div v-if="task.error_msg" class="bg-[var(--accent-red)]/10 border border-[var(--accent-red)]/20 rounded-sm p-3">
+                                            <div class="text-xs font-medium text-[var(--accent-red)] mb-1"><i class="fa-solid fa-circle-exclamation mr-1"></i>错误详情</div>
+                                            <div class="text-xs text-[var(--accent-red)]/80">
+                                                <span v-if="task.error_code" class="inline-flex items-center gap-1 font-mono bg-[var(--accent-red)]/15 px-1.5 py-0.5 rounded mr-2">
+                                                    {{ getErrorLabel(task.error_code) }}
+                                                    <span v-if="viewMode === 'advanced'" class="text-[var(--accent-red)]/60 text-[9px]">({{ task.error_code }})</span>
+                                                </span>
+                                                <span v-if="task.failed_stage" class="inline-flex items-center gap-1 text-[var(--accent-red)]/70 mr-2">
+                                                    <span class="w-1.5 h-1.5 bg-[var(--accent-red)] rounded-full inline-block"></span>{{ getStatusLabel(task.failed_stage) }}
+                                                </span>
                                                 {{ task.error_msg }}
                                             </div>
                                         </div>
 
                                         <!-- 文件路径 -->
-                                        <div class="text-xs text-gray-500 bg-gray-800/30 rounded-lg p-3">
-                                            <div class="mb-1 font-medium text-gray-400">媒体路径</div>
+                                        <div class="text-xs text-[var(--text-muted)] bg-[var(--bg-panel)] rounded-sm p-3">
+                                            <div class="mb-1 font-medium text-[var(--text-secondary)]">媒体路径</div>
                                             <div class="font-mono break-all">{{ task.media_path }}</div>
                                         </div>
 
                                         <!-- 优先级调整 (仅 pending) -->
                                         <div v-if="task.status === 'pending'" class="flex items-center gap-2 text-xs">
-                                            <span class="text-gray-400">优先级:</span>
+                                            <span class="text-[var(--text-secondary)]">优先级:</span>
                                             <button v-for="p in 5" :key="p" @click.stop="updatePriority(task.id, p)"
                                                 :class="['w-6 h-6 rounded text-[10px] font-medium transition-all',
                                                     task.priority === p
-                                                        ? (p <= 2 ? 'bg-red-600 text-white' : p === 3 ? 'bg-yellow-600 text-white' : 'bg-gray-600 text-white')
-                                                        : 'bg-gray-800 text-gray-400 hover:bg-gray-700']">
+                                                        ? (p <= 2 ? 'bg-[var(--accent-red)] text-white' : p === 3 ? 'bg-[var(--accent-amber)] text-white' : 'bg-[var(--bg-elevated)] text-white')
+                                                        : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]']">
                                                 {{ p }}
                                             </button>
                                         </div>
 
-                                        <!-- 预览字幕按钮 -->
+                                        <!-- 预览字幕 + 注释按钮 -->
                                         <div v-if="task.status === 'completed'" class="flex space-x-3">
-                                            <button @click.stop="openSubtitlePreview(task)" class="text-cyan-400 hover:text-cyan-300 text-xs font-medium py-2 px-4 rounded-lg flex items-center bg-cyan-500/10 hover:bg-cyan-500/20 transition-colors">
+                                            <button @click.stop="openSubtitlePreview(task)" class="text-[var(--accent-cyan)] hover:text-[var(--accent-cyan)] text-xs font-medium py-2 px-4 rounded-sm flex items-center bg-[var(--accent-cyan-dim)] hover:bg-[var(--accent-cyan)]/20 transition-colors">
                                                 <i class="fa-solid fa-closed-captioning mr-1.5"></i>预览字幕
+                                            </button>
+                                            <button v-if="task.result_summary?.annotation_count > 0" @click.stop="openAnnotationPreview(task)" class="text-[var(--accent-amber)] hover:text-[var(--accent-amber)] text-xs font-medium py-2 px-4 rounded-sm flex items-center bg-[var(--accent-amber-dim)] hover:bg-[var(--accent-amber-dim)] transition-colors">
+                                                <i class="fa-solid fa-language mr-1.5"></i>查看注释 ({{ task.result_summary.annotation_count }})
                                             </button>
                                         </div>
                                         <!-- 重试按钮 -->
-                                        <div v-if="task.status === 'failed' || task.status === 'cancelled'" class="flex space-x-3">
-                                            <button @click.stop="retryTask(task.id)" class="btn-retry text-white text-xs font-medium py-2 px-4 rounded-lg flex items-center">
-                                                <i class="fa-solid fa-rotate-right mr-1.5"></i>重试任务
+                                        <div v-if="task.status === 'failed' || task.status === 'cancelled'" class="flex flex-col gap-1.5">
+                                            <button @click.stop="retryTask(task.id)" class="btn-retry text-white text-xs font-medium py-2 px-4 rounded-sm flex items-center">
+                                                <i class="fa-solid fa-rotate-right mr-1.5"></i>{{ isRetryable(task.error_code) ? '重试任务 (建议)' : '重试任务' }}
                                             </button>
+                                            <span v-if="task.error_code && !isRetryable(task.error_code)" class="text-[10px] text-[var(--accent-amber)]/70">
+                                                <i class="fa-solid fa-triangle-exclamation mr-1"></i>此错误类型重试可能无法解决
+                                            </span>
                                         </div>
                                     </div>
                                 </td>
@@ -566,30 +659,30 @@
                     </tbody>
                 </table>
             </div>
-            <div v-if="totalTasks > pageSize" class="px-6 py-3 border-t border-gray-700/50 flex justify-between items-center bg-gray-800/30 text-xs">
-                <span class="text-gray-400">共 {{ totalTasks }} 条</span>
+            <div v-if="totalTasks > pageSize" class="px-6 py-3 border-t border-[var(--border-dim)] flex justify-between items-center bg-[var(--bg-panel)] text-xs">
+                <span class="text-[var(--text-secondary)]">共 {{ totalTasks }} 条</span>
                 <div class="flex items-center gap-2">
-                    <button @click="currentPage > 1 && (currentPage--, fetchTasks())" :disabled="currentPage <= 1" class="px-2 py-1 rounded border border-gray-700 text-gray-400 hover:text-white disabled:opacity-30">&lt;</button>
-                    <span class="text-gray-300">{{ currentPage }} / {{ Math.ceil(totalTasks / pageSize) }}</span>
-                    <button @click="currentPage < Math.ceil(totalTasks / pageSize) && (currentPage++, fetchTasks())" :disabled="currentPage >= Math.ceil(totalTasks / pageSize)" class="px-2 py-1 rounded border border-gray-700 text-gray-400 hover:text-white disabled:opacity-30">&gt;</button>
+                    <button @click="currentPage > 1 && (currentPage--, fetchTasks())" :disabled="currentPage <= 1" class="px-2 py-1 rounded border border-[var(--border-dim)] text-[var(--text-secondary)] hover:text-white disabled:opacity-30">&lt;</button>
+                    <span class="text-[var(--text-primary)]">{{ currentPage }} / {{ Math.ceil(totalTasks / pageSize) }}</span>
+                    <button @click="currentPage < Math.ceil(totalTasks / pageSize) && (currentPage++, fetchTasks())" :disabled="currentPage >= Math.ceil(totalTasks / pageSize)" class="px-2 py-1 rounded border border-[var(--border-dim)] text-[var(--text-secondary)] hover:text-white disabled:opacity-30">&gt;</button>
                 </div>
             </div>
         </div>
 
         <!-- Batch Action Bar -->
-        <div v-if="selectedCount > 0" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 glass-panel px-6 py-3 flex items-center gap-4 border border-blue-500/30 shadow-2xl" style="animation: scale-in 0.2s ease">
-            <span class="text-sm text-gray-300">已选中 <span class="text-blue-400 font-bold">{{ selectedCount }}</span> 个任务</span>
-            <div class="w-px h-6 bg-gray-700"></div>
-            <button @click="batchRetry" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-amber-600/30 hover:bg-amber-600/50 text-amber-300 border border-amber-700/50 transition-all">
+        <div v-if="selectedCount > 0" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 glass-panel px-6 py-3 flex items-center gap-4 border border-[var(--accent-cyan)]/30 shadow-2xl" style="animation: scale-in 0.2s ease">
+            <span class="text-sm text-[var(--text-primary)]">已选中 <span class="text-[var(--accent-cyan)] font-bold">{{ selectedCount }}</span> 个任务</span>
+            <div class="w-px h-6 bg-[var(--bg-elevated)]"></div>
+            <button @click="batchRetry" class="px-3 py-1.5 rounded-sm text-xs font-medium bg-[var(--accent-amber-dim)] hover:bg-[var(--accent-amber)]/30 text-[var(--accent-amber)] border border-[var(--accent-amber)]/30 transition-all">
                 <i class="fa-solid fa-rotate-right mr-1"></i>批量重试
             </button>
-            <button @click="batchCancel" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-600/30 hover:bg-gray-600/50 text-gray-300 border border-gray-600/50 transition-all">
+            <button @click="batchCancel" class="px-3 py-1.5 rounded-sm text-xs font-medium bg-[var(--bg-elevated)]/30 hover:bg-[var(--bg-elevated)]/50 text-[var(--text-primary)] border border-[var(--border-dim)]/50 transition-all">
                 <i class="fa-solid fa-ban mr-1"></i>批量取消
             </button>
-            <button @click="batchDelete" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-600/30 hover:bg-red-600/50 text-red-300 border border-red-700/50 transition-all">
+            <button @click="batchDelete" class="px-3 py-1.5 rounded-sm text-xs font-medium bg-[var(--accent-red)]/15 hover:bg-[var(--accent-red)]/30 text-[var(--accent-red)] border border-[var(--accent-red)]/30 transition-all">
                 <i class="fa-solid fa-trash mr-1"></i>批量删除
             </button>
-            <button @click="clearSelection" class="text-gray-500 hover:text-gray-300 ml-1" title="清除选择">
+            <button @click="clearSelection" class="text-[var(--text-muted)] hover:text-[var(--text-primary)] ml-1" title="清除选择">
                 <i class="fa-solid fa-xmark"></i>
             </button>
         </div>
@@ -598,28 +691,28 @@
         <div class="flex flex-col space-y-8 right-panel">
             <!-- Manual Intervention -->
             <div class="glass-panel flex flex-col">
-                <div class="px-6 py-4 border-b border-gray-700/50 bg-gray-800/30">
-                    <h2 class="font-semibold text-lg"><i class="fa-solid fa-terminal mr-2 text-indigo-400"></i>控制指令区</h2>
-                    <p class="text-xs text-gray-400 mt-1">手动下发或强制重生影片字幕</p>
+                <div class="px-6 py-4 border-b border-[var(--border-dim)] bg-[var(--bg-panel)]">
+                    <h2 class="font-semibold text-lg"><i class="fa-solid fa-terminal mr-2 text-[var(--accent-blue)]"></i>控制指令区</h2>
+                    <p class="text-xs text-[var(--text-secondary)] mt-1">手动下发或强制重生影片字幕</p>
                 </div>
                 
                 <div class="p-6 flex-1 flex flex-col justify-between">
                     <div class="space-y-4">
                         <div>
-                            <label class="block text-xs font-medium text-gray-400 mb-1">媒体绝对路径 / Media Path</label>
+                            <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1">媒体绝对路径 / Media Path</label>
                             <div class="flex space-x-2">
                                 <input v-model="form.media_path" type="text" placeholder="/vol1/media/movies/Avatar.mp4" 
-                                    class="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all">
-                                <button @click.prevent="openBrowser" class="bg-gray-700 hover:bg-gray-600 px-4 rounded-lg text-sm transition-colors border border-gray-600 whitespace-nowrap">
+                                    class="flex-1 bg-[var(--bg-void)] border border-[var(--border-dim)] rounded-sm px-4 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)] focus:ring-1 focus:ring-[var(--accent-amber)] transition-all">
+                                <button @click.prevent="openBrowser" class="bg-[var(--bg-elevated)] hover:bg-[var(--bg-elevated)] px-4 rounded-sm text-sm transition-colors border border-[var(--border-dim)] whitespace-nowrap">
                                     <i class="fa-solid fa-folder-open"></i> 浏览
                                 </button>
                             </div>
                         </div>
                         
                         <div>
-                            <label class="block text-xs font-medium text-gray-400 mb-1">目标语言 / Target Language</label>
+                            <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1">目标语言 / Target Language</label>
                             <select v-model="form.target_lang" 
-                                class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
+                                class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded-sm px-4 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
                                 <option value="zh">简体中文 (zh)</option>
                                 <option value="en">English (en)</option>
                                 <option value="ja">日本語 (ja)</option>
@@ -627,34 +720,34 @@
                         </div>
 
                         <div>
-                            <label class="block text-xs font-medium text-gray-400 mb-1">优先级 / Priority</label>
+                            <label class="block text-xs font-medium text-[var(--text-secondary)] mb-1">优先级 / Priority</label>
                             <div class="flex gap-2">
                                 <button v-for="p in 5" :key="p" @click="form.priority = p"
-                                    :class="['px-3 py-1.5 rounded-lg text-xs font-medium transition-all',
+                                    :class="['px-3 py-1.5 rounded-sm text-xs font-medium transition-all',
                                         form.priority === p
-                                            ? (p <= 2 ? 'bg-red-600/80 text-white ring-1 ring-red-400' : p === 3 ? 'bg-yellow-600/80 text-white ring-1 ring-yellow-400' : 'bg-gray-600/80 text-white ring-1 ring-gray-400')
-                                            : 'bg-gray-800/60 text-gray-400 hover:bg-gray-700/60']"
+                                            ? (p <= 2 ? 'bg-[var(--accent-red)] text-white ring-1 ring-[var(--accent-red)]' : p === 3 ? 'bg-[var(--accent-amber)] text-white ring-1 ring-[var(--accent-amber)]' : 'bg-[var(--bg-elevated)]/80 text-white ring-1 ring-[var(--text-muted)]')
+                                            : 'bg-[var(--bg-surface)]/60 text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]/60']"
                                     :title="['最高', '较高', '普通', '较低', '最低'][p-1]">
                                     {{ p }}
                                 </button>
-                                <span class="text-[10px] text-gray-500 self-center ml-1">
+                                <span class="text-[10px] text-[var(--text-muted)] self-center ml-1">
                                     {{ ['最高', '较高', '普通', '较低', '最低'][form.priority - 1] }}
                                 </span>
                             </div>
                         </div>
 
                         <label class="flex items-center space-x-3 cursor-pointer mt-4">
-                            <input type="checkbox" v-model="form.force" class="form-checkbox h-4 w-4 text-blue-600 bg-gray-900 border-gray-600 rounded">
+                            <input type="checkbox" v-model="form.force" class="form-checkbox h-4 w-4 text-[var(--accent-amber)] bg-[var(--bg-void)] border-[var(--border-dim)] rounded">
                             <div class="flex flex-col">
-                                <span class="text-sm font-medium text-red-400">强制覆写 (Force Rewrite)</span>
-                                <span class="text-[10px] text-gray-500">勾选此项目将无视已存在的字幕</span>
+                                <span class="text-sm font-medium text-[var(--accent-red)]">强制覆写 (Force Rewrite)</span>
+                                <span class="text-[10px] text-[var(--text-muted)]">勾选此项目将无视已存在的字幕</span>
                             </div>
                         </label>
                     </div>
                     
                     <div class="mt-6">
                         <button @click="submitTask" :disabled="submitting || !form.media_path"
-                            class="w-full btn-primary text-white font-medium py-3 px-4 rounded-lg shadow-lg flex justify-center items-center opacity-90 disabled:opacity-50 disabled:cursor-not-allowed">
+                            class="w-full btn-primary text-white font-medium py-3 px-4 rounded-sm shadow-lg flex justify-center items-center opacity-90 disabled:opacity-50 disabled:cursor-not-allowed">
                             <i class="fa-solid fa-paper-plane mr-2" v-if="!submitting"></i>
                             <i class="fa-solid fa-circle-notch fa-spin mr-2" v-else></i>
                             {{ submitting ? '指令广播中...' : '提交指令' }}
@@ -665,32 +758,32 @@
 
             <!-- Worker 节点集群 -->
             <div class="glass-panel">
-                <div class="px-6 py-4 border-b border-gray-700/50 bg-gray-800/30">
+                <div class="px-6 py-4 border-b border-[var(--border-dim)] bg-[var(--bg-panel)]">
                     <h2 class="font-semibold text-base">
-                        <i class="fa-solid fa-server mr-2 text-purple-400"></i>Worker 节点集群
-                        <span class="text-xs text-gray-400 ml-2">({{ onlineCount }}/{{ (sysInfo.workers || []).length }} 在线)</span>
+                        <i class="fa-solid fa-server mr-2 text-[var(--accent-blue)]"></i>Worker 节点集群
+                        <span class="text-xs text-[var(--text-secondary)] ml-2">({{ onlineCount }}/{{ (sysInfo.workers || []).length }} 在线)</span>
                     </h2>
                 </div>
                 <div class="p-4 space-y-3">
                     <div v-for="w in (sysInfo.workers || [])" :key="w.url"
-                         class="rounded-xl p-4 border transition-all"
+                         class="rounded-sm p-4 border transition-all"
                          :class="{
-                             'bg-green-900/10 border-green-800/30': w.online && !w.heartbeat?.current_task_id,
-                             'bg-blue-900/10 border-blue-800/30': w.online && w.heartbeat?.current_task_id,
-                             'bg-red-900/10 border-red-800/30': !w.online,
+                             'bg-[var(--accent-green)]/5 border-[var(--accent-green)]/20': w.online && !w.heartbeat?.current_task_id,
+                             'bg-[var(--accent-cyan)]/5 border-[var(--accent-cyan)]/20': w.online && w.heartbeat?.current_task_id,
+                             'bg-[var(--accent-red)]/5 border-[var(--accent-red)]/20': !w.online,
                          }">
 
                         <!-- 头部: ID + 状态 + 权重 + 操作 -->
                         <div class="flex justify-between items-center mb-3">
                             <div class="flex items-center space-x-2">
                                 <span class="status-dot" :class="w.online ? 'online' : 'offline'" style="height:8px;width:8px"></span>
-                                <span class="font-medium text-sm" :class="w.online ? 'text-green-400' : 'text-red-400'">
+                                <span class="font-medium text-sm" :class="w.online ? 'text-[var(--accent-green)]' : 'text-[var(--accent-red)]'">
                                     {{ w.worker_id }}
                                 </span>
-                                <span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-700/50 text-gray-400">w={{ w.weight }}</span>
+                                <span class="text-[10px] px-1.5 py-0.5 rounded bg-[var(--bg-elevated)]/50 text-[var(--text-secondary)]">w={{ w.weight }}</span>
                             </div>
                             <button @click.stop="toggleWorker(w)" class="text-[10px] px-2 py-1 rounded border transition-all"
-                                :class="w.online ? 'border-red-700/50 text-red-400 hover:bg-red-900/30' : 'border-green-700/50 text-green-400 hover:bg-green-900/30'"
+                                :class="w.online ? 'border-[var(--accent-red)]/30 text-[var(--accent-red)] hover:bg-[var(--accent-red)]/10' : 'border-[var(--accent-green)]/30 text-[var(--accent-green)] hover:bg-[var(--accent-green)]/10'"
                                 :title="w.online ? '下线此 Worker' : '上线此 Worker'">
                                 {{ w.online ? '下线' : '上线' }}
                             </button>
@@ -699,99 +792,99 @@
                         <!-- 详情 (在线时显示) -->
                         <template v-if="w.online && w.heartbeat">
                             <div class="flex justify-between text-sm mb-2">
-                                <span class="text-gray-400">GPU</span>
-                                <span class="text-gray-200">{{ w.heartbeat.gpu_name }}</span>
+                                <span class="text-[var(--text-secondary)]">GPU</span>
+                                <span class="text-[var(--text-primary)]">{{ w.heartbeat.gpu_name }}</span>
                             </div>
                             <div class="mb-2">
                                 <div class="flex justify-between text-xs mb-1">
-                                    <span class="text-gray-400">GPU 使用率</span>
-                                    <span class="text-gray-300">{{ w.heartbeat.gpu_utilization }}%</span>
+                                    <span class="text-[var(--text-secondary)]">GPU 使用率</span>
+                                    <span class="text-[var(--text-primary)]">{{ w.heartbeat.gpu_utilization }}%</span>
                                 </div>
-                                <div class="w-full bg-gray-800 rounded-full h-1.5">
-                                    <div class="bg-cyan-500 h-1.5 rounded-full transition-all" :style="'width:' + (w.heartbeat.gpu_utilization||0) + '%'"></div>
+                                <div class="w-full bg-[var(--bg-surface)] rounded-full h-1.5">
+                                    <div class="bg-[var(--accent-cyan)] h-1.5 rounded-full transition-all" :style="'width:' + (w.heartbeat.gpu_utilization||0) + '%'"></div>
                                 </div>
                             </div>
                             <div v-if="w.heartbeat.vram_total_mb" class="mb-2">
                                 <div class="flex justify-between text-xs mb-1">
-                                    <span class="text-gray-400">VRAM</span>
-                                    <span class="text-gray-300">{{ w.heartbeat.vram_used_mb }}M / {{ w.heartbeat.vram_total_mb }}M</span>
+                                    <span class="text-[var(--text-secondary)]">VRAM</span>
+                                    <span class="text-[var(--text-primary)]">{{ w.heartbeat.vram_used_mb }}M / {{ w.heartbeat.vram_total_mb }}M</span>
                                 </div>
-                                <div class="w-full bg-gray-800 rounded-full h-1.5">
-                                    <div class="bg-purple-500 h-1.5 rounded-full transition-all" :style="'width:' + ((w.heartbeat.vram_used_mb / w.heartbeat.vram_total_mb) * 100) + '%'"></div>
+                                <div class="w-full bg-[var(--bg-surface)] rounded-full h-1.5">
+                                    <div class="bg-[var(--accent-blue)] h-1.5 rounded-full transition-all" :style="'width:' + ((w.heartbeat.vram_used_mb / w.heartbeat.vram_total_mb) * 100) + '%'"></div>
                                 </div>
                             </div>
                             <!-- 当前任务进度 (高级模式) -->
                             <div v-if="viewMode === 'advanced' && w.heartbeat.current_task_id" class="mb-2">
                                 <div class="flex justify-between text-xs mb-1">
-                                    <span class="text-gray-400">任务进度</span>
-                                    <span class="text-blue-300 font-mono">{{ w.heartbeat.current_progress || 0 }}%</span>
+                                    <span class="text-[var(--text-secondary)]">任务进度</span>
+                                    <span class="text-[var(--accent-cyan)] font-mono">{{ w.heartbeat.current_progress || 0 }}%</span>
                                 </div>
-                                <div class="w-full bg-gray-800 rounded-full h-1.5">
-                                    <div class="bg-blue-500 h-1.5 rounded-full transition-all progress-bar-fill" :style="'width:' + (w.heartbeat.current_progress||0) + '%'"></div>
+                                <div class="w-full bg-[var(--bg-surface)] rounded-full h-1.5">
+                                    <div class="bg-[var(--accent-cyan)] h-1.5 rounded-full transition-all progress-bar-fill" :style="'width:' + (w.heartbeat.current_progress||0) + '%'"></div>
                                 </div>
                             </div>
                             <div class="flex justify-between items-center text-sm" v-if="w.heartbeat.current_task_id">
-                                <span class="text-gray-400">当前任务</span>
-                                <span class="text-blue-400 font-mono text-xs">{{ w.heartbeat.current_task_id }}</span>
+                                <span class="text-[var(--text-secondary)]">当前任务</span>
+                                <span class="text-[var(--accent-cyan)] font-mono text-xs">{{ w.heartbeat.current_task_id }}</span>
                             </div>
-                            <div class="flex justify-between items-center text-xs text-gray-500 pt-2 border-t border-gray-800">
+                            <div class="flex justify-between items-center text-xs text-[var(--text-muted)] pt-2 border-t border-[var(--border-dim)]">
                                 <span v-if="viewMode === 'advanced'">v{{ w.heartbeat.version }} · 运行 {{ formatUptime(w.heartbeat.uptime_seconds) }}</span>
-                                <span v-else class="text-gray-600">-</span>
+                                <span v-else class="text-[var(--text-muted)]">-</span>
                                 <span>队列: {{ w.heartbeat.queue_length }}</span>
                             </div>
                         </template>
 
-                        <div v-else-if="!w.online" class="text-xs text-gray-500 text-center py-2">
+                        <div v-else-if="!w.online" class="text-xs text-[var(--text-muted)] text-center py-2">
                             <i class="fa-solid fa-wifi-slash mr-1"></i>离线
                         </div>
                     </div>
 
                     <!-- 兼容旧单 Worker 显示 -->
-                    <div v-if="!(sysInfo.workers?.length) && sysInfo.worker" class="rounded-xl p-4 border transition-all"
-                         :class="sysInfo.worker.online ? 'bg-green-900/10 border-green-800/30' : 'bg-red-900/10 border-red-800/30'">
+                    <div v-if="!(sysInfo.workers?.length) && sysInfo.worker" class="rounded-sm p-4 border transition-all"
+                         :class="sysInfo.worker.online ? 'bg-[var(--accent-green)]/5 border-[var(--accent-green)]/20' : 'bg-[var(--accent-red)]/5 border-[var(--accent-red)]/20'">
                         <div class="flex justify-between items-center mb-3">
                             <div class="flex items-center space-x-2">
                                 <span class="status-dot" :class="sysInfo.worker.online ? 'online' : 'offline'" style="height:8px;width:8px"></span>
-                                <span class="font-medium text-sm" :class="sysInfo.worker.online ? 'text-green-400' : 'text-red-400'">
+                                <span class="font-medium text-sm" :class="sysInfo.worker.online ? 'text-[var(--accent-green)]' : 'text-[var(--accent-red)]'">
                                     {{ sysInfo.worker.worker_id }}
                                 </span>
                             </div>
                         </div>
                         <template v-if="sysInfo.worker.online && sysInfo.worker.heartbeat">
                             <div class="flex justify-between text-sm mb-2">
-                                <span class="text-gray-400">GPU</span>
-                                <span class="text-gray-200">{{ sysInfo.worker.heartbeat.gpu_name }}</span>
+                                <span class="text-[var(--text-secondary)]">GPU</span>
+                                <span class="text-[var(--text-primary)]">{{ sysInfo.worker.heartbeat.gpu_name }}</span>
                             </div>
                             <div class="mb-2">
                                 <div class="flex justify-between text-xs mb-1">
-                                    <span class="text-gray-400">GPU 使用率</span>
-                                    <span class="text-gray-300">{{ sysInfo.worker.heartbeat.gpu_utilization }}%</span>
+                                    <span class="text-[var(--text-secondary)]">GPU 使用率</span>
+                                    <span class="text-[var(--text-primary)]">{{ sysInfo.worker.heartbeat.gpu_utilization }}%</span>
                                 </div>
-                                <div class="w-full bg-gray-800 rounded-full h-1.5">
-                                    <div class="bg-cyan-500 h-1.5 rounded-full transition-all" :style="'width:' + (sysInfo.worker.heartbeat.gpu_utilization||0) + '%'"></div>
+                                <div class="w-full bg-[var(--bg-surface)] rounded-full h-1.5">
+                                    <div class="bg-[var(--accent-cyan)] h-1.5 rounded-full transition-all" :style="'width:' + (sysInfo.worker.heartbeat.gpu_utilization||0) + '%'"></div>
                                 </div>
                             </div>
                             <div v-if="sysInfo.worker.heartbeat.vram_total_mb" class="mb-2">
                                 <div class="flex justify-between text-xs mb-1">
-                                    <span class="text-gray-400">VRAM</span>
-                                    <span class="text-gray-300">{{ sysInfo.worker.heartbeat.vram_used_mb }}M / {{ sysInfo.worker.heartbeat.vram_total_mb }}M</span>
+                                    <span class="text-[var(--text-secondary)]">VRAM</span>
+                                    <span class="text-[var(--text-primary)]">{{ sysInfo.worker.heartbeat.vram_used_mb }}M / {{ sysInfo.worker.heartbeat.vram_total_mb }}M</span>
                                 </div>
-                                <div class="w-full bg-gray-800 rounded-full h-1.5">
-                                    <div class="bg-purple-500 h-1.5 rounded-full transition-all" :style="'width:' + ((sysInfo.worker.heartbeat.vram_used_mb / sysInfo.worker.heartbeat.vram_total_mb) * 100) + '%'"></div>
+                                <div class="w-full bg-[var(--bg-surface)] rounded-full h-1.5">
+                                    <div class="bg-[var(--accent-blue)] h-1.5 rounded-full transition-all" :style="'width:' + ((sysInfo.worker.heartbeat.vram_used_mb / sysInfo.worker.heartbeat.vram_total_mb) * 100) + '%'"></div>
                                 </div>
                             </div>
-                            <div class="flex justify-between items-center text-xs text-gray-500 pt-2 border-t border-gray-800">
+                            <div class="flex justify-between items-center text-xs text-[var(--text-muted)] pt-2 border-t border-[var(--border-dim)]">
                                 <span>v{{ sysInfo.worker.heartbeat.version }} · 运行 {{ formatUptime(sysInfo.worker.heartbeat.uptime_seconds) }}</span>
                                 <span>队列: {{ sysInfo.worker.heartbeat.queue_length }}</span>
                             </div>
                         </template>
-                        <div v-else class="text-xs text-gray-500 text-center py-3">
+                        <div v-else class="text-xs text-[var(--text-muted)] text-center py-3">
                             <i class="fa-solid fa-wifi-slash mr-1"></i>无法获取 Worker 状态信息
                         </div>
                     </div>
 
                     <!-- 空状态 -->
-                    <div v-if="!(sysInfo.workers?.length) && !sysInfo.worker" class="text-center text-gray-500 py-8">
+                    <div v-if="!(sysInfo.workers?.length) && !sysInfo.worker" class="text-center text-[var(--text-muted)] py-8">
                         <i class="fa-solid fa-server-slash text-3xl mb-2"></i>
                         <p>未配置 Worker 节点</p>
                     </div>
@@ -800,46 +893,46 @@
 
             <!-- Automation Status -->
             <div class="glass-panel">
-                <div class="px-6 py-4 border-b border-gray-700/50 bg-gray-800/30 flex justify-between items-center">
-                    <h2 class="font-semibold text-base"><i class="fa-solid fa-robot mr-2 text-amber-400"></i>自动化调度</h2>
+                <div class="px-6 py-4 border-b border-[var(--border-dim)] bg-[var(--bg-panel)] flex justify-between items-center">
+                    <h2 class="font-semibold text-base"><i class="fa-solid fa-robot mr-2 text-[var(--accent-amber)]"></i>自动化调度</h2>
                     <button @click="toggleAutomation" class="text-xs px-3 py-1 rounded-full border transition-all"
-                        :class="autoStatus.enabled ? 'border-green-600 text-green-400 hover:bg-green-900/30' : 'border-gray-600 text-gray-400 hover:bg-gray-700'">
+                        :class="autoStatus.enabled ? 'border-[var(--accent-green)] text-[var(--accent-green)] hover:bg-[var(--accent-green)]/10' : 'border-[var(--border-dim)] text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]'">
                         {{ autoStatus.enabled ? '运行中' : '已关闭' }}
                     </button>
                 </div>
                 <div class="p-5 space-y-3 text-sm">
                     <!-- 时间窗口 -->
                     <div class="flex justify-between items-center">
-                        <span class="text-gray-400"><i class="fa-regular fa-clock mr-1"></i>扫描窗口</span>
-                        <span class="text-gray-200 font-mono text-xs">{{ autoStatus.schedule_start || '--:--' }} ~ {{ autoStatus.schedule_end || '--:--' }}</span>
+                        <span class="text-[var(--text-secondary)]"><i class="fa-regular fa-clock mr-1"></i>扫描窗口</span>
+                        <span class="text-[var(--text-primary)] font-mono text-xs">{{ autoStatus.schedule_start || '--:--' }} ~ {{ autoStatus.schedule_end || '--:--' }}</span>
                     </div>
                     <div class="flex justify-between items-center">
-                        <span class="text-gray-400"><i class="fa-solid fa-arrows-rotate mr-1"></i>扫描间隔</span>
-                        <span class="text-gray-200">{{ autoStatus.scan_interval_minutes || '-' }} 分钟</span>
+                        <span class="text-[var(--text-secondary)]"><i class="fa-solid fa-arrows-rotate mr-1"></i>扫描间隔</span>
+                        <span class="text-[var(--text-primary)]">{{ autoStatus.scan_interval_minutes || '-' }} 分钟</span>
                     </div>
                     <!-- 窗口状态 -->
                     <div class="flex justify-between items-center">
-                        <span class="text-gray-400">当前窗口</span>
-                        <span :class="autoStatus.in_window ? 'text-green-400' : 'text-gray-500'">
+                        <span class="text-[var(--text-secondary)]">当前窗口</span>
+                        <span :class="autoStatus.in_window ? 'text-[var(--accent-green)]' : 'text-[var(--text-muted)]'">
                             {{ autoStatus.in_window ? '🟢 窗口内' : '🔘 窗口外' }}
                         </span>
                     </div>
 
                     <!-- 上次扫描 -->
-                    <div v-if="autoStatus.last_report" class="bg-gray-800/50 rounded-lg p-3 space-y-1.5">
-                        <div class="text-xs text-gray-400 font-medium"><i class="fa-solid fa-chart-bar mr-1"></i>上次扫描结果</div>
+                    <div v-if="autoStatus.last_report" class="bg-[var(--bg-elevated)] rounded-sm p-3 space-y-1.5">
+                        <div class="text-xs text-[var(--text-secondary)] font-medium"><i class="fa-solid fa-chart-bar mr-1"></i>上次扫描结果</div>
                         <div class="grid grid-cols-2 gap-2 text-xs">
-                            <div><span class="text-gray-500">视频总数:</span> <span class="text-gray-300">{{ autoStatus.last_report.total_videos }}</span></div>
-                            <div><span class="text-gray-500">缺字幕:</span> <span class="text-amber-400 font-medium">{{ autoStatus.last_report.missing_subtitle }}</span></div>
-                            <div><span class="text-gray-500">已有任务:</span> <span class="text-gray-300">{{ autoStatus.last_report.already_active }}</span></div>
-                            <div><span class="text-gray-500">新建任务:</span> <span class="text-green-400 font-medium">{{ autoStatus.last_report.new_tasks_created }}</span></div>
+                            <div><span class="text-[var(--text-muted)]">视频总数:</span> <span class="text-[var(--text-primary)]">{{ autoStatus.last_report.total_videos }}</span></div>
+                            <div><span class="text-[var(--text-muted)]">缺字幕:</span> <span class="text-[var(--accent-amber)] font-medium">{{ autoStatus.last_report.missing_subtitle }}</span></div>
+                            <div><span class="text-[var(--text-muted)]">已有任务:</span> <span class="text-[var(--text-primary)]">{{ autoStatus.last_report.already_active }}</span></div>
+                            <div><span class="text-[var(--text-muted)]">新建任务:</span> <span class="text-[var(--accent-green)] font-medium">{{ autoStatus.last_report.new_tasks_created }}</span></div>
                         </div>
-                        <div class="text-[10px] text-gray-500 mt-1">{{ autoStatus.last_report.time ? formatDate(autoStatus.last_report.time) : '' }} · {{ autoStatus.last_report.duration_seconds }}s</div>
+                        <div class="text-[10px] text-[var(--text-muted)] mt-1">{{ autoStatus.last_report.time ? formatDate(autoStatus.last_report.time) : '' }} · {{ autoStatus.last_report.duration_seconds }}s</div>
                     </div>
-                    <div v-else class="text-xs text-gray-500 text-center py-2">尚无扫描记录</div>
+                    <div v-else class="text-xs text-[var(--text-muted)] text-center py-2">尚无扫描记录</div>
 
                     <!-- 手动扫描 -->
-                    <button @click="triggerScan" :disabled="scanning" class="w-full mt-2 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-700/50 text-amber-300 text-xs font-medium py-2 rounded-lg transition-all flex justify-center items-center disabled:opacity-50">
+                    <button @click="triggerScan" :disabled="scanning" class="w-full mt-2 bg-[var(--accent-amber-dim)] hover:bg-[var(--accent-amber-dim)] border border-[var(--accent-amber)]/30 text-[var(--accent-amber)] text-xs font-medium py-2 rounded-sm transition-all flex justify-center items-center disabled:opacity-50">
                         <i class="fa-solid fa-magnifying-glass mr-1.5" v-if="!scanning"></i>
                         <i class="fa-solid fa-circle-notch fa-spin mr-1.5" v-else></i>
                         {{ scanning ? '扫描中...' : '立即扫描' }}
@@ -851,19 +944,19 @@
 
     <!-- Live Logs Terminal (高级模式) -->
     <div v-if="viewMode === 'advanced'" class="glass-panel mt-8 flex flex-col mb-8 overflow-hidden">
-        <div class="px-6 py-3 border-b border-gray-700/50 bg-gray-800/50 flex justify-between items-center cursor-pointer" @click="toggleLogs">
+        <div class="px-6 py-3 border-b border-[var(--border-dim)] bg-[var(--bg-elevated)] flex justify-between items-center cursor-pointer" @click="toggleLogs">
             <h2 class="font-semibold text-sm font-mono">
-                <i class="fa-solid fa-terminal mr-2 text-green-400"></i>系统实时日志 / TTY0
-                <span class="ml-2 text-[10px] px-1.5 py-0.5 rounded" :class="logWsConnected ? 'bg-green-900/30 text-green-400' : 'bg-yellow-900/30 text-yellow-400'">
+                <i class="fa-solid fa-terminal mr-2 text-[var(--accent-green)]"></i>系统实时日志 / TTY0
+                <span class="ml-2 text-[10px] px-1.5 py-0.5 rounded" :class="logWsConnected ? 'bg-[var(--accent-green)]/10 text-[var(--accent-green)]' : 'bg-[var(--accent-amber)]/10 text-[var(--accent-amber)]'">
                     {{ logWsConnected ? 'WebSocket' : 'REST' }}
                 </span>
             </h2>
             <div class="flex items-center space-x-3">
                 <span class="flex h-2 w-2 relative">
-                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                    <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--accent-green)] opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-2 w-2 bg-[var(--accent-green)]"></span>
                 </span>
-                <button class="text-gray-400 hover:text-white transition-transform duration-300" :class="{'rotate-180': !showLogs}">
+                <button class="text-[var(--text-secondary)] hover:text-white transition-transform duration-300" :class="{'rotate-180': !showLogs}">
                     <i class="fa-solid fa-chevron-up"></i>
                 </button>
             </div>
@@ -875,56 +968,56 @@
                     {{ line.trim() }}
                 </div>
             </template>
-            <div v-else class="text-gray-600 italic">读取信号中...</div>
+            <div v-else class="text-[var(--text-muted)] italic">读取信号中...</div>
         </div>
     </div>
 
     <!-- File Browser Modal -->
     <div v-if="showBrowser" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" @keydown.escape="showBrowser = false">
-        <div class="glass-panel w-full max-w-4xl flex flex-col h-[80vh] border border-gray-700">
+        <div class="glass-panel w-full max-w-4xl flex flex-col h-[80vh] border border-[var(--border-dim)]">
             <!-- Modal Header -->
-            <div class="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-800/80 rounded-t-2xl">
-                <h3 class="font-bold text-lg"><i class="fa-solid fa-server mr-2 text-blue-400"></i>服务器文件系统</h3>
-                <button @click="showBrowser = false" class="text-gray-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
+            <div class="p-4 border-b border-[var(--border-dim)] flex justify-between items-center bg-[var(--bg-panel)] rounded-t-sm">
+                <h3 class="font-bold text-lg"><i class="fa-solid fa-server mr-2 text-[var(--accent-cyan)]"></i>服务器文件系统</h3>
+                <button @click="showBrowser = false" class="text-[var(--text-secondary)] hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
             </div>
             
             <!-- Address Bar -->
-            <div class="p-3 bg-gray-900/50 border-b border-gray-800 flex items-center space-x-2">
-                <button @click="loadPath(browserData.parent_path)" :disabled="!browserData.parent_path" class="p-2 bg-gray-800 rounded hover:bg-gray-700 disabled:opacity-50">
+            <div class="p-3 bg-[var(--bg-surface)] border-b border-[var(--border-dim)] flex items-center space-x-2">
+                <button @click="loadPath(browserData.parent_path)" :disabled="!browserData.parent_path" class="p-2 bg-[var(--bg-surface)] rounded hover:bg-[var(--bg-elevated)] disabled:opacity-50">
                     <i class="fa-solid fa-arrow-up"></i>
                 </button>
-                <div class="flex-1 bg-black/30 px-3 py-2 rounded text-sm text-gray-300 overflow-x-auto whitespace-nowrap border border-gray-800 font-mono">
+                <div class="flex-1 bg-black/30 px-3 py-2 rounded text-sm text-[var(--text-primary)] overflow-x-auto whitespace-nowrap border border-[var(--border-dim)] font-mono">
                     {{ browserData.current_path || '根目录' }}
                 </div>
-                <button @click="loadPath(browserData.current_path)" class="p-2 bg-gray-800 rounded hover:bg-gray-700 text-blue-400">
+                <button @click="loadPath(browserData.current_path)" class="p-2 bg-[var(--bg-surface)] rounded hover:bg-[var(--bg-elevated)] text-[var(--accent-cyan)]">
                     <i class="fa-solid fa-rotate-right" :class="{'fa-spin': browsing}"></i>
                 </button>
             </div>
 
             <!-- File List -->
             <div class="flex-1 overflow-y-auto p-2 bg-black/20">
-                <div v-if="browsing" class="flex justify-center items-center h-full text-indigo-400 text-2xl">
+                <div v-if="browsing" class="flex justify-center items-center h-full text-[var(--accent-blue)] text-2xl">
                     <i class="fa-solid fa-circle-notch fa-spin"></i>
                 </div>
                 <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                     <!-- Directories -->
                     <div v-for="d in browserData.dirs" :key="'d-'+d" @click="loadPath((browserData.current_path ? browserData.current_path + '/' : '') + d)" 
-                        class="flex items-center p-3 rounded hover:bg-white/5 cursor-pointer transition-colors border border-transparent hover:border-gray-700">
-                        <i class="fa-solid fa-folder text-yellow-500 text-xl mr-3 w-6 text-center"></i>
+                        class="flex items-center p-3 rounded hover:bg-[var(--text-primary)]/5 cursor-pointer transition-colors border border-transparent hover:border-[var(--border-dim)]">
+                        <i class="fa-solid fa-folder text-[var(--accent-amber)] text-xl mr-3 w-6 text-center"></i>
                         <span class="truncate text-sm font-medium">{{ d }}</span>
                     </div>
                     <!-- Files -->
                     <div v-for="f in browserData.files" :key="'f-'+f.name" @click="selectFile((browserData.current_path ? browserData.current_path + '/' : '') + f.name)"
-                        class="flex items-center p-3 rounded hover:bg-blue-900/40 cursor-pointer transition-colors border border-transparent hover:border-blue-700/50 group">
-                        <i class="fa-solid fa-file-video text-blue-400 text-xl mr-3 w-6 text-center group-hover:text-blue-300"></i>
+                        class="flex items-center p-3 rounded hover:bg-[var(--accent-cyan)]/15 cursor-pointer transition-colors border border-transparent hover:border-[var(--accent-cyan)]/30 group">
+                        <i class="fa-solid fa-file-video text-[var(--accent-cyan)] text-xl mr-3 w-6 text-center group-hover:text-[var(--accent-cyan)]"></i>
                         <div class="flex-1 min-w-0">
-                            <div class="truncate text-sm font-light text-gray-300 group-hover:text-white">{{ f.name }}</div>
-                            <div class="text-[10px] text-gray-500 mt-0.5">{{ f.size_mb }} MB</div>
+                            <div class="truncate text-sm font-light text-[var(--text-primary)] group-hover:text-white">{{ f.name }}</div>
+                            <div class="text-[10px] text-[var(--text-muted)] mt-0.5">{{ f.size_mb }} MB</div>
                         </div>
                     </div>
                     
                     <!-- Empty State -->
-                    <div v-if="browserData.dirs?.length === 0 && browserData.files?.length === 0" class="col-span-full py-12 text-center text-gray-500">
+                    <div v-if="browserData.dirs?.length === 0 && browserData.files?.length === 0" class="col-span-full py-12 text-center text-[var(--text-muted)]">
                         <i class="fa-regular fa-folder-open text-4xl mb-3 opacity-50"></i>
                         <p>该文件夹为空或没有可处理的视频</p>
                     </div>
@@ -950,38 +1043,38 @@
     <div v-if="confirmState.show" class="confirm-overlay" @click.self="confirmResolve(false)" @keydown.escape="confirmResolve(false)" tabindex="0">
         <div class="confirm-dialog">
             <div class="flex items-center gap-3 mb-4">
-                <div class="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center flex-shrink-0">
-                    <i class="fa-solid fa-question text-amber-400"></i>
+                <div class="w-10 h-10 rounded-full bg-[var(--accent-amber-dim)] flex items-center justify-center flex-shrink-0">
+                    <i class="fa-solid fa-question text-[var(--accent-amber)]"></i>
                 </div>
                 <h3 class="text-lg font-semibold text-white">{{ confirmState.title || '确认操作' }}</h3>
             </div>
-            <p class="text-gray-300 text-sm mb-6 pl-13">{{ confirmState.message }}</p>
+            <p class="text-[var(--text-primary)] text-sm mb-6 pl-13">{{ confirmState.message }}</p>
             <div class="flex justify-end gap-3">
-                <button @click="confirmResolve(false)" class="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors rounded-lg border border-gray-700 hover:border-gray-500">取消</button>
-                <button @click="confirmResolve(true)" class="px-4 py-2 text-sm text-white bg-red-600 hover:bg-red-500 transition-colors rounded-lg font-medium">确认</button>
+                <button @click="confirmResolve(false)" class="px-4 py-2 text-sm text-[var(--text-secondary)] hover:text-white transition-colors rounded-sm border border-[var(--border-dim)] hover:border-[var(--text-muted)]">取消</button>
+                <button @click="confirmResolve(true)" class="px-4 py-2 text-sm text-white bg-[var(--accent-red)] hover:bg-[var(--accent-red)] transition-colors rounded-sm font-medium">确认</button>
             </div>
         </div>
     </div>
 
     <!-- 登录弹窗 -->
     <div v-if="showLoginDialog" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
-        <div class="glass-panel w-full max-w-sm p-6 border border-gray-700" role="dialog" aria-modal="true" aria-label="API 认证">
+        <div class="glass-panel w-full max-w-sm p-6 border border-[var(--border-dim)]" role="dialog" aria-modal="true" aria-label="API 认证">
             <div class="text-center mb-6">
-                <div class="w-16 h-16 rounded-full bg-blue-500/20 flex items-center justify-center mx-auto mb-4">
-                    <i class="fa-solid fa-lock text-2xl text-blue-400"></i>
+                <div class="w-16 h-16 rounded-full bg-[var(--accent-cyan-dim)] flex items-center justify-center mx-auto mb-4">
+                    <i class="fa-solid fa-lock text-2xl text-[var(--accent-cyan)]"></i>
                 </div>
                 <h3 class="text-lg font-semibold text-white">需要认证</h3>
-                <p class="text-sm text-gray-400 mt-1">请输入 API Token 以访问控制台</p>
+                <p class="text-sm text-[var(--text-secondary)] mt-1">请输入 API Token 以访问控制台</p>
             </div>
             <form @submit.prevent="submitLogin">
                 <div class="mb-4">
                     <input v-model="loginToken" type="password"
-                        class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                        class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded-sm px-4 py-2.5 text-sm text-white placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-amber)]"
                         placeholder="输入 API Token..." autofocus>
-                    <p v-if="loginError" class="text-red-400 text-xs mt-2"><i class="fa-solid fa-exclamation-circle mr-1"></i>{{ loginError }}</p>
+                    <p v-if="loginError" class="text-[var(--accent-red)] text-xs mt-2"><i class="fa-solid fa-exclamation-circle mr-1"></i>{{ loginError }}</p>
                 </div>
                 <button type="submit" :disabled="loginLoading"
-                    class="w-full btn-primary text-white text-sm font-medium py-2.5 rounded-lg flex items-center justify-center">
+                    class="w-full btn-primary text-white text-sm font-medium py-2.5 rounded-sm flex items-center justify-center">
                     <i class="fa-solid fa-right-to-bracket mr-2"></i>
                     {{ loginLoading ? '验证中...' : '登录' }}
                 </button>
@@ -991,17 +1084,17 @@
 
     <!-- Settings Modal -->
     <div v-if="showSettings" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" @keydown.escape="showSettings = false">
-        <div class="glass-panel w-full max-w-3xl max-h-[85vh] flex flex-col border border-gray-700" role="dialog" aria-modal="true" aria-label="系统设置">
-            <div class="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-800/80 rounded-t-2xl">
-                <h3 class="font-bold text-lg"><i class="fa-solid fa-gear mr-2 text-blue-400"></i>系统设置</h3>
-                <button @click="showSettings = false" class="text-gray-400 hover:text-white" aria-label="关闭"><i class="fa-solid fa-xmark text-xl"></i></button>
+        <div class="glass-panel w-full max-w-3xl max-h-[85vh] flex flex-col border border-[var(--border-dim)]" role="dialog" aria-modal="true" aria-label="系统设置">
+            <div class="p-4 border-b border-[var(--border-dim)] flex justify-between items-center bg-[var(--bg-panel)] rounded-t-sm">
+                <h3 class="font-bold text-lg"><i class="fa-solid fa-gear mr-2 text-[var(--accent-cyan)]"></i>系统设置</h3>
+                <button @click="showSettings = false" class="text-[var(--text-secondary)] hover:text-white" aria-label="关闭"><i class="fa-solid fa-xmark text-xl"></i></button>
             </div>
 
             <!-- Tabs -->
-            <div class="flex border-b border-gray-700 bg-gray-900/50" role="tablist">
+            <div class="flex border-b border-[var(--border-dim)] bg-[var(--bg-surface)]" role="tablist">
                 <button v-for="tab in settingsTabs" :key="tab.key" @click="settingsTab = tab.key"
                     class="px-4 py-2 text-xs font-medium transition-colors"
-                    :class="settingsTab === tab.key ? 'text-blue-400 border-b-2 border-blue-400 bg-gray-800/50' : 'text-gray-400 hover:text-gray-200'"
+                    :class="settingsTab === tab.key ? 'text-[var(--accent-cyan)] border-b-2 border-[var(--accent-cyan)] bg-[var(--bg-elevated)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'"
                     role="tab" :aria-selected="settingsTab === tab.key">
                     <i :class="tab.icon" class="mr-1"></i>{{ tab.label }}
                 </button>
@@ -1010,33 +1103,33 @@
             <div class="flex-1 overflow-y-auto p-6 space-y-4">
                 <!-- Worker Tab -->
                 <div v-if="settingsTab === 'workers'">
-                    <div v-for="(w, idx) in configForm.workers || []" :key="idx" class="bg-gray-800/50 rounded-lg p-4 mb-3 border border-gray-700/50">
+                    <div v-for="(w, idx) in configForm.workers || []" :key="idx" class="bg-[var(--bg-elevated)] rounded-sm p-4 mb-3 border border-[var(--border-dim)]">
                         <div class="flex justify-between items-center mb-3">
-                            <span class="text-sm font-medium text-gray-300">Worker {{ idx + 1 }}</span>
-                            <button @click="removeWorker(idx)" class="text-red-400 hover:text-red-300 text-xs"><i class="fa-solid fa-trash mr-1"></i>移除</button>
+                            <span class="text-sm font-medium text-[var(--text-primary)]">Worker {{ idx + 1 }}</span>
+                            <button @click="removeWorker(idx)" class="text-[var(--accent-red)] hover:text-[var(--accent-red)] text-xs"><i class="fa-solid fa-trash mr-1"></i>移除</button>
                         </div>
                         <div class="grid grid-cols-2 gap-3">
                             <div>
-                                <label class="text-xs text-gray-400">URL</label>
-                                <input v-model="w.url" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500" placeholder="http://192.168.1.50:8788">
+                                <label class="text-xs text-[var(--text-secondary)]">URL</label>
+                                <input v-model="w.url" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]" placeholder="http://192.168.1.50:8788">
                             </div>
                             <div>
-                                <label class="text-xs text-gray-400">节点 ID</label>
-                                <input v-model="w.worker_id" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500" placeholder="office-gpu">
+                                <label class="text-xs text-[var(--text-secondary)]">节点 ID</label>
+                                <input v-model="w.worker_id" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]" placeholder="office-gpu">
                             </div>
                             <div>
-                                <label class="text-xs text-gray-400">权重</label>
-                                <input v-model.number="w.weight" type="number" min="1" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500">
+                                <label class="text-xs text-[var(--text-secondary)]">权重</label>
+                                <input v-model.number="w.weight" type="number" min="1" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
                             </div>
                             <div class="flex items-end">
                                 <label class="flex items-center space-x-2 cursor-pointer">
-                                    <input type="checkbox" v-model="w.enabled" class="form-checkbox h-4 w-4 text-blue-600 bg-gray-900 border-gray-600 rounded">
-                                    <span class="text-sm text-gray-300">启用</span>
+                                    <input type="checkbox" v-model="w.enabled" class="form-checkbox h-4 w-4 text-[var(--accent-amber)] bg-[var(--bg-void)] border-[var(--border-dim)] rounded">
+                                    <span class="text-sm text-[var(--text-primary)]">启用</span>
                                 </label>
                             </div>
                         </div>
                     </div>
-                    <button @click="addWorker" class="w-full py-2 border border-dashed border-gray-600 rounded-lg text-gray-400 hover:text-white hover:border-gray-400 transition-colors text-sm">
+                    <button @click="addWorker" class="w-full py-2 border border-dashed border-[var(--border-dim)] rounded-sm text-[var(--text-secondary)] hover:text-white hover:border-[var(--text-muted)] transition-colors text-sm">
                         <i class="fa-solid fa-plus mr-1"></i>添加 Worker
                     </button>
                 </div>
@@ -1044,66 +1137,84 @@
                 <!-- Subtitle Tab -->
                 <div v-if="settingsTab === 'subtitle'" class="space-y-4">
                     <div>
-                        <label class="text-xs text-gray-400 block mb-1">输出模式</label>
-                        <select v-model="configForm.subtitle.output_mode" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
+                        <label class="text-xs text-[var(--text-secondary)] block mb-1">输出模式</label>
+                        <select v-model="configForm.subtitle.output_mode" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
                             <option value="single">单语翻译</option>
                             <option value="bilingual">中英双语</option>
                         </select>
                     </div>
                     <div>
-                        <label class="text-xs text-gray-400 block mb-1">输出格式</label>
-                        <select v-model="configForm.subtitle.output_format" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
+                        <label class="text-xs text-[var(--text-secondary)] block mb-1">输出格式</label>
+                        <select v-model="configForm.subtitle.output_format" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
                             <option value="srt">SRT</option>
                             <option value="ass">ASS</option>
                         </select>
                     </div>
                     <!-- ASS 样式配置 -->
-                    <div v-if="configForm.subtitle.output_format === 'ass'" class="bg-gray-800/50 rounded-lg p-4 border border-gray-700/50 space-y-3">
-                        <h4 class="text-xs font-medium text-gray-300"><i class="fa-solid fa-palette mr-1 text-purple-400"></i>ASS 字幕样式</h4>
+                    <div v-if="configForm.subtitle.output_format === 'ass'" class="bg-[var(--bg-elevated)] rounded-sm p-4 border border-[var(--border-dim)] space-y-3">
+                        <h4 class="text-xs font-medium text-[var(--text-primary)]"><i class="fa-solid fa-palette mr-1 text-[var(--accent-blue)]"></i>ASS 字幕样式</h4>
                         <div class="grid grid-cols-2 gap-3">
                             <div>
-                                <label class="text-xs text-gray-400">字体</label>
-                                <input v-model="configForm.subtitle.ass_style.font_name" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500">
+                                <label class="text-xs text-[var(--text-secondary)]">字体</label>
+                                <input v-model="configForm.subtitle.ass_style.font_name" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
                             </div>
                             <div>
-                                <label class="text-xs text-gray-400">字号</label>
-                                <input v-model.number="configForm.subtitle.ass_style.font_size" type="number" min="8" max="48" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500">
+                                <label class="text-xs text-[var(--text-secondary)]">字号</label>
+                                <input v-model.number="configForm.subtitle.ass_style.font_size" type="number" min="8" max="48" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
                             </div>
                             <div>
-                                <label class="text-xs text-gray-400">主色 (AABBGGRR)</label>
-                                <input v-model="configForm.subtitle.ass_style.primary_colour" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-blue-500">
+                                <label class="text-xs text-[var(--text-secondary)]">主色 (AABBGGRR)</label>
+                                <input v-model="configForm.subtitle.ass_style.primary_colour" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-[var(--accent-amber)]">
                             </div>
                             <div>
-                                <label class="text-xs text-gray-400">描边色</label>
-                                <input v-model="configForm.subtitle.ass_style.outline_colour" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-blue-500">
+                                <label class="text-xs text-[var(--text-secondary)]">描边色</label>
+                                <input v-model="configForm.subtitle.ass_style.outline_colour" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-[var(--accent-amber)]">
                             </div>
                             <div>
-                                <label class="text-xs text-gray-400">描边宽度</label>
-                                <input v-model.number="configForm.subtitle.ass_style.outline_width" type="number" step="0.5" min="0" max="5" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500">
+                                <label class="text-xs text-[var(--text-secondary)]">描边宽度</label>
+                                <input v-model.number="configForm.subtitle.ass_style.outline_width" type="number" step="0.5" min="0" max="5" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
                             </div>
                             <div>
-                                <label class="text-xs text-gray-400">底部边距</label>
-                                <input v-model.number="configForm.subtitle.ass_style.margin_v" type="number" min="0" max="200" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500">
+                                <label class="text-xs text-[var(--text-secondary)]">底部边距</label>
+                                <input v-model.number="configForm.subtitle.ass_style.margin_v" type="number" min="0" max="200" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
                             </div>
                         </div>
-                        <p class="text-[10px] text-gray-500">颜色格式: &HBBGGRR (Alpha 可选前缀)，如白色 = &H00FFFFFF</p>
+                        <p class="text-[10px] text-[var(--text-muted)]">颜色格式: &HBBGGRR (Alpha 可选前缀)，如白色 = &H00FFFFFF</p>
+                    </div>
+                    <!-- 注释设置 -->
+                    <div class="bg-[var(--bg-elevated)] rounded-sm p-4 border border-[var(--border-dim)] space-y-3">
+                        <h4 class="text-xs font-medium text-[var(--text-primary)]"><i class="fa-solid fa-language mr-1 text-[var(--accent-amber)]"></i>字幕注释</h4>
+                        <div>
+                            <label class="text-xs text-[var(--text-secondary)] block mb-1">注释模式</label>
+                            <select v-model="configForm.annotation.mode" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
+                                <option value="off">关闭</option>
+                                <option value="auto">自动 (根据内容复杂度)</option>
+                                <option value="on">始终开启</option>
+                            </select>
+                            <p class="text-[10px] text-[var(--text-muted)] mt-1">自动模式: 翻译时检测文化密度，高/中等复杂度时自动生成注释</p>
+                        </div>
+                        <div v-if="configForm.annotation.mode === 'auto'">
+                            <label class="text-xs text-[var(--text-secondary)] block mb-1">质量阈值</label>
+                            <input v-model.number="configForm.annotation.quality_threshold" type="number" min="0" max="100" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
+                            <p class="text-[10px] text-[var(--text-muted)] mt-1">auto 模式下，字幕质量评分达到此阈值才生成注释 (默认 75)</p>
+                        </div>
                     </div>
                 </div>
 
                 <!-- Automation Tab -->
                 <div v-if="settingsTab === 'automation'" class="space-y-4">
                     <label class="flex items-center space-x-3 cursor-pointer">
-                        <input type="checkbox" v-model="configForm.automation.enabled" class="form-checkbox h-4 w-4 text-blue-600 bg-gray-900 border-gray-600 rounded">
-                        <span class="text-sm text-gray-300">启用自动化扫描</span>
+                        <input type="checkbox" v-model="configForm.automation.enabled" class="form-checkbox h-4 w-4 text-[var(--accent-amber)] bg-[var(--bg-void)] border-[var(--border-dim)] rounded">
+                        <span class="text-sm text-[var(--text-primary)]">启用自动化扫描</span>
                     </label>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
-                            <label class="text-xs text-gray-400 block mb-1">扫描开始时间</label>
-                            <input v-model="configForm.automation.schedule_start" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-blue-500">
+                            <label class="text-xs text-[var(--text-secondary)] block mb-1">扫描开始时间</label>
+                            <input v-model="configForm.automation.schedule_start" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-[var(--accent-amber)]">
                         </div>
                         <div>
-                            <label class="text-xs text-gray-400 block mb-1">扫描结束时间</label>
-                            <input v-model="configForm.automation.schedule_end" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-blue-500">
+                            <label class="text-xs text-[var(--text-secondary)] block mb-1">扫描结束时间</label>
+                            <input v-model="configForm.automation.schedule_end" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-[var(--accent-amber)]">
                         </div>
                     </div>
                 </div>
@@ -1111,38 +1222,38 @@
                 <!-- Emby Tab -->
                 <div v-if="settingsTab === 'emby'" class="space-y-4">
                     <div>
-                        <label class="text-xs text-gray-400 block mb-1">Emby 服务器地址</label>
-                        <input v-model="configForm.emby.server" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" placeholder="http://192.168.1.100:8096">
+                        <label class="text-xs text-[var(--text-secondary)] block mb-1">Emby 服务器地址</label>
+                        <input v-model="configForm.emby.server" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]" placeholder="http://192.168.1.100:8096">
                     </div>
                     <div>
-                        <label class="text-xs text-gray-400 block mb-1">API Key</label>
-                        <input v-model="configForm.emby.api_key" type="password" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
+                        <label class="text-xs text-[var(--text-secondary)] block mb-1">API Key</label>
+                        <input v-model="configForm.emby.api_key" type="password" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
                     </div>
                 </div>
 
                 <!-- Notifications Tab -->
                 <div v-if="settingsTab === 'notifications'" class="space-y-4">
                     <label class="flex items-center space-x-3 cursor-pointer">
-                        <input type="checkbox" v-model="configForm.notifications.enabled" class="form-checkbox h-4 w-4 text-blue-600 bg-gray-900 border-gray-600 rounded">
-                        <span class="text-sm text-gray-300">启用通知</span>
+                        <input type="checkbox" v-model="configForm.notifications.enabled" class="form-checkbox h-4 w-4 text-[var(--accent-amber)] bg-[var(--bg-void)] border-[var(--border-dim)] rounded">
+                        <span class="text-sm text-[var(--text-primary)]">启用通知</span>
                     </label>
                     <div v-if="configForm.notifications?.enabled">
-                        <div v-for="(ch, idx) in configForm.notifications.channels || []" :key="idx" class="bg-gray-800/50 rounded-lg p-4 mb-3 border border-gray-700/50">
+                        <div v-for="(ch, idx) in configForm.notifications.channels || []" :key="idx" class="bg-[var(--bg-elevated)] rounded-sm p-4 mb-3 border border-[var(--border-dim)]">
                             <div class="flex justify-between items-center mb-3">
                                 <div class="flex items-center gap-2">
-                                    <span class="text-sm font-medium text-gray-300">{{ ch.name || '渠道 ' + (idx+1) }}</span>
-                                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-700 text-gray-400">{{ ch.channel_type }}</span>
+                                    <span class="text-sm font-medium text-[var(--text-primary)]">{{ ch.name || '渠道 ' + (idx+1) }}</span>
+                                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-[var(--bg-elevated)] text-[var(--text-secondary)]">{{ ch.channel_type }}</span>
                                 </div>
-                                <button @click="configForm.notifications.channels.splice(idx, 1)" class="text-red-400 hover:text-red-300 text-xs"><i class="fa-solid fa-trash mr-1"></i>移除</button>
+                                <button @click="configForm.notifications.channels.splice(idx, 1)" class="text-[var(--accent-red)] hover:text-[var(--accent-red)] text-xs"><i class="fa-solid fa-trash mr-1"></i>移除</button>
                             </div>
                             <div class="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label class="text-xs text-gray-400">名称</label>
-                                    <input v-model="ch.name" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500" placeholder="我的通知">
+                                    <label class="text-xs text-[var(--text-secondary)]">名称</label>
+                                    <input v-model="ch.name" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]" placeholder="我的通知">
                                 </div>
                                 <div>
-                                    <label class="text-xs text-gray-400">类型</label>
-                                    <select v-model="ch.channel_type" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500">
+                                    <label class="text-xs text-[var(--text-secondary)]">类型</label>
+                                    <select v-model="ch.channel_type" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
                                         <option value="generic">通用 Webhook</option>
                                         <option value="bark">Bark</option>
                                         <option value="pushplus">PushPlus</option>
@@ -1150,37 +1261,37 @@
                                     </select>
                                 </div>
                                 <div class="col-span-2">
-                                    <label class="text-xs text-gray-400">Webhook URL</label>
-                                    <input v-model="ch.url" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-blue-500" placeholder="https://api.day.app/your-key/">
+                                    <label class="text-xs text-[var(--text-secondary)]">Webhook URL</label>
+                                    <input v-model="ch.url" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-[var(--accent-amber)]" placeholder="https://api.day.app/your-key/">
                                 </div>
                             </div>
                             <div class="mt-3">
-                                <label class="text-xs text-gray-400 block mb-1">订阅事件</label>
+                                <label class="text-xs text-[var(--text-secondary)] block mb-1">订阅事件</label>
                                 <div class="flex flex-wrap gap-2">
                                     <label v-for="evt in ['task_completed','task_failed','worker_offline','scan_result']" :key="evt" class="flex items-center gap-1.5 text-xs cursor-pointer">
-                                        <input type="checkbox" :value="evt" v-model="ch.events" class="form-checkbox h-3 w-3 text-blue-600 bg-gray-900 border-gray-600 rounded">
-                                        <span class="text-gray-400">{{ {task_completed:'任务完成',task_failed:'任务失败',worker_offline:'Worker离线',scan_result:'扫描结果'}[evt] }}</span>
+                                        <input type="checkbox" :value="evt" v-model="ch.events" class="form-checkbox h-3 w-3 text-[var(--accent-amber)] bg-[var(--bg-void)] border-[var(--border-dim)] rounded">
+                                        <span class="text-[var(--text-secondary)]">{{ {task_completed:'任务完成',task_failed:'任务失败',worker_offline:'Worker离线',scan_result:'扫描结果'}[evt] }}</span>
                                     </label>
                                 </div>
                             </div>
                             <div class="mt-2 flex items-center gap-2">
                                 <label class="flex items-center gap-1.5 text-xs cursor-pointer">
-                                    <input type="checkbox" v-model="ch.enabled" class="form-checkbox h-3 w-3 text-blue-600 bg-gray-900 border-gray-600 rounded">
-                                    <span class="text-gray-400">启用</span>
+                                    <input type="checkbox" v-model="ch.enabled" class="form-checkbox h-3 w-3 text-[var(--accent-amber)] bg-[var(--bg-void)] border-[var(--border-dim)] rounded">
+                                    <span class="text-[var(--text-secondary)]">启用</span>
                                 </label>
                             </div>
                         </div>
                         <button @click="(configForm.notifications.channels || (configForm.notifications.channels = [])).push({name:'',url:'',enabled:true,events:['task_completed','task_failed'],headers:{},template:'',channel_type:'generic'})"
-                            class="w-full py-2 border border-dashed border-gray-600 rounded-lg text-gray-400 hover:text-white hover:border-gray-400 transition-colors text-sm">
+                            class="w-full py-2 border border-dashed border-[var(--border-dim)] rounded-sm text-[var(--text-secondary)] hover:text-white hover:border-[var(--text-muted)] transition-colors text-sm">
                             <i class="fa-solid fa-plus mr-1"></i>添加通知渠道
                         </button>
                         <div class="mt-3 flex justify-end">
-                            <button @click="testNotification" class="text-xs text-blue-400 hover:text-blue-300 px-3 py-1.5 border border-blue-400/30 rounded-lg hover:bg-blue-400/10 transition-colors">
+                            <button @click="testNotification" class="text-xs text-[var(--accent-cyan)] hover:text-[var(--accent-cyan)] px-3 py-1.5 border border-[var(--accent-cyan)]/20 rounded-sm hover:bg-[var(--accent-cyan)]/10 transition-colors">
                                 <i class="fa-solid fa-paper-plane mr-1"></i>发送测试通知
                             </button>
                         </div>
                     </div>
-                    <div v-else class="text-center text-gray-500 py-6">
+                    <div v-else class="text-center text-[var(--text-muted)] py-6">
                         <i class="fa-solid fa-bell-slash text-2xl mb-2"></i>
                         <p class="text-sm">通知未启用</p>
                     </div>
@@ -1188,31 +1299,31 @@
 
                 <!-- Security Tab -->
                 <div v-if="settingsTab === 'security'" class="space-y-4">
-                    <div class="bg-gray-800/50 rounded-lg p-4 border border-gray-700/50">
-                        <h4 class="text-sm font-medium text-gray-300 mb-3"><i class="fa-solid fa-key mr-1 text-yellow-400"></i>API Token</h4>
-                        <p class="text-xs text-gray-500 mb-3">配置后所有 API 请求需携带此 Token，留空则不验证（向后兼容）</p>
+                    <div class="bg-[var(--bg-elevated)] rounded-sm p-4 border border-[var(--border-dim)]">
+                        <h4 class="text-sm font-medium text-[var(--text-primary)] mb-3"><i class="fa-solid fa-key mr-1 text-[var(--accent-amber)]"></i>API Token</h4>
+                        <p class="text-xs text-[var(--text-muted)] mb-3">配置后所有 API 请求需携带此 Token，留空则不验证（向后兼容）</p>
                         <div>
-                            <label class="text-xs text-gray-400 block mb-1">API 访问令牌</label>
+                            <label class="text-xs text-[var(--text-secondary)] block mb-1">API 访问令牌</label>
                             <input v-model="configForm.security.api_token" type="password"
-                                class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                                class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]"
                                 placeholder="留空则不验证">
                         </div>
                         <div class="mt-3">
-                            <label class="text-xs text-gray-400 block mb-1">Worker 回调令牌</label>
+                            <label class="text-xs text-[var(--text-secondary)] block mb-1">Worker 回调令牌</label>
                             <input v-model="configForm.security.worker_token" type="password"
-                                class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                                class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]"
                                 placeholder="Worker 回调验证，留空则不验证">
                         </div>
                     </div>
-                    <div class="bg-gray-800/50 rounded-lg p-4 border border-gray-700/50">
-                        <h4 class="text-sm font-medium text-gray-300 mb-3"><i class="fa-solid fa-shield-halved mr-1 text-green-400"></i>当前会话</h4>
+                    <div class="bg-[var(--bg-elevated)] rounded-sm p-4 border border-[var(--border-dim)]">
+                        <h4 class="text-sm font-medium text-[var(--text-primary)] mb-3"><i class="fa-solid fa-shield-halved mr-1 text-[var(--accent-green)]"></i>当前会话</h4>
                         <div class="flex items-center justify-between">
                             <div>
-                                <span class="text-xs text-gray-400">认证状态：</span>
-                                <span v-if="isAuthenticated" class="text-xs text-green-400 ml-1"><i class="fa-solid fa-circle-check mr-1"></i>已认证</span>
-                                <span v-else class="text-xs text-gray-500 ml-1"><i class="fa-solid fa-circle-minus mr-1"></i>未设置</span>
+                                <span class="text-xs text-[var(--text-secondary)]">认证状态：</span>
+                                <span v-if="isAuthenticated" class="text-xs text-[var(--accent-green)] ml-1"><i class="fa-solid fa-circle-check mr-1"></i>已认证</span>
+                                <span v-else class="text-xs text-[var(--text-muted)] ml-1"><i class="fa-solid fa-circle-minus mr-1"></i>未设置</span>
                             </div>
-                            <button v-if="isAuthenticated" @click="logout" class="text-xs text-red-400 hover:text-red-300 px-3 py-1 border border-red-400/30 rounded-lg hover:bg-red-400/10 transition-colors">
+                            <button v-if="isAuthenticated" @click="logout" class="text-xs text-[var(--accent-red)] hover:text-[var(--accent-red)] px-3 py-1 border border-[var(--accent-red)]/20 rounded-sm hover:bg-[var(--accent-red)]/10 transition-colors">
                                 <i class="fa-solid fa-right-from-bracket mr-1"></i>清除 Token
                             </button>
                         </div>
@@ -1222,77 +1333,77 @@
                 <!-- Statistics Tab -->
                 <div v-if="settingsTab === 'stats'" class="space-y-6">
                     <div v-if="statsData" class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div class="bg-gray-800/50 rounded-xl p-4 text-center">
-                            <div class="text-2xl font-bold text-blue-400">{{ statsData.total }}</div>
-                            <div class="text-xs text-gray-400 mt-1">近 {{ statsData.days }} 天总任务</div>
+                        <div class="bg-[var(--bg-elevated)] rounded-sm p-4 text-center">
+                            <div class="text-2xl font-bold text-[var(--accent-cyan)]">{{ statsData.total }}</div>
+                            <div class="text-xs text-[var(--text-secondary)] mt-1">近 {{ statsData.days }} 天总任务</div>
                         </div>
-                        <div class="bg-gray-800/50 rounded-xl p-4 text-center">
-                            <div class="text-2xl font-bold text-green-400">{{ statsData.success_rate }}%</div>
-                            <div class="text-xs text-gray-400 mt-1">成功率</div>
+                        <div class="bg-[var(--bg-elevated)] rounded-sm p-4 text-center">
+                            <div class="text-2xl font-bold text-[var(--accent-green)]">{{ statsData.success_rate }}%</div>
+                            <div class="text-xs text-[var(--text-secondary)] mt-1">成功率</div>
                         </div>
-                        <div class="bg-gray-800/50 rounded-xl p-4 text-center">
-                            <div class="text-2xl font-bold text-yellow-400">{{ statsData.completed }}</div>
-                            <div class="text-xs text-gray-400 mt-1">已完成</div>
+                        <div class="bg-[var(--bg-elevated)] rounded-sm p-4 text-center">
+                            <div class="text-2xl font-bold text-[var(--accent-amber)]">{{ statsData.completed }}</div>
+                            <div class="text-xs text-[var(--text-secondary)] mt-1">已完成</div>
                         </div>
-                        <div class="bg-gray-800/50 rounded-xl p-4 text-center">
-                            <div class="text-2xl font-bold text-red-400">{{ statsData.failed }}</div>
-                            <div class="text-xs text-gray-400 mt-1">失败</div>
+                        <div class="bg-[var(--bg-elevated)] rounded-sm p-4 text-center">
+                            <div class="text-2xl font-bold text-[var(--accent-red)]">{{ statsData.failed }}</div>
+                            <div class="text-xs text-[var(--text-secondary)] mt-1">失败</div>
                         </div>
                     </div>
 
                     <!-- 7-day trend (simple bar chart) -->
-                    <div v-if="statsData?.by_day?.length" class="bg-gray-800/50 rounded-xl p-4">
-                        <h4 class="text-sm font-medium text-gray-300 mb-3"><i class="fa-solid fa-chart-bar mr-1"></i>近 7 天趋势</h4>
+                    <div v-if="statsData?.by_day?.length" class="bg-[var(--bg-elevated)] rounded-sm p-4">
+                        <h4 class="text-sm font-medium text-[var(--text-primary)] mb-3"><i class="fa-solid fa-chart-bar mr-1"></i>近 7 天趋势</h4>
                         <div class="flex items-end gap-2 h-32">
                             <div v-for="day in statsData.by_day" :key="day.date" class="flex-1 flex flex-col items-center justify-end h-full">
-                                <div class="text-[10px] text-gray-400 mb-1">{{ day.count }}</div>
+                                <div class="text-[10px] text-[var(--text-secondary)] mb-1">{{ day.count }}</div>
                                 <div class="w-full rounded-t transition-all"
                                     :style="'height:' + Math.max(4, (day.count / Math.max(...statsData.by_day.map(d => d.count), 1)) * 100) + '%; background: linear-gradient(180deg, #38bdf8, #4f46e5)'"></div>
-                                <div class="text-[9px] text-gray-500 mt-1">{{ day.date?.slice(5) }}</div>
+                                <div class="text-[9px] text-[var(--text-muted)] mt-1">{{ day.date?.slice(5) }}</div>
                             </div>
                         </div>
                     </div>
 
                     <!-- Average duration -->
-                    <div v-if="statsData" class="bg-gray-800/50 rounded-xl p-4">
+                    <div v-if="statsData" class="bg-[var(--bg-elevated)] rounded-sm p-4">
                         <div class="flex justify-between items-center">
-                            <span class="text-sm text-gray-300"><i class="fa-solid fa-clock mr-1"></i>平均处理耗时</span>
-                            <span class="text-lg font-bold text-cyan-400">
+                            <span class="text-sm text-[var(--text-primary)]"><i class="fa-solid fa-clock mr-1"></i>平均处理耗时</span>
+                            <span class="text-lg font-bold text-[var(--accent-cyan)]">
                                 {{ statsData.avg_duration_sec > 60 ? Math.floor(statsData.avg_duration_sec / 60) + '分' + Math.round(statsData.avg_duration_sec % 60) + '秒' : statsData.avg_duration_sec + '秒' }}
                             </span>
                         </div>
                     </div>
 
                     <!-- Worker stats -->
-                    <div v-if="workerStatsData && Object.keys(workerStatsData).length" class="bg-gray-800/50 rounded-xl p-4">
-                        <h4 class="text-sm font-medium text-gray-300 mb-3"><i class="fa-solid fa-server mr-1"></i>Worker 统计</h4>
+                    <div v-if="workerStatsData && Object.keys(workerStatsData).length" class="bg-[var(--bg-elevated)] rounded-sm p-4">
+                        <h4 class="text-sm font-medium text-[var(--text-primary)] mb-3"><i class="fa-solid fa-server mr-1"></i>Worker 统计</h4>
                         <div class="space-y-3">
                             <div v-for="(stats, wid) in workerStatsData" :key="wid" class="flex items-center justify-between text-sm">
-                                <span class="text-gray-300 font-mono">{{ wid }}</span>
+                                <span class="text-[var(--text-primary)] font-mono">{{ wid }}</span>
                                 <div class="flex items-center gap-4 text-xs">
-                                    <span class="text-gray-400">总计: <span class="text-white">{{ stats.total }}</span></span>
-                                    <span class="text-green-400">成功: {{ stats.completed }}</span>
-                                    <span class="text-red-400">失败: {{ stats.failed }}</span>
-                                    <span class="text-cyan-400 font-medium">{{ stats.success_rate }}%</span>
+                                    <span class="text-[var(--text-secondary)]">总计: <span class="text-white">{{ stats.total }}</span></span>
+                                    <span class="text-[var(--accent-green)]">成功: {{ stats.completed }}</span>
+                                    <span class="text-[var(--accent-red)]">失败: {{ stats.failed }}</span>
+                                    <span class="text-[var(--accent-cyan)] font-medium">{{ stats.success_rate }}%</span>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <div v-if="!statsData" class="text-center text-gray-500 py-8">
+                    <div v-if="!statsData" class="text-center text-[var(--text-muted)] py-8">
                         <i class="fa-solid fa-chart-pie text-3xl mb-2"></i>
                         <p>加载统计数据中...</p>
                     </div>
                 </div>
             </div>
 
-            <div class="p-4 border-t border-gray-700 flex justify-between items-center bg-gray-800/50 rounded-b-2xl">
-                <a href="/docs" target="_blank" class="text-xs text-gray-500 hover:text-blue-400 transition-colors">
+            <div class="p-4 border-t border-[var(--border-dim)] flex justify-between items-center bg-[var(--bg-elevated)] rounded-b-sm">
+                <a href="/docs" target="_blank" class="text-xs text-[var(--text-muted)] hover:text-[var(--accent-cyan)] transition-colors">
                     <i class="fa-solid fa-book mr-1"></i>API 文档
                 </a>
                 <div class="flex space-x-3">
-                <button @click="showSettings = false" class="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors">取消</button>
-                <button @click="saveSettings" :disabled="savingSettings" class="btn-primary text-white text-sm font-medium py-2 px-6 rounded-lg flex items-center">
+                <button @click="showSettings = false" class="px-4 py-2 text-sm text-[var(--text-secondary)] hover:text-white transition-colors">取消</button>
+                <button @click="saveSettings" :disabled="savingSettings" class="btn-primary text-white text-sm font-medium py-2 px-6 rounded-sm flex items-center">
                     <i class="fa-solid fa-check mr-1.5" v-if="!savingSettings"></i>
                     <i class="fa-solid fa-circle-notch fa-spin mr-1.5" v-else></i>
                     {{ savingSettings ? '保存中...' : '保存并重载' }}
@@ -1305,43 +1416,64 @@
     <!-- Subtitle Preview Modal (must be inside #app for Vue reactivity) -->
     <div v-if="showSubtitlePreview" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" @click.self="showSubtitlePreview = false">
         <div class="glass-panel w-full max-w-4xl max-h-[85vh] flex flex-col mx-4">
-            <div class="px-6 py-4 border-b border-gray-700/50 flex justify-between items-center">
-                <h2 class="font-semibold text-lg"><i class="fa-solid fa-closed-captioning mr-2 text-cyan-400"></i>字幕预览 — {{ subtitlePreviewTitle }}</h2>
+            <div class="px-6 py-4 border-b border-[var(--border-dim)] flex justify-between items-center">
+                <h2 class="font-semibold text-lg"><i class="fa-solid fa-closed-captioning mr-2 text-[var(--accent-cyan)]"></i>字幕预览 — {{ subtitlePreviewTitle }}</h2>
                 <div class="flex items-center gap-3">
-                    <button @click="subtitleEditMode = !subtitleEditMode" class="text-xs px-3 py-1 rounded-lg" :class="subtitleEditMode ? 'bg-amber-600/30 text-amber-300' : 'bg-gray-700 text-gray-300 hover:text-white'">
+                    <button @click="subtitleEditMode = !subtitleEditMode" class="text-xs px-3 py-1 rounded-sm" :class="subtitleEditMode ? 'bg-[var(--accent-amber-dim)] text-[var(--accent-amber)]' : 'bg-[var(--bg-elevated)] text-[var(--text-primary)] hover:text-white'">
                         <i class="fa-solid fa-pen mr-1"></i>{{ subtitleEditMode ? '退出编辑' : '编辑' }}
                     </button>
-                    <button @click="showSubtitlePreview = false" class="text-gray-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+                    <button @click="showSubtitlePreview = false" class="text-[var(--text-secondary)] hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
                 </div>
             </div>
             <div class="flex-1 overflow-y-auto p-6">
                 <div v-if="!subtitleEditMode" class="space-y-2">
-                    <div v-for="(seg, i) in subtitleSegments" :key="i" class="flex items-start gap-3 py-2 px-3 rounded-lg hover:bg-gray-800/50 group">
-                        <input type="checkbox" v-model="seg.selected" class="mt-1 accent-cyan-500" />
+                    <div v-for="(seg, i) in subtitleSegments" :key="i" class="flex items-start gap-3 py-2 px-3 rounded-sm hover:bg-[var(--bg-elevated)] group">
+                        <input type="checkbox" v-model="seg.selected" class="mt-1 accent-[var(--accent-cyan)]" />
                         <div class="flex-1 min-w-0">
-                            <div class="text-[10px] text-gray-500 font-mono">{{ seg.timecode }}</div>
-                            <div class="text-sm text-gray-200">{{ seg.text }}</div>
+                            <div class="text-[10px] text-[var(--text-muted)] font-mono">{{ seg.timecode }}</div>
+                            <div class="text-sm text-[var(--text-primary)]">{{ seg.text }}</div>
                         </div>
                     </div>
-                    <div v-if="subtitleSegments.length === 0" class="text-center text-gray-500 py-8">无字幕数据</div>
+                    <div v-if="subtitleSegments.length === 0" class="text-center text-[var(--text-muted)] py-8">无字幕数据</div>
                 </div>
                 <div v-else>
-                    <textarea v-model="subtitleRawSrt" class="w-full h-[50vh] bg-gray-900 text-gray-200 font-mono text-xs p-4 rounded-lg border border-gray-700 focus:outline-none focus:border-cyan-500 resize-none" spellcheck="false"></textarea>
+                    <textarea v-model="subtitleRawSrt" class="w-full h-[50vh] bg-[var(--bg-void)] text-[var(--text-primary)] font-mono text-xs p-4 rounded-sm border border-[var(--border-dim)] focus:outline-none focus:border-[var(--accent-cyan)] resize-none" spellcheck="false"></textarea>
                 </div>
             </div>
-            <div class="px-6 py-3 border-t border-gray-700/50 flex justify-between items-center">
-                <div class="text-xs text-gray-500">
+            <div class="px-6 py-3 border-t border-[var(--border-dim)] flex justify-between items-center">
+                <div class="text-xs text-[var(--text-muted)]">
                     <span v-if="selectedSegmentCount > 0">已选 {{ selectedSegmentCount }} 段</span>
                 </div>
                 <div class="flex gap-2">
-                    <button v-if="selectedSegmentCount > 0 && !subtitleEditMode" @click="reoptimizeSelected" class="btn-primary text-white text-xs py-1.5 px-4 rounded-lg">
+                    <button v-if="selectedSegmentCount > 0 && !subtitleEditMode" @click="reoptimizeSelected" class="btn-primary text-white text-xs py-1.5 px-4 rounded-sm">
                         <i class="fa-solid fa-wand-magic-sparkles mr-1"></i>重新优化选中段落
                     </button>
-                    <button v-if="subtitleEditMode" @click="saveSubtitle" class="btn-primary text-white text-xs py-1.5 px-4 rounded-lg">
+                    <button v-if="subtitleEditMode" @click="saveSubtitle" class="btn-primary text-white text-xs py-1.5 px-4 rounded-sm">
                         <i class="fa-solid fa-save mr-1"></i>保存修改
                     </button>
-                    <button @click="showSubtitlePreview = false" class="text-gray-400 hover:text-white text-xs py-1.5 px-4 rounded-lg bg-gray-800">关闭</button>
+                    <button @click="showSubtitlePreview = false" class="text-[var(--text-secondary)] hover:text-white text-xs py-1.5 px-4 rounded-sm bg-[var(--bg-surface)]">关闭</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Annotation Preview Modal -->
+    <div v-if="showAnnotationPreview" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" @click.self="showAnnotationPreview = false" @keydown.escape="showAnnotationPreview = false">
+        <div class="glass-panel w-full max-w-2xl max-h-[80vh] flex flex-col mx-4">
+            <div class="px-6 py-4 border-b border-[var(--border-dim)] flex justify-between items-center">
+                <h2 class="font-semibold text-lg"><i class="fa-solid fa-language mr-2 text-[var(--accent-amber)]"></i>注释预览 — {{ annotationPreviewTitle }}</h2>
+                <button @click="showAnnotationPreview = false" class="text-[var(--text-secondary)] hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-6">
+                <div v-if="annotationAssContent" class="space-y-3">
+                    <div v-for="(line, i) in annotationAssContent.split('\n').filter(l => l.startsWith('Dialogue:'))" :key="i" class="bg-[var(--accent-amber)]/5 border border-[var(--accent-amber)]/15 rounded-sm p-3">
+                        <div class="text-sm text-[var(--accent-amber)]">{{ line.replace(/^Dialogue:\s*\d+,[^,]*,[^,]*,[^,]*,[^,]*,\d+,\d+,\d+,,/, '').replace(/\{[^}]*\}/g, '') }}</div>
+                    </div>
+                </div>
+                <div v-else class="text-center text-[var(--text-muted)] py-8">无注释数据</div>
+            </div>
+            <div class="px-6 py-3 border-t border-[var(--border-dim)] flex justify-end">
+                <button @click="showAnnotationPreview = false" class="text-[var(--text-secondary)] hover:text-white text-xs py-1.5 px-4 rounded-sm bg-[var(--bg-surface)]">关闭</button>
             </div>
         </div>
     </div>
@@ -1349,50 +1481,50 @@
     <!-- Worker Detail Modal (must be inside #app for Vue reactivity) -->
     <div v-if="showWorkerDetail" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" @click.self="showWorkerDetail = false">
         <div class="glass-panel w-full max-w-lg mx-4">
-            <div class="px-6 py-4 border-b border-gray-700/50 flex justify-between items-center">
-                <h2 class="font-semibold text-lg"><i class="fa-solid fa-server mr-2 text-purple-400"></i>Worker 详情</h2>
-                <button @click="showWorkerDetail = false" class="text-gray-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+            <div class="px-6 py-4 border-b border-[var(--border-dim)] flex justify-between items-center">
+                <h2 class="font-semibold text-lg"><i class="fa-solid fa-server mr-2 text-[var(--accent-blue)]"></i>Worker 详情</h2>
+                <button @click="showWorkerDetail = false" class="text-[var(--text-secondary)] hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
             </div>
             <div class="p-6 space-y-4" v-if="workerDetail">
                 <div class="flex items-center gap-3">
                     <span class="status-dot" :class="workerDetail.online ? 'online' : 'offline'"></span>
                     <span class="font-medium">{{ workerDetail.worker_id || workerDetail.url }}</span>
-                    <span class="text-xs text-gray-500 ml-auto">{{ workerDetail.url }}</span>
+                    <span class="text-xs text-[var(--text-muted)] ml-auto">{{ workerDetail.url }}</span>
                 </div>
                 <template v-if="workerDetail.heartbeat">
                     <div class="grid grid-cols-2 gap-3 text-sm">
-                        <div class="bg-gray-800/50 rounded-lg p-3">
-                            <div class="text-xs text-gray-500 mb-1">GPU</div>
-                            <div class="text-gray-200">{{ workerDetail.heartbeat.gpu_name || 'Unknown' }}</div>
+                        <div class="bg-[var(--bg-elevated)] rounded-sm p-3">
+                            <div class="text-xs text-[var(--text-muted)] mb-1">GPU</div>
+                            <div class="text-[var(--text-primary)]">{{ workerDetail.heartbeat.gpu_name || 'Unknown' }}</div>
                         </div>
-                        <div class="bg-gray-800/50 rounded-lg p-3">
-                            <div class="text-xs text-gray-500 mb-1">利用率</div>
+                        <div class="bg-[var(--bg-elevated)] rounded-sm p-3">
+                            <div class="text-xs text-[var(--text-muted)] mb-1">利用率</div>
                             <div class="flex items-center gap-2">
-                                <div class="flex-1 h-2 bg-gray-700 rounded-full overflow-hidden">
+                                <div class="flex-1 h-2 bg-[var(--bg-elevated)] rounded-full overflow-hidden">
                                     <div class="h-full rounded-full" :style="{width: (workerDetail.heartbeat.gpu_utilization || 0) + '%', background: getBarColor(workerDetail.heartbeat.gpu_utilization)}"></div>
                                 </div>
-                                <span class="text-gray-300">{{ workerDetail.heartbeat.gpu_utilization || 0 }}%</span>
+                                <span class="text-[var(--text-primary)]">{{ workerDetail.heartbeat.gpu_utilization || 0 }}%</span>
                             </div>
                         </div>
-                        <div class="bg-gray-800/50 rounded-lg p-3">
-                            <div class="text-xs text-gray-500 mb-1">显存</div>
-                            <div class="text-gray-200">{{ ((workerDetail.heartbeat.vram_used_mb || 0) / 1024).toFixed(1) }} / {{ ((workerDetail.heartbeat.vram_total_mb || 0) / 1024).toFixed(1) }} GB</div>
+                        <div class="bg-[var(--bg-elevated)] rounded-sm p-3">
+                            <div class="text-xs text-[var(--text-muted)] mb-1">显存</div>
+                            <div class="text-[var(--text-primary)]">{{ ((workerDetail.heartbeat.vram_used_mb || 0) / 1024).toFixed(1) }} / {{ ((workerDetail.heartbeat.vram_total_mb || 0) / 1024).toFixed(1) }} GB</div>
                         </div>
-                        <div class="bg-gray-800/50 rounded-lg p-3">
-                            <div class="text-xs text-gray-500 mb-1">运行时间</div>
-                            <div class="text-gray-200">{{ formatUptime(workerDetail.heartbeat.uptime_seconds) }}</div>
+                        <div class="bg-[var(--bg-elevated)] rounded-sm p-3">
+                            <div class="text-xs text-[var(--text-muted)] mb-1">运行时间</div>
+                            <div class="text-[var(--text-primary)]">{{ formatUptime(workerDetail.heartbeat.uptime_seconds) }}</div>
                         </div>
-                        <div class="bg-gray-800/50 rounded-lg p-3">
-                            <div class="text-xs text-gray-500 mb-1">版本</div>
-                            <div class="text-gray-200">v{{ workerDetail.heartbeat.version }}</div>
+                        <div class="bg-[var(--bg-elevated)] rounded-sm p-3">
+                            <div class="text-xs text-[var(--text-muted)] mb-1">版本</div>
+                            <div class="text-[var(--text-primary)]">v{{ workerDetail.heartbeat.version }}</div>
                         </div>
-                        <div class="bg-gray-800/50 rounded-lg p-3">
-                            <div class="text-xs text-gray-500 mb-1">队列</div>
-                            <div class="text-gray-200">{{ workerDetail.heartbeat.queue_length }} 个任务</div>
+                        <div class="bg-[var(--bg-elevated)] rounded-sm p-3">
+                            <div class="text-xs text-[var(--text-muted)] mb-1">队列</div>
+                            <div class="text-[var(--text-primary)]">{{ workerDetail.heartbeat.queue_length }} 个任务</div>
                         </div>
                     </div>
                 </template>
-                <div v-else class="text-center text-gray-500 py-4">Worker 离线，无详细信息</div>
+                <div v-else class="text-center text-[var(--text-muted)] py-4">Worker 离线，无详细信息</div>
             </div>
         </div>
     </div>
@@ -1443,6 +1575,11 @@
             const subtitleRawSrt = ref('');
             const subtitleEditMode = ref(false);
             const selectedSegmentCount = computed(() => subtitleSegments.value.filter(s => s.selected).length);
+
+            // Annotation preview state
+            const showAnnotationPreview = ref(false);
+            const annotationPreviewTitle = ref('');
+            const annotationAssContent = ref('');
 
             // Worker detail state
             const showWorkerDetail = ref(false);
@@ -1718,6 +1855,7 @@
                         if (!data.subtitle) data.subtitle = { output_mode: 'single', output_format: 'srt' };
                         if (!data.subtitle.ass_style) data.subtitle.ass_style = { font_name: 'Noto Sans', font_size: 12, primary_colour: '&H00FFFFFF', outline_colour: '&H000000FF', outline_width: 1.5, margin_v: 30 };
                         if (!data.notifications) data.notifications = { enabled: false, channels: [] };
+                        if (!data.annotation) data.annotation = { mode: 'off', quality_threshold: 75 };
                         configForm.value = data;
                     }
                 } catch(e) { console.error('load config error', e); }
@@ -1848,6 +1986,7 @@
                     'transcribing': 'ASR 转写',
                     'optimizing': 'LLM 优化',
                     'translating': 'LLM 翻译',
+                    'annotating': '生成注释',
                     'aligning': '对轴处理',
                     'writing_subtitle': '写回字幕',
                     'refreshing_emby': '刷新 Emby',
@@ -1859,21 +1998,46 @@
                 return map[status] || status;
             };
 
+            const getErrorLabel = (code) => {
+                const map = {
+                    'config_error': '配置错误',
+                    'network_error': '网络异常',
+                    'media_read_error': '媒体读取失败',
+                    'audio_extract_error': '音频提取失败',
+                    'upload_error': '上传失败',
+                    'model_error': '模型加载失败',
+                    'llm_error': 'LLM 调用失败',
+                    'subtitle_write_error': '字幕写入失败',
+                    'emby_refresh_error': 'Emby 刷新失败',
+                    'callback_error': '回调失败',
+                    'timeout_error': '阶段超时',
+                    'unknown_error': '未知错误',
+                };
+                return map[code] || code;
+            };
+
+            const RETRYABLE_ERRORS = new Set([
+                'network_error', 'upload_error', 'llm_error',
+                'emby_refresh_error', 'callback_error', 'timeout_error',
+            ]);
+
+            const isRetryable = (code) => code && RETRYABLE_ERRORS.has(code);
+
             const getStatusColor = (status) => {
                 const map = {
-                    'pending': 'text-yellow-400',
-                    'completed': 'text-green-400',
-                    'failed': 'text-red-400 font-bold',
-                    'skipped': 'text-gray-400',
-                    'cancelled': 'text-gray-500',
+                    'pending': 'text-[var(--accent-amber)]',
+                    'completed': 'text-[var(--accent-green)]',
+                    'failed': 'text-[var(--accent-red)] font-bold',
+                    'skipped': 'text-[var(--text-secondary)]',
+                    'cancelled': 'text-[var(--text-muted)]',
                 };
-                return map[status] || 'text-blue-400 font-bold';
+                return map[status] || 'text-[var(--accent-cyan)] font-bold';
             };
 
             const getBarColor = (status) => {
-                if(status === 'failed') return 'bg-red-500 !bg-none';
-                if(status === 'completed') return 'bg-green-500 !bg-none';
-                if(status === 'skipped') return 'bg-gray-500 !bg-none';
+                if(status === 'failed') return 'bg-[var(--accent-red)] !bg-none';
+                if(status === 'completed') return 'bg-[var(--accent-green)] !bg-none';
+                if(status === 'skipped') return 'bg-[var(--text-muted)] !bg-none';
                 return ''; // default blue gradient
             };
 
@@ -2013,11 +2177,11 @@
                 logWs.onerror = () => { logWs.close(); };
             };
             const getLogColor = (line) => {
-                if (line.includes(' ERROR: ')) return 'text-red-400';
-                if (line.includes(' WARNING: ')) return 'text-yellow-400';
-                if (line.includes(' INFO: ')) return 'text-green-300';
-                if (line.includes(' DEBUG: ')) return 'text-gray-500';
-                return 'text-gray-300';
+                if (line.includes(' ERROR: ')) return 'text-[var(--accent-red)]';
+                if (line.includes(' WARNING: ')) return 'text-[var(--accent-amber)]';
+                if (line.includes(' INFO: ')) return 'text-[var(--accent-green)]';
+                if (line.includes(' DEBUG: ')) return 'text-[var(--text-muted)]';
+                return 'text-[var(--text-primary)]';
             };
 
             // File Browser API Methods
@@ -2194,6 +2358,21 @@
                 }
             };
 
+            const openAnnotationPreview = async (task) => {
+                annotationPreviewTitle.value = task.media_title || task.media_path;
+                annotationAssContent.value = '';
+                showAnnotationPreview.value = true;
+                try {
+                    const res = await fetch(`/api/task/${task.id}/annotations`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        annotationAssContent.value = data.ass_content || '';
+                    }
+                } catch (e) {
+                    console.error("annotation fetch error", e);
+                }
+            };
+
             const parseSrtSegments = (srt) => {
                 if (!srt) return [];
                 const blocks = srt.trim().split(/\n\s*\n/);
@@ -2272,6 +2451,7 @@
                 document.addEventListener('keydown', (e) => {
                     if (e.key === 'Escape') {
                         if (showSubtitlePreview.value) { showSubtitlePreview.value = false; }
+                        else if (showAnnotationPreview.value) { showAnnotationPreview.value = false; }
                         else if (showWorkerDetail.value) { showWorkerDetail.value = false; }
                         else if (showSettings.value) { showSettings.value = false; }
                         else if (showBrowser.value) { showBrowser.value = false; }
@@ -2311,7 +2491,7 @@
                 showWorkerDetail, workerDetail, openWorkerDetail,
                 selectedTasks, selectAll, selectedCount, toggleSelect, clearSelection,
                 batchRetry, batchCancel, batchDelete,
-                getFileName, formatDate, formatUptime, getStatusLabel, getStatusColor, getBarColor,
+                getFileName, formatDate, formatUptime, getStatusLabel, getStatusColor, getBarColor, getErrorLabel, isRetryable,
                 getStageClass, toggleDetail, retryTask, updatePriority,
                 fetchData, submitTask,
                 // Phase 1 additions
@@ -2322,7 +2502,9 @@
                 // Phase 6 additions
                 healthData, showHealthDetail, fetchHealth, getHealthColor,
                 // Statistics
-                statsData, workerStatsData, fetchStats
+                statsData, workerStatsData, fetchStats,
+                // Annotation preview
+                showAnnotationPreview, annotationPreviewTitle, annotationAssContent, openAnnotationPreview
             };
         }
     }).mount('#app');

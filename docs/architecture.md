@@ -152,10 +152,12 @@ sequenceDiagram
 核心模块：
 
 - `main.py`: FastAPI 入口、分块接收、队列处理
-- `task_executor.py`: 转写、优化、翻译主链路
+- `task_executor.py`: 转写、优化、翻译、注释主链路
 - `llm_client.py`: LLM 调用封装
 - `optimizer.py`: 字幕优化
-- `translator.py`: 字幕翻译
+- `translator.py`: 字幕翻译（附带 cultural_density 信号）
+- `annotator.py`: 字幕文化注释生成器 (V0.12)
+- `terminology_extractor.py`: 术语自动提取 (V0.11)
 - `health.py`: Worker 健康状态
 
 适合继续演进的方向：
@@ -232,7 +234,7 @@ stateDiagram-v2
 |---|---|---|
 | Coordinator 本地 | `pending` → `subtitle_checking` → `extracting` → `extracted` | 音频提取完成，等待分发 |
 | 传输 | `uploading` → `worker_queued` | 音频上传至 Worker |
-| Worker 执行 | `transcribing` → `optimizing` → `translating` → `aligning` | AI 处理链路 |
+| Worker 执行 | `transcribing` → `optimizing` → `translating` → `annotating` → `aligning` | AI 处理链路 (V0.12: 新增注释阶段) |
 | 回收 | `writing_subtitle` → `refreshing_emby` → `completed` | 结果写回 |
 
 ## 7. 关键设计决策
@@ -491,6 +493,14 @@ V0.11 已实现：
 5. **日志持久化**：双端 `RotatingFileHandler`，可配置轮转大小和备份数。
 6. **httpx 资源管理**：WorkerClient、TaskExecutor、SubtitleWriter、Notifier 全部使用共享客户端，消除连接泄漏。
 
+V0.12 已实现：
+
+1. **字幕注释系统**：自动生成文化注释（双关语、典故、跨作品引用），翻译时 piggyback `cultural_density` 信号，ASS 双文件输出 (基础 + 注释版)。
+2. **音轨智能选择**：FFprobe 检测音轨语言标签，优先英语音轨（方便翻译），排除评论/配音轨。
+3. **结构化错误展示**：error_code 中文标签、可重试性提示、失败阶段红色标记。
+4. **MoviePilot 插件 0.5.0**：新增 API Token 认证、注释模式、优先级配置。
+5. **电影级 WebUI 重设计**：全面采用电影制作美学 — JetBrains Mono + Outfit 字体、琥珀色主色调、SVG 胶片颗粒叠加、暗角效果、菱形状态指示器、CSS 变量驱动的完整主题系统。设置引导页同步重设计。
+
 ### 7.18 LLM 多端点容灾 (V0.10)
 
 Worker 端支持配置多个 LLM 提供商，按优先级自动切换：
@@ -609,3 +619,33 @@ _file = RotatingFileHandler(
 - **终端 + 文件双输出**：`StreamHandler`（stderr）+ `RotatingFileHandler`
 - **WebUI 日志面板**：`/api/logs` 端点读取日志文件尾部，WebSocket `/ws/logs` 实时推送新日志
 - **配置可调**：`level`（DEBUG/INFO/WARNING/ERROR）、`max_size_mb`、`backup_count`、`log_dir`
+
+### 7.25 电影级 WebUI 设计系统 (V0.12)
+
+WebUI 采用电影制作美学，全部样式通过 CSS 变量驱动，支持未来主题切换：
+
+```css
+:root {
+    --bg-void: #06070a;       /* 最深背景 */
+    --bg-surface: #0c0e13;    /* 面板底层 */
+    --bg-panel: rgba(14, 17, 24, 0.85);  /* 毛玻璃面板 */
+    --accent-amber: #f5a623;  /* 主强调色 */
+    --accent-cyan: #3ecfcf;   /* 次强调色 */
+    --accent-red: #e54b4b;    /* 错误/失败 */
+    --accent-green: #4ade80;  /* 成功/在线 */
+}
+```
+
+**设计要素**：
+- **字体**：JetBrains Mono（代码/数据）+ Outfit（正文），避免 Inter/Roboto 等通用字体
+- **胶片颗粒**：SVG `feTurbulence` 滤镜作为 `body::before` 叠加层，opacity 0.5
+- **暗角效果**：`radial-gradient` 作为 `body::after`，营造聚焦感
+- **状态指示器**：菱形 (45° 旋转) 替代圆形，`border-radius: 1px`
+- **圆角**：统一 `4px` (`rounded-sm`)，锐利工业风
+- **进度条**：琥珀色渐变 + shimmer 扫光动画
+- **入场动画**：`stagger-in` 交错 fade-up，子元素依次延迟 50ms
+- **面板**：毛玻璃 (`backdrop-filter: blur(20px)`) + 微妙内高光
+
+**文件结构**：
+- `coordinator/static/index.html` — 主控制台 SPA（Vue 3 + Tailwind CSS）
+- `coordinator/static/setup.html` — 首次配置引导页（同设计语言）

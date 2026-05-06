@@ -3,7 +3,7 @@
 # =============================================================================
 # 版本
 # =============================================================================
-VERSION = "0.11.0"
+VERSION = "0.12.0"
 PROJECT_NAME = "SSUBB"
 PROJECT_DESC = "异地分布式字幕转写翻译系统"
 
@@ -21,6 +21,7 @@ class TaskStatus:
     OPTIMIZING = "optimizing"                   # 正在 LLM 优化断句
     TRANSLATING = "translating"                 # 正在翻译
     ALIGNING = "aligning"                       # 正在对轴/后处理
+    ANNOTATING = "annotating"                   # 正在生成字幕注释
     WRITING_SUBTITLE = "writing_subtitle"       # 正在写回字幕
     REFRESHING_EMBY = "refreshing_emby"         # 正在刷新 Emby
     COMPLETED = "completed"                     # 已完成
@@ -29,21 +30,21 @@ class TaskStatus:
     CANCELLED = "cancelled"                     # 已取消
 
     ALL = [PENDING, SUBTITLE_CHECKING, EXTRACTING, EXTRACTED, UPLOADING, WORKER_QUEUED,
-           TRANSCRIBING, OPTIMIZING, TRANSLATING, ALIGNING,
+           TRANSCRIBING, OPTIMIZING, TRANSLATING, ALIGNING, ANNOTATING,
            WRITING_SUBTITLE, REFRESHING_EMBY,
            COMPLETED, FAILED, SKIPPED, CANCELLED]
 
     # 活跃状态 (任务尚未结束)
     ACTIVE = [PENDING, SUBTITLE_CHECKING, EXTRACTING, EXTRACTED, UPLOADING, WORKER_QUEUED,
-              TRANSCRIBING, OPTIMIZING, TRANSLATING, ALIGNING,
+              TRANSCRIBING, OPTIMIZING, TRANSLATING, ALIGNING, ANNOTATING,
               WRITING_SUBTITLE, REFRESHING_EMBY]
 
     # Coordinator 本地阶段
     COORDINATOR_STAGES = [PENDING, SUBTITLE_CHECKING, EXTRACTING, EXTRACTED, UPLOADING,
-                          WRITING_SUBTITLE, REFRESHING_EMBY]
+                          ANNOTATING, WRITING_SUBTITLE, REFRESHING_EMBY]
 
     # Worker 执行阶段
-    WORKER_STAGES = [WORKER_QUEUED, TRANSCRIBING, OPTIMIZING, TRANSLATING, ALIGNING]
+    WORKER_STAGES = [WORKER_QUEUED, TRANSCRIBING, OPTIMIZING, TRANSLATING, ALIGNING, ANNOTATING]
 
     # 终态
     TERMINAL = [COMPLETED, FAILED, SKIPPED, CANCELLED]
@@ -81,6 +82,7 @@ STAGE_TIMEOUTS = {
     TaskStatus.TRANSCRIBING: 3600,      # 60 分钟
     TaskStatus.OPTIMIZING: 1800,        # 30 分钟
     TaskStatus.TRANSLATING: 1800,       # 30 分钟
+    TaskStatus.ANNOTATING: 300,         # 5 分钟
     TaskStatus.ALIGNING: 300,           # 5 分钟
     TaskStatus.WRITING_SUBTITLE: 60,    # 1 分钟
     TaskStatus.REFRESHING_EMBY: 60,     # 1 分钟

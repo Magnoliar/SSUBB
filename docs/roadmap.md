@@ -91,6 +91,13 @@
 - **httpx 资源管理**：WorkerClient、TaskExecutor、SubtitleWriter、Notifier 全部使用共享客户端，消除连接泄漏。
 - **代码质量清理**：修复 `@staticmethod` + `self` 关键 Bug，清理冗余 import，统一使用共享常量。
 
+### V0.12：字幕注释 & 音轨智能 & 电影级 UI
+- **字幕文化注释**：自动生成文化注释（双关语、典故、跨作品引用），类似字幕组的翻译备注。翻译时 piggyback `cultural_density` 信号（零额外开销），ASS 双文件输出（基础版 + 注释版，播放器内可切换）。
+- **音轨智能选择**：FFprobe 分析音轨语言标签，优先选择英语音轨（方便翻译），排除评论/配音轨，支持语言别名映射。
+- **结构化错误展示**：error_code 映射为中文标签，可重试性智能提示，失败阶段红色标记。
+- **MoviePilot 插件 0.5.0**：新增 API Token 认证、注释模式 (off/auto/on)、优先级 (1-5) 配置。
+- **电影级 WebUI 重设计**：全面采用电影制作美学 — JetBrains Mono + Outfit 字体组合、琥珀色 (#f5a623) 主色调、SVG feTurbulence 胶片颗粒叠加、径向渐变暗角、菱形 (45° 旋转) 状态指示器、CSS 变量驱动的主题系统（`--bg-void` / `--accent-amber` 等）、锐利 4px 圆角。设置引导页 (`setup.html`) 同步重设计。
+
 ---
 
 ## 远期愿景

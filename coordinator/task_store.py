@@ -93,6 +93,8 @@ class TaskStore:
     def _migrate_db(self):
         """向后兼容：为旧数据库增加新列"""
         conn = self._get_conn()
+
+        # tasks 表迁移
         existing_columns = set()
         for row in conn.execute("PRAGMA table_info(tasks)").fetchall():
             existing_columns.add(row["name"])
@@ -103,11 +105,25 @@ class TaskStore:
             "stage_times_json": "TEXT",
             "callback_url": "TEXT",
             "priority": "INTEGER DEFAULT 3",
+            "audio_track": "INTEGER DEFAULT -1",
         }
 
         for col_name, col_type in new_columns.items():
             if col_name not in existing_columns:
                 conn.execute(f"ALTER TABLE tasks ADD COLUMN {col_name} {col_type}")
+
+        # task_subtitles 表迁移
+        existing_sub_columns = set()
+        for row in conn.execute("PRAGMA table_info(task_subtitles)").fetchall():
+            existing_sub_columns.add(row["name"])
+
+        sub_new_columns = {
+            "annotation_content": "TEXT",
+        }
+
+        for col_name, col_type in sub_new_columns.items():
+            if col_name not in existing_sub_columns:
+                conn.execute(f"ALTER TABLE task_subtitles ADD COLUMN {col_name} {col_type}")
 
         conn.commit()
 
@@ -118,8 +134,15 @@ class TaskStore:
     def create_task(self, req: TaskCreate, task_id: Optional[str] = None) -> TaskInfo:
         """创建新任务"""
         from shared.models import _gen_id
-        
+
         now = datetime.utcnow().isoformat()
+        # 将 annotation 配置序列化到 config_json
+        task_config = TaskConfig(
+            source_lang=req.source_lang,
+            target_lang=req.target_lang,
+            annotation=req.annotation,
+        )
+
         task = TaskInfo(
             id=task_id or _gen_id(),
             media_path=req.media_path,
@@ -133,6 +156,7 @@ class TaskStore:
             priority=req.priority,
             force_mode=req.force,
             callback_url=req.callback_url,
+            config=task_config,
             status=TaskStatus.PENDING,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
@@ -142,12 +166,13 @@ class TaskStore:
         conn.execute(
             """INSERT INTO tasks (id, media_path, media_title, media_type, season,
                episode, tmdb_id, source_lang, target_lang, status, priority, force_mode,
-               callback_url, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               callback_url, audio_track, config_json, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (task.id, task.media_path, task.media_title, task.media_type,
              task.season, task.episode, task.tmdb_id, task.source_lang,
              task.target_lang, task.status, task.priority, int(task.force_mode),
-             task.callback_url, now, now)
+             task.callback_url, req.audio_track, task_config.model_dump_json(),
+             now, now)
         )
         conn.commit()
         return task
@@ -427,6 +452,23 @@ class TaskStore:
         )
         conn.commit()
         return cursor.rowcount > 0
+
+    def save_annotations(self, task_id: str, annotation_content: str):
+        """保存注释 ASS 内容"""
+        conn = self._get_conn()
+        conn.execute(
+            "UPDATE task_subtitles SET annotation_content = ? WHERE task_id = ?",
+            (annotation_content, task_id),
+        )
+        conn.commit()
+
+    def get_annotations(self, task_id: str) -> Optional[str]:
+        """获取注释内容"""
+        conn = self._get_conn()
+        row = conn.execute(
+            "SELECT annotation_content FROM task_subtitles WHERE task_id = ?", (task_id,)
+        ).fetchone()
+        return row["annotation_content"] if row and row["annotation_content"] else None
 
     # =========================================================================
     # 扫描历史

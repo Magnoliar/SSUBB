@@ -59,6 +59,10 @@ class TaskConfig(BaseModel):
     terminology_enabled: bool = Field(default=True, description="翻译前自动提取术语")
     glossary: Optional[dict[str, str]] = Field(default=None, description="术语表 {原文: 译文}，可手动传入或自动提取")
 
+    # 注释
+    annotation: str = Field(default="off", description="注释模式: off/auto/on")
+    annotation_quality_threshold: int = Field(default=75, description="auto 模式下触发注释的质量阈值")
+
 
 class TaskCreate(BaseModel):
     """创建任务请求 (MoviePilot/Emby/手动 → Coordinator)"""
@@ -71,6 +75,7 @@ class TaskCreate(BaseModel):
     source_lang: str = Field(default="auto")
     target_lang: str = Field(default="zh")
     audio_track: int = Field(default=-1, description="音轨索引 (-1=自动选择)")
+    annotation: str = Field(default="off", description="注释模式: off/auto/on")
     force: bool = Field(default=False, description="强制模式: 跳过所有检查，覆盖已有字幕")
     priority: int = Field(default=3, ge=1, le=5, description="优先级 1(最高)-5(最低)")
     callback_url: Optional[str] = Field(default=None, description="通知回调地址 (Webhook)")
@@ -154,6 +159,8 @@ class WorkerTaskResult(BaseModel):
     error_code: Optional[str] = None              # 错误分类码
     partial_translation: bool = False              # 部分翻译失败标记
     original_srt: Optional[str] = None             # 原始转写 SRT (用于双语合并)
+    annotations: Optional[list[dict]] = Field(default=None, description="注释列表 [{index, start, end, text}]")
+    cultural_density: Optional[str] = Field(default=None, description="文化密度信号: high/medium/low")
 
 
 # =============================================================================

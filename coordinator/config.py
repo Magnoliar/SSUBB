@@ -145,6 +145,12 @@ class NotificationConfig(BaseModel):
     channels: list[NotificationChannel] = Field(default_factory=list)
 
 
+class AnnotationConfig(BaseModel):
+    """字幕注释系统配置"""
+    mode: str = "off"                    # off / auto / on
+    quality_threshold: int = 75          # auto 模式下触发注释的质量阈值
+
+
 class WorkerNodeConfig(BaseModel):
     """单个 Worker 节点配置"""
     url: str
@@ -171,6 +177,7 @@ class CoordinatorConfig(BaseModel):
     security: SecurityConfig = Field(default_factory=SecurityConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     notifications: NotificationConfig = Field(default_factory=NotificationConfig)
+    annotation: AnnotationConfig = Field(default_factory=AnnotationConfig)
 
 
 def load_config(config_path: Optional[str] = None) -> CoordinatorConfig:
