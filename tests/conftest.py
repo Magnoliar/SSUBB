@@ -76,6 +76,10 @@ Goodbye and see you next time.
 # Coordinator API 集成测试 fixtures
 # ──────────────────────────────────────────────────────────────
 
+TEST_API_TOKEN = "test-api-token-for-ci"
+TEST_WORKER_TOKEN = "test-worker-token-for-ci"
+
+
 @pytest.fixture(scope="module")
 def coord_config(tmp_path_factory):
     """创建临时 Coordinator 配置"""
@@ -94,7 +98,7 @@ def coord_config(tmp_path_factory):
             "workers": [{"url": "http://127.0.0.1:9999", "weight": 1, "enabled": True}],
             "emby": {"server": "", "api_key": ""},
             "discovery": {"enabled": False},
-            "security": {"api_token": "", "worker_token": ""},
+            "security": {"api_token": TEST_API_TOKEN, "worker_token": TEST_WORKER_TOKEN},
             "logging": {"level": "DEBUG", "log_dir": log_dir, "max_size_mb": 1, "backup_count": 1},
             "notifications": {"enabled": False},
         }
@@ -144,7 +148,7 @@ def mock_registry():
 
 @pytest.fixture
 def client(coord_app, mock_registry, tmp_path):
-    """FastAPI TestClient"""
+    """FastAPI TestClient with auth headers"""
     from fastapi.testclient import TestClient
     from coordinator.main import app
     import coordinator.main as main_mod
@@ -158,5 +162,7 @@ def client(coord_app, mock_registry, tmp_path):
     main_mod.task_manager = tm
     main_mod.SETUP_REQUIRED = False
 
-    with TestClient(app, raise_server_exceptions=False) as c:
+    with TestClient(app, raise_server_exceptions=False, headers={
+        "Authorization": f"Bearer {TEST_API_TOKEN}",
+    }) as c:
         yield c
