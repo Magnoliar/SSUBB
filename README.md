@@ -26,40 +26,87 @@ NAS (存储)                    GPU (算力)
 
 ## 快速开始
 
-### 准备
+### 你需要什么
 
-| 需要 | 说明 |
-|------|------|
-| NAS / 家用机 | Python 3.10+，FFmpeg，不需要 GPU |
-| GPU 机器 | NVIDIA 显卡 4GB+，Python + CUDA |
-| LLM API Key | 推荐 [DeepSeek](https://platform.deepseek.com/)（翻译一部电影约 ¥0.1） |
-| 网络互通 | 同一局域网，或 Tailscale 内网穿透 |
+| 角色 | 设备 | 说明 |
+|------|------|------|
+| **Coordinator** | NAS 或家用电脑 | 调度中心，不需要 GPU，推荐 Docker 部署 |
+| **Worker** | 有 GPU 的电脑 | NVIDIA 显卡 4GB+，负责转写翻译 |
+| **LLM API** | DeepSeek 等 | 翻译用，一部电影约 ¥0.1 |
+| **网络** | 同一局域网 | 或 Tailscale 内网穿透 |
 
-### 第一步：NAS 端启动 Coordinator
+---
 
-**Docker（推荐）**：
+### 第一步：NAS 端 — 启动 Coordinator（Docker）
+
+在你的 NAS 或家用电脑上执行：
+
 ```bash
+# 1. 克隆项目
 git clone https://github.com/Magnoliar/SSUBB.git && cd SSUBB
-python3 -m coordinator.setup_wizard   # 生成 config.yaml
+
+# 2. 生成配置文件
+python3 -m coordinator.setup_wizard
+
+# 3. 启动服务
 docker compose up -d
 ```
 
-**裸机**：Windows 双击 `start_coordinator.bat`，Linux 运行 `bash start_coordinator.sh`。
+启动后访问 `http://NAS_IP:8787`，首次启动会自动生成 API Token（显示在终端日志中，WebUI 登录需要）。
 
-启动后访问 `http://NAS_IP:8787`，首次启动会自动生成 API Token（显示在终端日志中，登录需要）。
+**没有 Docker？** 也可以裸机运行：
+- Windows：双击 `start_coordinator.bat`
+- Linux：`bash start_coordinator.sh`
 
-### 第二步：GPU 端启动 Worker
+---
+
+### 第二步：GPU 端 — 启动 Worker
+
+在有 GPU 的电脑上，**二选一**：
+
+#### 方式 A：下载编译好的 exe（推荐）
+
+从 [GitHub Releases](https://github.com/Magnoliar/SSUBB/releases) 下载对应版本：
+- Windows：`ssubb-worker-1.0.0-win64-cuda12.exe`
+- Linux：`ssubb-worker-1.0.0-linux-x64-cuda12`
+
+双击运行，首次启动会自动引导配置。
+
+> **注意**：exe 不含 PyTorch，需先安装 GPU 版：
+> ```bash
+> pip install torch --index-url https://download.pytorch.org/whl/cu124
+> ```
+
+#### 方式 B：从源码运行
 
 ```bash
 git clone https://github.com/Magnoliar/SSUBB.git && cd SSUBB
-# Windows: worker\run_worker.bat  |  Linux: bash worker/run_worker.sh
+
+# Windows
+worker\run_worker.bat
+
+# Linux
+bash worker/run_worker.sh
 ```
 
 脚本自动安装依赖、检测 GPU/FFmpeg、引导配置、下载 Whisper 模型。
 
-### 第三步：测试
+---
 
-打开 `http://NAS_IP:8787` → 选择文件 → 提交任务 → 等几分钟 → 字幕出现在视频旁。
+### 第三步：配置连接
+
+Worker 首次启动会弹出配置向导，需要填写：
+- **Coordinator 地址**：`http://NAS_IP:8787`
+- **Worker Token**：在 Coordinator WebUI 的「设置 → 安全」页面查看
+- **LLM API Key**：推荐 [DeepSeek](https://platform.deepseek.com/)（便宜又好用）
+
+配置完成后 Worker 自动注册到 Coordinator，可以在 WebUI 的「看板」页面看到在线状态。
+
+---
+
+### 第四步：测试
+
+打开 `http://NAS_IP:8787` → 看板 → 影视资源列表 → 选择一个没字幕的视频 → 点击「生成字幕」→ 等几分钟 → 字幕出现在视频旁。
 
 ---
 
@@ -135,13 +182,29 @@ git clone https://github.com/Magnoliar/SSUBB.git && cd SSUBB
 
 ---
 
+## 下载
+
+从 [GitHub Releases](https://github.com/Magnoliar/SSUBB/releases) 下载：
+
+| 文件 | 平台 | 说明 |
+|------|------|------|
+| `ssubb-worker-*-win64-cuda12.exe` | Windows + CUDA 12 | Worker（推荐） |
+| `ssubb-worker-*-win64-cuda11.exe` | Windows + CUDA 11 | Worker（旧显卡） |
+| `ssubb-worker-*-linux-x64-cuda12` | Linux + CUDA 12 | Worker |
+| `ssubb-launcher-*-win64.exe` | Windows | 桌面启动器（GUI） |
+| `ssubb-launcher-*-linux-x64` | Linux | 桌面启动器（GUI） |
+
+> **前置要求**：需先安装 [PyTorch GPU 版](https://pytorch.org/get-started/locally/)，exe 本身不含 CUDA 运行时。
+
+---
+
 ## 技术栈
 
 - **后端**：Python 3.10+ / FastAPI / SQLite / asyncio
 - **前端**：Vue 3 + Tailwind CSS（单文件 SPA，无构建工具）
 - **转写**：Faster-Whisper（CTranslate2 加速）
 - **翻译**：OpenAI 兼容 API（DeepSeek / GPT / 智谱等）
-- **部署**：Docker Compose / 裸机脚本
+- **部署**：Docker Compose / 裸机脚本 / 预编译 exe
 
 ```
 coordinator/          NAS 端（任务调度 + WebUI + 字幕写入）
@@ -157,6 +220,7 @@ worker/               GPU 端（转写 + 翻译）
   └── translator.py   LLM 翻译（多源容灾）
 
 shared/               共用数据模型与常量
+launcher/             PySide6 桌面启动器（11 个模块）
 moviepilot-plugin/    MoviePilot 自动触发插件
 ```
 
@@ -170,16 +234,7 @@ moviepilot-plugin/    MoviePilot 自动触发插件
 | V0.6~V0.7 | ✅ 完成 | 多节点并发、自动发现、WebUI 体验升级 |
 | V0.8~V0.9 | ✅ 完成 | 智能调度、Webhook、批量操作、数据洞察 |
 | V0.10~V0.12 | ✅ 完成 | LLM 容灾、字幕编辑、术语提取、注释系统 |
-| **V1.0** | **进行中** | WebUI 重构 + 配置统管 + 安全加固 + 打包 + 启动器 |
-
-### V1.0 剩余工作
-
-- [ ] 跨平台打包（Nuitka + PyInstaller + GitHub Actions CI/CD）
-- [ ] Worker 桌面启动器（PySide6 GUI + 环境检测 + 系统托盘）
-- [ ] 首次运行引导 OOBE（无 config.yaml 时弹出分步向导）
-- [ ] 自动更新（GitHub Releases 检查 + 下载替换 + 回滚）
-
-详见 [docs/roadmap.md](docs/roadmap.md) 和 [docs/v1.0-plan.md](docs/v1.0-plan.md)。
+| **V1.0** | **✅ 发布** | WebUI 重构 + 配置统管 + 安全加固 + exe 打包 + 桌面启动器 |
 
 ---
 
@@ -201,6 +256,10 @@ moviepilot-plugin/    MoviePilot 自动触发插件
 **Q: 一部电影多久？** → RTX 3060 参考：90 分钟电影转写 3~5 分钟，翻译 1~2 分钟。
 
 **Q: 字幕质量？** → large-v3-turbo + DeepSeek 超过大部分网上下载字幕。开启 `need_reflect: true` 可进一步提升。
+
+**Q: Worker exe 闪退？** → 大概率是没装 PyTorch。运行 `pip install torch --index-url https://download.pytorch.org/whl/cu124`
+
+**Q: Coordinator 怎么更新？** → `docker compose pull && docker compose up -d`（Docker）或 `git pull`（裸机）
 
 ---
 
