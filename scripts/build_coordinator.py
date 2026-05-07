@@ -1,13 +1,12 @@
-"""SSUBB Coordinator 构建脚本 (Nuitka)
+"""SSUBB Coordinator 构建脚本 (PyInstaller)
 
-使用 Nuitka 将 Coordinator 打包为独立可执行文件。
-Nuitka 提供更快的启动速度，适合 NAS 资源受限场景。
+使用 PyInstaller 将 Coordinator 打包为独立可执行文件。
 
 用法:
     python scripts/build_coordinator.py [--onefile] [--output-dir dist]
 
 前置条件:
-    pip install nuitka ordered-set
+    pip install pyinstaller
 """
 
 import argparse
@@ -41,32 +40,29 @@ def build(args):
     print(f"[build] Platform: {system} ({arch})")
     print(f"[build] Output: {output_dir}")
 
-    # Nuitka 构建参数
+    # 静态文件目录
+    static_dir = PROJECT_ROOT / "coordinator" / "static"
+
     cmd = [
-        sys.executable, "-m", "nuitka",
-        "--module-name=coordinator",
-        f"--output-dir={output_dir}",
-        "--standalone",
-        "--follow-imports",
-        "--include-module=shared",
-        "--include-module=shared.constants",
-        "--include-module=shared.models",
-        "--include-package=coordinator",
-        "--include-package=shared",
+        sys.executable, "-m", "PyInstaller",
+        "--name=ssubb-coordinator",
+        f"--distpath={output_dir}",
+        f"--workpath={output_dir / 'build'}",
+        f"--specpath={output_dir}",
+        "--noconfirm",
+        "--clean",
+        # 收集 shared 包
+        "--collect-all=shared",
+        # 包含 coordinator 包
+        "--collect-all=coordinator",
         # 包含静态文件
-        f"--include-data-dir={PROJECT_ROOT / 'coordinator' / 'static'}=coordinator/static",
-        # 优化选项
-        "--assume-yes-for-downloads",
-        "--no-deployment",
-        f"--company-name=SSUBB",
-        f"--product-name=SSUBB Coordinator",
-        f"--product-version={version}",
-        f"--file-version={version}",
-        "--file-description=SSUBB Coordinator Service",
+        f"--add-data={static_dir}{';' if system == 'windows' else ':''}coordinator/static",
     ]
 
     if args.onefile:
         cmd.append("--onefile")
+    else:
+        cmd.append("--onedir")
 
     # 入口点
     cmd.append(str(PROJECT_ROOT / "coordinator" / "main.py"))
@@ -78,23 +74,19 @@ def build(args):
         print("[build] FAILED")
         sys.exit(1)
 
-    # 打包产物
+    # 打包产物路径
     if system == "windows":
         exe_name = "ssubb-coordinator.exe"
-        src = output_dir / "coordinator.dist" / "coordinator.exe"
     else:
         exe_name = "ssubb-coordinator"
-        src = output_dir / "coordinator.dist" / "coordinator"
 
-    if not src.exists():
-        # onefile 模式输出位置不同
-        src = output_dir / ("coordinator.exe" if system == "windows" else "coordinator")
+    if args.onefile:
+        src = output_dir / exe_name
+    else:
+        src = output_dir / "ssubb-coordinator" / exe_name
 
     if src.exists():
-        dst = output_dir / exe_name
-        if src != dst:
-            shutil.copy2(src, dst)
-        print(f"[build] Output: {dst}")
+        print(f"[build] Output: {src}")
     else:
         print(f"[build] Warning: expected output not found at {src}")
 
@@ -109,7 +101,7 @@ def build(args):
         f"  3. 浏览器访问 http://localhost:8787 进入 WebUI\n\n"
         f"配置文件: config.yaml (首次运行自动生成)\n"
         f"数据目录: data/ (首次运行自动创建)\n\n"
-        f"更多文档: https://github.com/anthropics/ssubb\n",
+        f"更多文档: https://github.com/Magnoliar/SSUBB\n",
         encoding="utf-8",
     )
 
@@ -129,7 +121,7 @@ def build(args):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Build SSUBB Coordinator with Nuitka")
+    parser = argparse.ArgumentParser(description="Build SSUBB Coordinator with PyInstaller")
     parser.add_argument("--onefile", action="store_true", help="Build as single file")
     parser.add_argument("--output-dir", default="dist/coordinator", help="Output directory")
     args = parser.parse_args()

@@ -58,14 +58,10 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install GCC (Linux)
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y gcc
-
       - name: Install dependencies
         run: |
           pip install -r coordinator/requirements.txt
-          pip install nuitka ordered-set
+          pip install pyinstaller
 
       - name: Build with Nuitka
         run: python scripts/build_coordinator.py --output-dir dist
