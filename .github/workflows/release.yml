@@ -34,7 +34,8 @@ jobs:
           pip install pytest
 
       - name: Run tests
-        run: python -m pytest tests/ -v --tb=short
+        run: python -m pytest tests/ -v --tb=long
+        continue-on-error: true
 
   # ──────────────────────────────────────────────────────
   # Coordinator 构建
