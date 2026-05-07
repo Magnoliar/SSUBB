@@ -65,7 +65,7 @@ jobs:
           pip install pyinstaller
 
       - name: Build with PyInstaller
-        run: python scripts/build_worker.py --output-dir dist
+        run: python scripts/build_worker.py --output-dir dist --cuda cuda12
 
       - name: Upload artifact
         if: success()
@@ -102,7 +102,7 @@ jobs:
           pip install pyinstaller
 
       - name: Build with PyInstaller
-        run: python scripts/build_worker.py --output-dir dist
+        run: python scripts/build_worker.py --output-dir dist --cuda cuda11
 
       - name: Upload artifact
         if: success()

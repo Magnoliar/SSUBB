@@ -38,7 +38,6 @@ def detect_cuda_version() -> str:
             capture_output=True, text=True, timeout=5,
         )
         if result.returncode == 0:
-            # 进一步检查 CUDA 版本
             result2 = subprocess.run(
                 ["nvidia-smi"],
                 capture_output=True, text=True, timeout=5,
@@ -56,7 +55,8 @@ def detect_cuda_version() -> str:
 def build(args):
     version = get_version()
     system = platform.system().lower()
-    cuda = detect_cuda_version()
+    # 优先使用命令行指定的 CUDA 版本，否则自动检测
+    cuda = args.cuda or detect_cuda_version()
     arch = "win64" if system == "windows" else "linux-x64"
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -246,6 +246,8 @@ def main():
     parser = argparse.ArgumentParser(description="Build SSUBB Worker with PyInstaller")
     parser.add_argument("--onefile", action="store_true", help="Build as single file")
     parser.add_argument("--output-dir", default="dist/worker", help="Output directory")
+    parser.add_argument("--cuda", choices=["cuda11", "cuda12", "cpu"], default=None,
+                        help="CUDA version (auto-detect if not specified)")
     args = parser.parse_args()
     build(args)
 
