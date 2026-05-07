@@ -176,10 +176,26 @@ async def lifespan(app: FastAPI):
     logger.info(f"SSUBB Coordinator v{VERSION} 启动")
 
     if not SETUP_REQUIRED:
+        tokens_generated = False
         if not config.security.api_token:
-            logger.warning("⚠️ API Token 未配置，所有接口均无认证保护！建议在 security.api_token 中设置强密码")
+            import secrets
+            new_token = secrets.token_urlsafe(32)
+            config.security.api_token = new_token
+            tokens_generated = True
+            logger.info(f"🔑 已自动生成 API Token: {new_token}")
+            logger.info("   请妥善保存此 Token，WebUI 登录时需要使用")
         if not config.security.worker_token:
-            logger.warning("⚠️ Worker Token 未配置，Worker 回调无认证保护！建议在 security.worker_token 中设置强密码")
+            import secrets
+            new_token = secrets.token_urlsafe(32)
+            config.security.worker_token = new_token
+            tokens_generated = True
+            logger.info(f"🔑 已自动生成 Worker Token: {new_token}")
+            logger.info("   Worker 端配置此 Token 才能连接 Coordinator")
+        if tokens_generated:
+            from .config import save_config
+            cfg_dict = config.model_dump()
+            save_config(cfg_dict)
+            logger.info("✅ Token 已写入 config.yaml，重启后仍有效")
 
     if SETUP_REQUIRED:
         logger.warning("未检测到配置文件或 Worker 配置，进入 Setup 引导模式")
@@ -292,13 +308,101 @@ app = FastAPI(
 
 # CORS 中间件（在路由定义之前添加）
 from fastapi.middleware.cors import CORSMiddleware
+_cors_origins = config.security.cors_origins
+if not _cors_origins:
+    _cors_origins = [f"http://localhost:{config.port}", f"http://127.0.0.1:{config.port}"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=config.security.cors_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=_cors_origins,
+    allow_credentials=("*" not in _cors_origins),
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Content-Type", "Authorization", "X-Worker-Token"],
 )
+
+# 速率限制中间件
+import time as _time
+from collections import defaultdict as _defaultdict
+
+_rate_limits = {
+    "POST": (60, 60),    # POST: 60次/分钟
+    "PUT": (30, 60),     # PUT: 30次/分钟
+    "DELETE": (20, 60),  # DELETE: 20次/分钟
+}
+_rate_store: dict[str, list[float]] = _defaultdict(list)
+
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    """基于 IP 的速率限制"""
+    method = request.method
+    if method not in _rate_limits:
+        return await call_next(request)
+
+    # 跳过静态文件和 WebSocket
+    path = request.url.path
+    if path.startswith("/static") or path == "/ws/logs":
+        return await call_next(request)
+
+    client_ip = request.client.host if request.client else "unknown"
+    max_requests, window = _rate_limits[method]
+    now = _time.time()
+    key = f"{client_ip}:{method}"
+
+    # 清理过期记录
+    _rate_store[key] = [t for t in _rate_store[key] if now - t < window]
+
+    if len(_rate_store[key]) >= max_requests:
+        return JSONResponse(
+            status_code=429,
+            content={"detail": f"请求过于频繁，请 {window} 秒后重试"},
+            headers={"Retry-After": str(window)},
+        )
+
+    _rate_store[key].append(now)
+    return await call_next(request)
+
+
+# =============================================================================
+# 路径安全校验
+# =============================================================================
+
+def _validate_media_path(media_path: str):
+    """校验 media_path 是否在允许的目录范围内"""
+    from pathlib import Path
+    if not media_path:
+        raise HTTPException(status_code=400, detail="media_path 不能为空")
+
+    target = Path(media_path).resolve()
+    scan_paths = config.automation.scan_paths if config.automation else []
+
+    # 如果配置了 scan_paths，限制在范围内
+    if scan_paths:
+        allowed = False
+        for sp in scan_paths:
+            sp_resolved = Path(sp).resolve()
+            try:
+                target.relative_to(sp_resolved)
+                allowed = True
+                break
+            except ValueError:
+                continue
+        if not allowed:
+            raise HTTPException(
+                status_code=403,
+                detail=f"路径不在允许的媒体库目录范围内: {media_path}",
+            )
+
+    # 通用黑名单路径
+    blocked = {"/etc", "/proc", "/sys", "/dev", "C:\\Windows", "C:\\System32"}
+    target_str = str(target)
+    for b in blocked:
+        if target_str.startswith(b) or target_str.lower().startswith(b.lower()):
+            raise HTTPException(status_code=403, detail=f"禁止访问系统路径")
+
+    # 视频扩展名校验
+    from shared.constants import VIDEO_EXTENSIONS
+    if target.suffix.lower() not in VIDEO_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"不支持的文件类型: {target.suffix}")
 
 
 # =============================================================================
@@ -310,6 +414,7 @@ async def create_task(req: TaskCreate):
     """创建字幕任务 (MoviePilot / 手动触发)"""
     if SETUP_REQUIRED:
         raise HTTPException(status_code=503, detail="系统未配置，请访问控制台完成初始化")
+    _validate_media_path(req.media_path)
     task = await task_manager.create_task(req)
     return task
 
@@ -319,6 +424,7 @@ async def force_regenerate(media_path: str, target_lang: str = "zh"):
     """强制重新生成字幕 (忽略所有跳过逻辑)"""
     if SETUP_REQUIRED:
         raise HTTPException(status_code=503, detail="系统未配置，请访问控制台完成初始化")
+    _validate_media_path(media_path)
     task = await task_manager.force_regenerate(media_path, target_lang)
     return task
 
@@ -897,6 +1003,115 @@ async def toggle_automation(enabled: bool = True):
 
 
 # =============================================================================
+# 媒体资源列表 API
+# =============================================================================
+
+@app.get("/api/media/list", tags=["媒体库"])
+async def list_media(
+    filter_type: str = "all",
+    page: int = 1,
+    page_size: int = 50,
+):
+    """获取媒体资源列表，含字幕状态"""
+    from pathlib import Path
+    from shared.constants import VIDEO_EXTENSIONS, SUBTITLE_EXTENSIONS
+
+    config = load_config()
+    scan_paths = config.automation.scan_paths if config.automation else []
+
+    if not scan_paths:
+        return {"items": [], "total": 0, "scan_paths": []}
+
+    items = []
+    for scan_dir in scan_paths:
+        scan_dir_path = Path(scan_dir)
+        if not scan_dir_path.is_dir():
+            continue
+        _collect_media_recursive(scan_dir_path, items, config.automation.scan_recursive)
+
+    # 过滤
+    if filter_type == "missing":
+        items = [i for i in items if not i["has_chinese_sub"]]
+    elif filter_type == "has_sub":
+        items = [i for i in items if i["has_chinese_sub"]]
+
+    total = len(items)
+    start = (page - 1) * page_size
+    end = start + page_size
+
+    return {
+        "items": items[start:end],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "scan_paths": scan_paths,
+    }
+
+
+def _collect_media_recursive(directory: Path, items: list, recursive: bool = True):
+    """递归收集媒体文件及字幕状态"""
+    from shared.constants import VIDEO_EXTENSIONS, SUBTITLE_EXTENSIONS
+
+    try:
+        for entry in os.scandir(directory):
+            if entry.is_dir() and recursive:
+                if entry.name.startswith(".") or entry.name.startswith("@"):
+                    continue
+                if entry.name.lower() in {"subtitles", "subs", "extras", "featurettes"}:
+                    continue
+                _collect_media_recursive(Path(entry.path), items, recursive)
+
+            elif entry.is_file():
+                suffix = Path(entry.name).suffix.lower()
+                if suffix not in VIDEO_EXTENSIONS:
+                    continue
+
+                video_path = Path(entry.path)
+                stem = video_path.stem
+
+                # 查找同目录下同名的字幕文件
+                subtitle_files = []
+                has_chinese = False
+                for sub_file in video_path.parent.iterdir():
+                    if sub_file.is_file() and sub_file.suffix.lower() in SUBTITLE_EXTENSIONS:
+                        if sub_file.stem.startswith(stem):
+                            lang = "unknown"
+                            sub_stem_lower = sub_file.stem.lower()
+                            if ".chi" in sub_stem_lower or ".zh" in sub_stem_lower or ".chs" in sub_stem_lower or ".cht" in sub_stem_lower:
+                                lang = "zh"
+                                has_chinese = True
+                            elif ".eng" in sub_stem_lower or ".en" in sub_stem_lower:
+                                lang = "en"
+                            elif ".ssubb" in sub_stem_lower:
+                                lang = "zh"
+                                has_chinese = True
+                            subtitle_files.append({
+                                "path": str(sub_file),
+                                "name": sub_file.name,
+                                "lang": lang,
+                            })
+
+                try:
+                    stat = entry.stat()
+                    size_mb = round(stat.st_size / (1024 * 1024), 1)
+                except OSError:
+                    size_mb = 0
+
+                items.append({
+                    "path": str(video_path),
+                    "name": video_path.name,
+                    "stem": stem,
+                    "size_mb": size_mb,
+                    "suffix": video_path.suffix.lower(),
+                    "subtitles": subtitle_files,
+                    "has_chinese_sub": has_chinese,
+                    "parent": str(video_path.parent),
+                })
+    except PermissionError:
+        pass
+
+
+# =============================================================================
 # Worker 管理 API
 # =============================================================================
 
@@ -1142,6 +1357,7 @@ class ConfigUpdateRequest(BaseModel):
     translate: Optional[dict] = None
     optimize: Optional[dict] = None
     annotation: Optional[dict] = None
+    transcribe: Optional[dict] = None
 
 
 @app.get("/api/config", tags=["配置"])
@@ -1196,6 +1412,11 @@ async def update_config(req: ConfigUpdateRequest):
         if req.notifications is not None:
             cfg_dict["notifications"] = req.notifications
         if req.llm_providers is not None:
+            # Preserve real API keys when frontend sends masked '***'
+            existing_keys = {i: p.get("api_key", "") for i, p in enumerate(cfg_dict.get("llm_providers", []))}
+            for i, p in enumerate(req.llm_providers):
+                if p.get("api_key") == "***" and i in existing_keys:
+                    p["api_key"] = existing_keys[i]
             cfg_dict["llm_providers"] = req.llm_providers
         if req.translate is not None:
             cfg_dict.setdefault("translate", {}).update(req.translate)
@@ -1203,6 +1424,8 @@ async def update_config(req: ConfigUpdateRequest):
             cfg_dict.setdefault("optimize", {}).update(req.optimize)
         if req.annotation is not None:
             cfg_dict.setdefault("annotation", {}).update(req.annotation)
+        if req.transcribe is not None:
+            cfg_dict.setdefault("transcribe", {}).update(req.transcribe)
 
         save_config(cfg_dict)
         config = load_config()
@@ -1216,10 +1439,79 @@ async def update_config(req: ConfigUpdateRequest):
             global_config["translate"] = req.translate
         if req.optimize is not None:
             global_config["optimize"] = req.optimize
+        if req.transcribe is not None:
+            global_config["transcribe"] = req.transcribe
         if global_config and task_manager and hasattr(task_manager, 'registry'):
             await _push_config_to_workers(global_config)
 
     return APIResponse(success=True, message="配置已保存并热重载")
+
+
+@app.get("/api/whisper/models", tags=["配置"])
+async def list_whisper_models():
+    """列出 Whisper 模型及本地状态"""
+    import shutil
+    models = [
+        {"id": "tiny", "name": "Tiny", "size_mb": 75, "vram_mb": 100, "speed": "极快", "quality": "低"},
+        {"id": "base", "name": "Base", "size_mb": 142, "vram_mb": 200, "speed": "很快", "quality": "一般"},
+        {"id": "small", "name": "Small", "size_mb": 466, "vram_mb": 500, "speed": "快", "quality": "良好"},
+        {"id": "medium", "name": "Medium", "size_mb": 1500, "vram_mb": 1500, "speed": "中等", "quality": "很好"},
+        {"id": "large-v3", "name": "Large V3", "size_mb": 3100, "vram_mb": 3000, "speed": "慢", "quality": "最佳"},
+        {"id": "large-v3-turbo", "name": "Large V3 Turbo", "size_mb": 1500, "vram_mb": 1500, "speed": "较快", "quality": "接近最佳"},
+    ]
+
+    # 检查本地缓存目录
+    cache_dirs = [
+        Path.home() / ".cache" / "huggingface" / "hub",
+        Path.home() / ".cache" / "whisper",
+        Path("./models"),
+    ]
+
+    for m in models:
+        m["downloaded"] = False
+        m["local_path"] = ""
+        for cache_dir in cache_dirs:
+            if not cache_dir.exists():
+                continue
+            # 检查 faster-whisper 模型目录
+            for item in cache_dir.iterdir():
+                if item.is_dir() and m["id"] in item.name.lower():
+                    # 检查是否有模型文件
+                    if any(item.rglob("*.bin")) or any(item.rglob("model.safetensors")):
+                        m["downloaded"] = True
+                        m["local_path"] = str(item)
+                        break
+            if m["downloaded"]:
+                break
+
+    return {"models": models}
+
+
+@app.post("/api/llm/test", tags=["配置"])
+async def test_llm_provider(req: dict):
+    """测试 LLM 提供商连通性"""
+    import time as _time
+    api_base = req.get("api_base", "")
+    api_key = req.get("api_key", "")
+    model = req.get("model", "gpt-4o-mini")
+    if not api_base or not api_key:
+        return {"ok": False, "error": "缺少 api_base 或 api_key"}
+    try:
+        import httpx
+        t0 = _time.time()
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                f"{api_base}/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json={"model": model, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 1},
+            )
+            latency = int((_time.time() - t0) * 1000)
+            if resp.status_code == 200:
+                return {"ok": True, "latency_ms": latency}
+            else:
+                return {"ok": False, "error": f"HTTP {resp.status_code}: {resp.text[:200]}"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 
 # =============================================================================

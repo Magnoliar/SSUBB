@@ -313,24 +313,59 @@
             .stage-node { min-height: 32px; display: inline-flex; align-items: center; }
             .right-panel { order: -1; }
         }
+
+        /* Tab content transitions */
+        .tab-content-enter-active { animation: tabFadeIn 0.2s ease-out; }
+        @keyframes tabFadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Sidebar active indicator glow */
+        aside nav button[class*="border-r-2"] {
+            box-shadow: inset 3px 0 12px -4px var(--accent-amber-glow);
+        }
     </style>
 </head>
-<body class="p-4 md:p-8">
+<body class="p-0">
 
-<div id="app" class="max-w-7xl mx-auto" v-cloak>
+<div id="app" class="flex h-screen overflow-hidden" v-cloak>
+    <!-- Sidebar -->
+    <aside class="w-56 flex-shrink-0 bg-[var(--bg-surface)] border-r border-[var(--border-dim)] flex flex-col">
+        <div class="px-5 py-5 border-b border-[var(--border-dim)]">
+            <div class="flex items-center gap-3">
+                <i class="fa-solid fa-closed-captioning text-xl gradient-text"></i>
+                <div>
+                    <div class="font-bold tracking-wide gradient-text">SSUBB</div>
+                    <div class="mono text-[10px] text-[var(--text-muted)]">v{{ sysInfo.version || '1.0.0' }}</div>
+                </div>
+            </div>
+        </div>
+        <nav class="flex-1 py-3">
+            <button v-for="tab in mainTabs" :key="tab.key"
+                @click="currentTab = tab.key"
+                class="w-full flex items-center gap-3 px-5 py-2.5 text-sm transition-all"
+                :class="currentTab === tab.key ? 'text-[var(--accent-amber)] bg-[var(--accent-amber-dim)] border-r-2 border-[var(--accent-amber)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]'">
+                <i :class="tab.icon" class="w-5 text-center"></i>
+                <span>{{ tab.label }}</span>
+            </button>
+        </nav>
+        <div class="px-5 py-4 border-t border-[var(--border-dim)] text-[10px] text-[var(--text-muted)]">
+            <a href="https://github.com/Magnoliar/SSUBB" target="_blank" class="flex items-center gap-2 hover:text-[var(--text-secondary)] transition-colors mb-1">
+                <i class="fa-brands fa-github"></i> GitHub
+            </a>
+            <div>Distributed Subtitle Intelligence</div>
+        </div>
+    </aside>
+
+    <!-- Main Area -->
+    <div class="flex-1 flex flex-col overflow-hidden">
     <!-- Header -->
-    <header class="flex flex-col md:flex-row justify-between items-center mb-6 glass-panel px-6 py-5">
-        <div class="flex items-center space-x-4 mb-4 md:mb-0">
-            <div class="p-2.5 border border-[var(--border-dim)] rounded-sm">
-                <i class="fa-solid fa-closed-captioning text-2xl gradient-text"></i>
-            </div>
-            <div>
-                <h1 class="text-xl font-bold tracking-wide">
-                    <span class="gradient-text">SSUBB</span>
-                    <span class="mono font-light text-[var(--text-muted)] text-xs ml-2">v{{ sysInfo.version || '0.1.0' }}</span>
-                </h1>
-                <p class="text-xs text-[var(--text-muted)] tracking-wider uppercase mt-0.5">Distributed Subtitle Intelligence</p>
-            </div>
+    <header class="flex justify-between items-center px-6 py-3 bg-[var(--bg-surface)] border-b border-[var(--border-dim)]">
+        <!-- 左侧：当前 tab 标题 -->
+        <div class="text-lg font-semibold">
+            <i :class="mainTabs.find(t => t.key === currentTab)?.icon" class="mr-2 text-[var(--accent-amber)]"></i>
+            {{ mainTabs.find(t => t.key === currentTab)?.label }}
         </div>
 
         <div class="flex items-center space-x-3">
@@ -374,63 +409,225 @@
                 <i :class="viewMode === 'advanced' ? 'fa-solid fa-wrench' : 'fa-solid fa-eye'"></i>
             </button>
             <!-- 设置 -->
-            <button @click="openSettings" class="p-2 rounded-sm border border-[var(--border-dim)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--accent-amber)] transition-all text-xs" title="设置">
+            <button @click="currentTab = 'settings'" class="p-2 rounded-sm border border-[var(--border-dim)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--accent-amber)] transition-all text-xs" title="设置">
                 <i class="fa-solid fa-gear"></i>
             </button>
         </div>
-
-        <!-- Node Status Strip -->
-        <div class="flex items-center gap-6 mt-4 md:mt-0">
-            <div class="flex items-center gap-2" title="Coordinator 任务调度节点状态">
-                <span class="status-dot online"></span>
-                <span class="mono text-xs text-[var(--accent-green)] glow-text">COORDINATOR</span>
-            </div>
-            <template v-for="(w, idx) in (sysInfo.workers || [])" :key="w.url">
-                <div class="w-px h-4 bg-[var(--border-dim)]"></div>
-                <div class="flex items-center gap-2">
-                    <span :class="w.online ? 'status-dot online' : 'status-dot offline'"></span>
-                    <span class="mono text-xs" :class="w.online ? 'text-[var(--accent-green)]' : 'text-[var(--accent-red)]'">
-                        {{ w.online ? (w.heartbeat?.gpu_name || w.worker_id || 'WORKER') : 'OFFLINE' }}
-                    </span>
-                </div>
-            </template>
-            <template v-if="!(sysInfo.workers?.length) && sysInfo.worker">
-                <div class="w-px h-4 bg-[var(--border-dim)]"></div>
-                <div class="flex items-center gap-2">
-                    <span :class="sysInfo.worker.online ? 'status-dot online' : 'status-dot offline'"></span>
-                    <span class="mono text-xs" :class="sysInfo.worker.online ? 'text-[var(--accent-green)]' : 'text-[var(--accent-red)]'">
-                        {{ sysInfo.worker.online ? (sysInfo.worker.heartbeat?.gpu_name || 'GPU WORKER') : 'OFFLINE' }}
-                    </span>
-                </div>
-            </template>
-        </div>
     </header>
 
-    <!-- System Health Strip -->
-    <div class="glass-panel px-5 py-3 mb-6 flex flex-wrap items-center gap-4 text-xs" role="region" aria-label="系统健康状态">
-        <div class="flex items-center gap-1.5">
-            <span class="status-dot online"></span>
-            <span class="text-[var(--text-primary)]">Coordinator</span>
-        </div>
-        <template v-for="w in (sysInfo.workers || [])" :key="w.url">
-            <div class="flex items-center gap-1.5 cursor-pointer hover:opacity-80" @click="openWorkerDetail(w)" :title="w.worker_id || w.url">
-                <span class="status-dot" :class="w.online ? 'online' : 'offline'"></span>
-                <span class="text-[var(--text-primary)]">{{ w.worker_id || w.url }}</span>
-                <span v-if="w.heartbeat && w.heartbeat.gpu_utilization != null" class="text-[var(--text-muted)]">({{ w.heartbeat.gpu_utilization }}%)</span>
+    <!-- Scrollable Content Area -->
+    <div class="flex-1 overflow-y-auto px-6 py-5">
+
+    <!-- ═══ Dashboard Tab ═══ -->
+    <div v-show="currentTab === 'dashboard'" class="tab-content-enter-active">
+        <!-- Status Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+            <!-- Worker Cluster Card (merged with Coordinator info) -->
+            <div class="glass-panel p-5 cursor-pointer hover:border-[var(--accent-blue)]/30 transition-all group" @click="goToSettings('workers')">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs text-[var(--text-muted)] uppercase tracking-wider">Worker 集群</span>
+                    <i class="fa-solid fa-server text-[var(--accent-blue)] group-hover:translate-x-0.5 transition-transform"></i>
+                </div>
+                <div class="text-lg font-bold text-[var(--text-primary)]">{{ onlineCount }}<span class="text-sm font-normal text-[var(--text-muted)]">/{{ (sysInfo.workers || []).length }} 在线</span></div>
+                <div class="text-xs text-[var(--text-secondary)] mt-1">
+                    <span class="text-[var(--accent-green)]">Coordinator v{{ sysInfo.version || '1.0.0' }}</span>
+                    <span class="text-[var(--text-muted)] mx-1.5">·</span>
+                    <template v-if="sysInfo.workers && sysInfo.workers.length > 0">
+                        <template v-for="(w, i) in sysInfo.workers" :key="w.url">
+                            <span :class="w.online ? 'text-[var(--accent-green)]' : 'text-[var(--accent-red)]'">{{ w.alias || w.worker_id || 'W' + (i+1) }}</span><span v-if="i < sysInfo.workers.length - 1" class="text-[var(--text-muted)]"> / </span>
+                        </template>
+                    </template>
+                    <span v-else class="text-[var(--text-muted)]">未配置 Worker</span>
+                </div>
             </div>
-        </template>
-        <div class="flex items-center gap-1.5" v-if="!sysInfo.workers || sysInfo.workers.length === 0">
-            <span class="status-dot offline"></span>
-            <span class="text-[var(--text-muted)]">无 Worker</span>
+            <!-- Task Overview Card -->
+            <div class="glass-panel p-5 cursor-pointer hover:border-[var(--accent-amber)]/30 transition-all group" @click="currentTab = 'tasks'">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs text-[var(--text-muted)] uppercase tracking-wider">任务概览</span>
+                    <i class="fa-solid fa-list-check text-[var(--accent-amber)] group-hover:translate-x-0.5 transition-transform"></i>
+                </div>
+                <div class="flex items-end gap-3">
+                    <div>
+                        <div class="text-lg font-bold text-[var(--accent-green)]">{{ sysInfo.tasks_completed || 0 }}</div>
+                        <div class="text-[10px] text-[var(--text-muted)]">完成</div>
+                    </div>
+                    <div>
+                        <div class="text-lg font-bold text-[var(--accent-cyan)]">{{ sysInfo.tasks_active || 0 }}</div>
+                        <div class="text-[10px] text-[var(--text-muted)]">进行中</div>
+                    </div>
+                    <div>
+                        <div class="text-lg font-bold text-[var(--accent-amber)]">{{ sysInfo.tasks_pending || 0 }}</div>
+                        <div class="text-[10px] text-[var(--text-muted)]">排队</div>
+                    </div>
+                    <div>
+                        <div class="text-lg font-bold text-[var(--accent-red)]">{{ sysInfo.tasks_failed || 0 }}</div>
+                        <div class="text-[10px] text-[var(--text-muted)]">失败</div>
+                    </div>
+                </div>
+            </div>
+            <!-- LLM Status Card -->
+            <div class="glass-panel p-5 cursor-pointer hover:border-[var(--accent-purple)]/30 transition-all group" @click="goToSettings('llm')">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs text-[var(--text-muted)] uppercase tracking-wider">LLM 提供商</span>
+                    <i class="fa-solid fa-brain text-[var(--accent-purple)] group-hover:translate-x-0.5 transition-transform"></i>
+                </div>
+                <div class="text-lg font-bold text-[var(--text-primary)]">{{ (configForm.llm_providers || []).filter(p => p.enabled !== false).length }}<span class="text-sm font-normal text-[var(--text-muted)]"> 个启用</span></div>
+                <div class="text-xs text-[var(--text-secondary)] mt-1 truncate">
+                    <template v-if="(configForm.llm_providers || []).length > 0">
+                        {{ configForm.llm_providers.map(p => p.name || p.model || '未命名').join(' / ') }}
+                    </template>
+                    <span v-else class="text-[var(--text-muted)]">点击配置 LLM 提供商</span>
+                </div>
+            </div>
+            <!-- Quick Submit Card -->
+            <div class="glass-panel p-5 cursor-pointer hover:border-[var(--accent-amber)]/30 transition-all group" @click="currentTab = 'tasks'">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs text-[var(--text-muted)] uppercase tracking-wider">快速操作</span>
+                    <i class="fa-solid fa-paper-plane text-[var(--accent-amber)] group-hover:translate-x-0.5 transition-transform"></i>
+                </div>
+                <div class="text-sm font-medium text-[var(--text-primary)]">提交新任务</div>
+                <div class="text-xs text-[var(--text-secondary)] mt-1">点击切换到任务面板</div>
+            </div>
         </div>
-        <div class="ml-auto flex items-center gap-4 text-[var(--text-secondary)]">
-            <span title="排队中"><i class="fa-solid fa-hourglass-half text-[var(--accent-amber)] mr-1"></i>{{ sysInfo.tasks_pending || 0 }}</span>
-            <span title="计算中"><i class="fa-solid fa-microchip text-[var(--accent-cyan)] mr-1"></i>{{ sysInfo.tasks_active || 0 }}</span>
-            <span title="已完成"><i class="fa-solid fa-check text-[var(--accent-green)] mr-1"></i>{{ sysInfo.tasks_completed || 0 }}</span>
-            <span title="失败"><i class="fa-solid fa-xmark text-[var(--accent-red)] mr-1"></i>{{ sysInfo.tasks_failed || 0 }}</span>
+
+        <!-- Worker Detail Cards -->
+        <div v-if="sysInfo.workers && sysInfo.workers.length > 0" class="mb-6">
+            <h3 class="text-sm font-medium text-[var(--text-secondary)] mb-3"><i class="fa-solid fa-server mr-2 text-[var(--accent-blue)]"></i>Worker 节点</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                <div v-for="w in (sysInfo.workers || [])" :key="w.url"
+                    class="glass-panel p-4 cursor-pointer hover:border-[var(--accent-cyan)]/30 transition-all"
+                    :class="w.online ? '' : 'opacity-60'"
+                    @click="openWorkerDetail(w)">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center gap-2">
+                            <span class="status-dot" :class="w.online ? 'online' : 'offline'"></span>
+                            <span class="font-medium text-sm" :class="w.online ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'">
+                                {{ w.alias || w.worker_id || w.url }}
+                            </span>
+                        </div>
+                        <span class="text-[10px] px-1.5 py-0.5 rounded" :class="w.online ? 'bg-[var(--accent-green)]/10 text-[var(--accent-green)]' : 'bg-[var(--accent-red)]/10 text-[var(--accent-red)]'">
+                            {{ w.online ? '在线' : '离线' }}
+                        </span>
+                    </div>
+                    <template v-if="w.online && w.heartbeat">
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div>
+                                <span class="text-[var(--text-muted)]">GPU</span>
+                                <span class="text-[var(--text-primary)] ml-1">{{ w.heartbeat.gpu_utilization || 0 }}%</span>
+                            </div>
+                            <div>
+                                <span class="text-[var(--text-muted)]">VRAM</span>
+                                <span class="text-[var(--text-primary)] ml-1">{{ ((w.heartbeat.vram_used_mb || 0) / 1024).toFixed(1) }}G</span>
+                            </div>
+                            <div>
+                                <span class="text-[var(--text-muted)]">任务</span>
+                                <span class="text-[var(--text-primary)] ml-1">{{ w.heartbeat.queue_length || 0 }}</span>
+                            </div>
+                            <div>
+                                <span class="text-[var(--text-muted)]">权重</span>
+                                <span class="text-[var(--text-primary)] ml-1">{{ w.weight }}</span>
+                            </div>
+                        </div>
+                        <div v-if="w.heartbeat.current_task_id" class="mt-2 text-[10px] text-[var(--accent-cyan)]">
+                            <i class="fa-solid fa-play mr-1"></i>处理中...
+                        </div>
+                    </template>
+                    <div v-else class="text-xs text-[var(--text-muted)]">
+                        <i class="fa-solid fa-plug-circle-xmark mr-1"></i>无连接信息
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Media Resource List -->
+        <div class="glass-panel overflow-hidden">
+            <div class="px-5 py-3 border-b border-[var(--border-dim)] flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <h3 class="text-sm font-medium"><i class="fa-solid fa-film mr-2 text-[var(--accent-amber)]"></i>影视资源</h3>
+                    <span class="text-xs text-[var(--text-muted)]">{{ mediaTotal }} 项</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button v-for="f in [{key:'all',label:'全部'},{key:'missing',label:'缺字幕'},{key:'has_sub',label:'已有字幕'}]"
+                        :key="f.key" @click="mediaFilter = f.key; mediaPage = 1; fetchMediaList()"
+                        class="px-2.5 py-1 text-[10px] rounded-sm border transition-all"
+                        :class="mediaFilter === f.key ? 'border-[var(--accent-amber)] text-[var(--accent-amber)] bg-[var(--accent-amber)]/10' : 'border-[var(--border-dim)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'">
+                        {{ f.label }}
+                    </button>
+                    <button @click="fetchMediaList()" class="ml-1 p-1.5 text-[var(--text-muted)] hover:text-[var(--accent-cyan)] transition-colors" title="刷新">
+                        <i class="fa-solid fa-rotate-right text-xs" :class="mediaLoading ? 'animate-spin' : ''"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- No scan paths configured -->
+            <div v-if="mediaScanPaths.length === 0 && !mediaLoading" class="px-6 py-10 text-center">
+                <i class="fa-solid fa-folder-open text-2xl text-[var(--text-muted)] mb-2"></i>
+                <p class="text-xs text-[var(--text-muted)] mb-2">未配置媒体库路径</p>
+                <button @click="goToSettings('media')" class="text-xs text-[var(--accent-cyan)] hover:underline">前往配置 →</button>
+            </div>
+
+            <!-- Loading -->
+            <div v-else-if="mediaLoading && mediaList.length === 0" class="px-6 py-10 text-center">
+                <i class="fa-solid fa-circle-notch fa-spin text-xl text-[var(--accent-cyan)]"></i>
+            </div>
+
+            <!-- Empty -->
+            <div v-else-if="mediaList.length === 0 && !mediaLoading" class="px-6 py-10 text-center">
+                <i class="fa-solid fa-check-circle text-2xl text-[var(--accent-green)] mb-2"></i>
+                <p class="text-xs text-[var(--text-muted)]">当前筛选条件下没有媒体文件</p>
+            </div>
+
+            <!-- Media items -->
+            <div v-else class="divide-y divide-[var(--border-dim)] max-h-[360px] overflow-y-auto">
+                <div v-for="item in mediaList" :key="item.path"
+                    class="px-5 py-2.5 flex items-center gap-3 hover:bg-[var(--bg-elevated)]/50 transition-colors group">
+                    <i class="fa-solid fa-file-video text-[var(--accent-amber)] text-sm opacity-60"></i>
+                    <div class="flex-1 min-w-0">
+                        <div class="text-xs text-[var(--text-primary)] truncate">{{ item.name }}</div>
+                        <div class="text-[10px] text-[var(--text-muted)] mt-0.5">
+                            {{ item.size_mb }} MB
+                            <span v-if="item.subtitles.length > 0" class="ml-2">
+                                <span v-for="(sub, si) in item.subtitles" :key="si"
+                                    class="inline-block px-1 py-0 mr-1 rounded text-[9px]"
+                                    :class="sub.lang === 'zh' ? 'bg-[var(--accent-green)]/15 text-[var(--accent-green)]' : 'bg-[var(--accent-cyan)]/15 text-[var(--accent-cyan)]'">
+                                    {{ sub.lang === 'zh' ? '中文' : sub.lang === 'en' ? 'EN' : sub.lang }}
+                                </span>
+                            </span>
+                        </div>
+                    </div>
+                    <span v-if="item.has_chinese_sub"
+                        class="text-[10px] px-1.5 py-0.5 rounded bg-[var(--accent-green)]/10 text-[var(--accent-green)] flex-shrink-0">
+                        有字幕
+                    </span>
+                    <span v-else
+                        class="text-[10px] px-1.5 py-0.5 rounded bg-[var(--accent-red)]/10 text-[var(--accent-red)] flex-shrink-0">
+                        无字幕
+                    </span>
+                    <button v-if="!item.has_chinese_sub"
+                        @click="submitMediaTask(item)"
+                        class="opacity-0 group-hover:opacity-100 text-[10px] px-2 py-1 rounded bg-[var(--accent-amber)]/10 text-[var(--accent-amber)] hover:bg-[var(--accent-amber)]/20 transition-all flex-shrink-0">
+                        <i class="fa-solid fa-wand-magic-sparkles mr-1"></i>生成字幕
+                    </button>
+                </div>
+            </div>
+
+            <!-- Pagination -->
+            <div v-if="mediaTotal > 50" class="px-5 py-2 border-t border-[var(--border-dim)] flex items-center justify-between">
+                <span class="text-[10px] text-[var(--text-muted)]">第 {{ mediaPage }} 页 / 共 {{ Math.ceil(mediaTotal / 50) }} 页</span>
+                <div class="flex gap-1">
+                    <button @click="mediaPage > 1 && (mediaPage--, fetchMediaList())"
+                        class="px-2 py-0.5 text-[10px] border border-[var(--border-dim)] rounded-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30"
+                        :disabled="mediaPage <= 1">上一页</button>
+                    <button @click="mediaPage < Math.ceil(mediaTotal / 50) && (mediaPage++, fetchMediaList())"
+                        class="px-2 py-0.5 text-[10px] border border-[var(--border-dim)] rounded-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30"
+                        :disabled="mediaPage >= Math.ceil(mediaTotal / 50)">下一页</button>
+                </div>
+            </div>
         </div>
     </div>
 
+    <!-- ═══ Tasks Tab ═══ -->
+    <div v-show="currentTab === 'tasks'" class="tab-content-enter-active">
     <!-- Main Content -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
@@ -458,7 +655,7 @@
                     <button @click="fetchData" class="text-[var(--text-secondary)] hover:text-white transition-colors" title="刷新">
                         <i class="fa-solid fa-rotate-right" :class="{'fa-spin': loading}"></i>
                     </button>
-                    <button @click="openSettings" class="text-[var(--text-secondary)] hover:text-white transition-colors" title="设置">
+                    <button @click="currentTab = 'settings'" class="text-[var(--text-secondary)] hover:text-white transition-colors" title="设置">
                         <i class="fa-solid fa-gear text-lg"></i>
                     </button>
                 </div>
@@ -496,14 +693,29 @@
                                     <div v-if="viewMode === 'advanced'" class="text-xs text-[var(--text-muted)] mt-1 truncate max-w-xs font-mono">{{ task.id }}</div>
                                 </td>
                                 <td class="px-6 py-4 w-4/12">
-                                    <div class="flex justify-between text-xs mb-1">
+                                    <div class="flex justify-between text-xs mb-1.5">
                                         <span :class="getStatusColor(task.status)">{{ getStatusLabel(task.status) }}</span>
-                                        <span class="text-[var(--text-secondary)] text-[10px]"><span v-if="task.target_lang">{{ task.source_lang }}→{{ task.target_lang }}</span></span>
+                                        <span class="mono text-[10px] text-[var(--text-secondary)]">{{ task.progress || 0 }}%</span>
                                     </div>
-                                    <div class="w-full bg-[var(--bg-elevated)] rounded-full h-1.5 mb-1 overflow-hidden">
-                                        <div class="h-1.5 rounded-full progress-bar-fill" :style="`width: ${task.progress || 0}%`" :class="getBarColor(task.status)"></div>
+                                    <!-- Segmented progress bar -->
+                                    <div class="flex gap-0.5 mb-1.5 h-1.5">
+                                        <div v-for="stage in pipelineStages" :key="stage.key"
+                                            class="rounded-full transition-all duration-500"
+                                            :class="getStageBarClass(task, stage.key)"
+                                            :style="{flex: stage.key === getCurrentStageKey(task) ? '2' : '1'}">
+                                        </div>
                                     </div>
-                                    <div class="text-[10px] text-[var(--text-secondary)] truncate" :title="task.error_msg" v-if="task.error_msg">
+                                    <div class="flex justify-between items-center text-[10px]">
+                                        <span class="text-[var(--text-secondary)]">
+                                            <span v-if="task.target_lang" class="mr-2">{{ task.source_lang }}→{{ task.target_lang }}</span>
+                                            <span v-if="isTaskRunning(task.status)" class="text-[var(--accent-cyan)]">{{ getCurrentStageLabel(task) }}</span>
+                                        </span>
+                                        <span class="text-[var(--text-muted)] mono">
+                                            <span v-if="task.started_at && isTaskRunning(task.status)">{{ getElapsed(task.started_at) }}</span>
+                                            <span v-if="task.estimated_remaining && isTaskRunning(task.status)"> / ~{{ formatDuration(task.estimated_remaining) }}</span>
+                                        </span>
+                                    </div>
+                                    <div class="text-[10px] text-[var(--text-secondary)] truncate mt-1" :title="task.error_msg" v-if="task.error_msg">
                                         <span v-if="task.error_code && viewMode === 'advanced'" class="bg-[var(--accent-red)]/10 text-[var(--accent-red)] px-1 rounded mr-1">{{ task.error_code }}</span>
                                         {{ task.error_msg }}
                                     </div>
@@ -971,136 +1183,29 @@
             <div v-else class="text-[var(--text-muted)] italic">读取信号中...</div>
         </div>
     </div>
+    </div><!-- end tasks tab -->
 
-    <!-- File Browser Modal -->
-    <div v-if="showBrowser" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" @keydown.escape="showBrowser = false">
-        <div class="glass-panel w-full max-w-4xl flex flex-col h-[80vh] border border-[var(--border-dim)]">
-            <!-- Modal Header -->
-            <div class="p-4 border-b border-[var(--border-dim)] flex justify-between items-center bg-[var(--bg-panel)] rounded-t-sm">
-                <h3 class="font-bold text-lg"><i class="fa-solid fa-server mr-2 text-[var(--accent-cyan)]"></i>服务器文件系统</h3>
-                <button @click="showBrowser = false" class="text-[var(--text-secondary)] hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
-            </div>
-            
-            <!-- Address Bar -->
-            <div class="p-3 bg-[var(--bg-surface)] border-b border-[var(--border-dim)] flex items-center space-x-2">
-                <button @click="loadPath(browserData.parent_path)" :disabled="!browserData.parent_path" class="p-2 bg-[var(--bg-surface)] rounded hover:bg-[var(--bg-elevated)] disabled:opacity-50">
-                    <i class="fa-solid fa-arrow-up"></i>
-                </button>
-                <div class="flex-1 bg-black/30 px-3 py-2 rounded text-sm text-[var(--text-primary)] overflow-x-auto whitespace-nowrap border border-[var(--border-dim)] font-mono">
-                    {{ browserData.current_path || '根目录' }}
-                </div>
-                <button @click="loadPath(browserData.current_path)" class="p-2 bg-[var(--bg-surface)] rounded hover:bg-[var(--bg-elevated)] text-[var(--accent-cyan)]">
-                    <i class="fa-solid fa-rotate-right" :class="{'fa-spin': browsing}"></i>
-                </button>
-            </div>
-
-            <!-- File List -->
-            <div class="flex-1 overflow-y-auto p-2 bg-black/20">
-                <div v-if="browsing" class="flex justify-center items-center h-full text-[var(--accent-blue)] text-2xl">
-                    <i class="fa-solid fa-circle-notch fa-spin"></i>
-                </div>
-                <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                    <!-- Directories -->
-                    <div v-for="d in browserData.dirs" :key="'d-'+d" @click="loadPath((browserData.current_path ? browserData.current_path + '/' : '') + d)" 
-                        class="flex items-center p-3 rounded hover:bg-[var(--text-primary)]/5 cursor-pointer transition-colors border border-transparent hover:border-[var(--border-dim)]">
-                        <i class="fa-solid fa-folder text-[var(--accent-amber)] text-xl mr-3 w-6 text-center"></i>
-                        <span class="truncate text-sm font-medium">{{ d }}</span>
-                    </div>
-                    <!-- Files -->
-                    <div v-for="f in browserData.files" :key="'f-'+f.name" @click="selectFile((browserData.current_path ? browserData.current_path + '/' : '') + f.name)"
-                        class="flex items-center p-3 rounded hover:bg-[var(--accent-cyan)]/15 cursor-pointer transition-colors border border-transparent hover:border-[var(--accent-cyan)]/30 group">
-                        <i class="fa-solid fa-file-video text-[var(--accent-cyan)] text-xl mr-3 w-6 text-center group-hover:text-[var(--accent-cyan)]"></i>
-                        <div class="flex-1 min-w-0">
-                            <div class="truncate text-sm font-light text-[var(--text-primary)] group-hover:text-white">{{ f.name }}</div>
-                            <div class="text-[10px] text-[var(--text-muted)] mt-0.5">{{ f.size_mb }} MB</div>
-                        </div>
-                    </div>
-                    
-                    <!-- Empty State -->
-                    <div v-if="browserData.dirs?.length === 0 && browserData.files?.length === 0" class="col-span-full py-12 text-center text-[var(--text-muted)]">
-                        <i class="fa-regular fa-folder-open text-4xl mb-3 opacity-50"></i>
-                        <p>该文件夹为空或没有可处理的视频</p>
-                    </div>
-                </div>
+    <!-- ═══ Settings Tab ═══ -->
+    <div v-show="currentTab === 'settings'" class="tab-content-enter-active">
+        <!-- Loading state -->
+        <div v-if="Object.keys(configForm).length === 0" class="flex items-center justify-center py-20">
+            <div class="text-center">
+                <i class="fa-solid fa-circle-notch fa-spin text-3xl text-[var(--accent-cyan)] mb-3"></i>
+                <p class="text-sm text-[var(--text-secondary)]">加载配置中...</p>
             </div>
         </div>
-    </div>
-
-    <!-- Toast 通知容器 -->
-    <div class="toast-container">
-        <div v-for="t in toasts" :key="t.id" class="toast" :class="['toast-' + t.type, t.exiting ? 'fade-out' : '']">
-            <i class="toast-icon" :class="{
-                'fa-solid fa-circle-check': t.type === 'success',
-                'fa-solid fa-circle-xmark': t.type === 'error',
-                'fa-solid fa-triangle-exclamation': t.type === 'warning',
-                'fa-solid fa-circle-info': t.type === 'info',
-            }"></i>
-            <span class="flex-1">{{ t.message }}</span>
-        </div>
-    </div>
-
-    <!-- 确认对话框 -->
-    <div v-if="confirmState.show" class="confirm-overlay" @click.self="confirmResolve(false)" @keydown.escape="confirmResolve(false)" tabindex="0">
-        <div class="confirm-dialog">
-            <div class="flex items-center gap-3 mb-4">
-                <div class="w-10 h-10 rounded-full bg-[var(--accent-amber-dim)] flex items-center justify-center flex-shrink-0">
-                    <i class="fa-solid fa-question text-[var(--accent-amber)]"></i>
-                </div>
-                <h3 class="text-lg font-semibold text-white">{{ confirmState.title || '确认操作' }}</h3>
-            </div>
-            <p class="text-[var(--text-primary)] text-sm mb-6 pl-13">{{ confirmState.message }}</p>
-            <div class="flex justify-end gap-3">
-                <button @click="confirmResolve(false)" class="px-4 py-2 text-sm text-[var(--text-secondary)] hover:text-white transition-colors rounded-sm border border-[var(--border-dim)] hover:border-[var(--text-muted)]">取消</button>
-                <button @click="confirmResolve(true)" class="px-4 py-2 text-sm text-white bg-[var(--accent-red)] hover:bg-[var(--accent-red)] transition-colors rounded-sm font-medium">确认</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- 登录弹窗 -->
-    <div v-if="showLoginDialog" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
-        <div class="glass-panel w-full max-w-sm p-6 border border-[var(--border-dim)]" role="dialog" aria-modal="true" aria-label="API 认证">
-            <div class="text-center mb-6">
-                <div class="w-16 h-16 rounded-full bg-[var(--accent-cyan-dim)] flex items-center justify-center mx-auto mb-4">
-                    <i class="fa-solid fa-lock text-2xl text-[var(--accent-cyan)]"></i>
-                </div>
-                <h3 class="text-lg font-semibold text-white">需要认证</h3>
-                <p class="text-sm text-[var(--text-secondary)] mt-1">请输入 API Token 以访问控制台</p>
-            </div>
-            <form @submit.prevent="submitLogin">
-                <div class="mb-4">
-                    <input v-model="loginToken" type="password"
-                        class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded-sm px-4 py-2.5 text-sm text-white placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-amber)]"
-                        placeholder="输入 API Token..." autofocus>
-                    <p v-if="loginError" class="text-[var(--accent-red)] text-xs mt-2"><i class="fa-solid fa-exclamation-circle mr-1"></i>{{ loginError }}</p>
-                </div>
-                <button type="submit" :disabled="loginLoading"
-                    class="w-full btn-primary text-white text-sm font-medium py-2.5 rounded-sm flex items-center justify-center">
-                    <i class="fa-solid fa-right-to-bracket mr-2"></i>
-                    {{ loginLoading ? '验证中...' : '登录' }}
-                </button>
-            </form>
-        </div>
-    </div>
-
-    <!-- Settings Modal -->
-    <div v-if="showSettings" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" @keydown.escape="showSettings = false">
-        <div class="glass-panel w-full max-w-3xl max-h-[85vh] flex flex-col border border-[var(--border-dim)]" role="dialog" aria-modal="true" aria-label="系统设置">
-            <div class="p-4 border-b border-[var(--border-dim)] flex justify-between items-center bg-[var(--bg-panel)] rounded-t-sm">
-                <h3 class="font-bold text-lg"><i class="fa-solid fa-gear mr-2 text-[var(--accent-cyan)]"></i>系统设置</h3>
-                <button @click="showSettings = false" class="text-[var(--text-secondary)] hover:text-white" aria-label="关闭"><i class="fa-solid fa-xmark text-xl"></i></button>
-            </div>
-
-            <!-- Tabs -->
-            <div class="flex border-b border-[var(--border-dim)] bg-[var(--bg-surface)]" role="tablist">
+        <div v-else class="flex gap-6 max-w-6xl">
+            <!-- Left Nav -->
+            <nav class="w-48 flex-shrink-0 space-y-1">
                 <button v-for="tab in settingsTabs" :key="tab.key" @click="settingsTab = tab.key"
-                    class="px-4 py-2 text-xs font-medium transition-colors"
-                    :class="settingsTab === tab.key ? 'text-[var(--accent-cyan)] border-b-2 border-[var(--accent-cyan)] bg-[var(--bg-elevated)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'"
-                    role="tab" :aria-selected="settingsTab === tab.key">
-                    <i :class="tab.icon" class="mr-1"></i>{{ tab.label }}
+                    class="w-full flex items-center gap-3 px-4 py-2.5 text-sm rounded-sm transition-all"
+                    :class="settingsTab === tab.key ? 'text-[var(--accent-cyan)] bg-[var(--accent-cyan)]/10 border border-[var(--accent-cyan)]/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] border border-transparent'">
+                    <i :class="tab.icon" class="w-4 text-center"></i>
+                    <span>{{ tab.label }}</span>
                 </button>
-            </div>
-
-            <div class="flex-1 overflow-y-auto p-6 space-y-4">
+            </nav>
+            <!-- Right Form -->
+            <div class="flex-1 glass-panel p-6 space-y-4">
                 <!-- Worker Tab -->
                 <div v-if="settingsTab === 'workers'">
                     <div v-for="(w, idx) in configForm.workers || []" :key="idx" class="bg-[var(--bg-elevated)] rounded-sm p-4 mb-3 border border-[var(--border-dim)]">
@@ -1110,22 +1215,12 @@
                         </div>
                         <div class="grid grid-cols-2 gap-3">
                             <div>
-                                <label class="text-xs text-[var(--text-secondary)]">URL</label>
-                                <input v-model="w.url" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]" placeholder="http://192.168.1.50:8788">
+                                <label class="text-xs text-[var(--text-secondary)] block mb-1">地址 (URL)</label>
+                                <input v-model="w.url" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-[var(--accent-amber)]" placeholder="http://192.168.1.50:8788">
                             </div>
                             <div>
-                                <label class="text-xs text-[var(--text-secondary)]">节点 ID</label>
-                                <input v-model="w.worker_id" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]" placeholder="office-gpu">
-                            </div>
-                            <div>
-                                <label class="text-xs text-[var(--text-secondary)]">权重</label>
-                                <input v-model.number="w.weight" type="number" min="1" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
-                            </div>
-                            <div class="flex items-end">
-                                <label class="flex items-center space-x-2 cursor-pointer">
-                                    <input type="checkbox" v-model="w.enabled" class="form-checkbox h-4 w-4 text-[var(--accent-amber)] bg-[var(--bg-void)] border-[var(--border-dim)] rounded">
-                                    <span class="text-sm text-[var(--text-primary)]">启用</span>
-                                </label>
+                                <label class="text-xs text-[var(--text-secondary)] block mb-1">权重 (Weight)</label>
+                                <input v-model.number="w.weight" type="number" min="1" max="100" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
                             </div>
                         </div>
                     </div>
@@ -1134,70 +1229,189 @@
                     </button>
                 </div>
 
-                <!-- Subtitle Tab -->
-                <div v-if="settingsTab === 'subtitle'" class="space-y-4">
-                    <div>
-                        <label class="text-xs text-[var(--text-secondary)] block mb-1">输出模式</label>
-                        <select v-model="configForm.subtitle.output_mode" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
-                            <option value="single">单语翻译</option>
-                            <option value="bilingual">中英双语</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="text-xs text-[var(--text-secondary)] block mb-1">输出格式</label>
-                        <select v-model="configForm.subtitle.output_format" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
-                            <option value="srt">SRT</option>
-                            <option value="ass">ASS</option>
-                        </select>
-                    </div>
-                    <!-- ASS 样式配置 -->
-                    <div v-if="configForm.subtitle.output_format === 'ass'" class="bg-[var(--bg-elevated)] rounded-sm p-4 border border-[var(--border-dim)] space-y-3">
-                        <h4 class="text-xs font-medium text-[var(--text-primary)]"><i class="fa-solid fa-palette mr-1 text-[var(--accent-blue)]"></i>ASS 字幕样式</h4>
+                <!-- LLM Tab -->
+                <div v-if="settingsTab === 'llm'" class="space-y-4">
+                    <p class="text-xs text-[var(--text-muted)]">配置 LLM 提供商列表，按优先级排序。Coordinator 会将配置推送到所有在线 Worker。</p>
+                    <div v-for="(p, idx) in configForm.llm_providers || []" :key="idx" class="bg-[var(--bg-elevated)] rounded-sm p-4 border border-[var(--border-dim)] relative group">
+                        <div class="flex justify-between items-center mb-3">
+                            <div class="flex items-center gap-2">
+                                <i class="fa-solid fa-grip-vertical text-[var(--text-muted)] cursor-grab"></i>
+                                <span class="text-sm font-medium text-[var(--text-primary)]">{{ p.name || 'Provider ' + (idx+1) }}</span>
+                                <span class="text-[10px] px-1.5 py-0.5 rounded bg-[var(--bg-void)] text-[var(--text-secondary)]">{{ p.provider || 'openai' }}</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button @click="testLlmProvider(idx)" class="text-[10px] px-2 py-1 rounded border border-[var(--accent-cyan)]/30 text-[var(--accent-cyan)] hover:bg-[var(--accent-cyan)]/10 transition-colors">
+                                    <i class="fa-solid fa-plug mr-1"></i>测试
+                                </button>
+                                <button @click="configForm.llm_providers.splice(idx, 1)" class="text-[var(--accent-red)] hover:text-[var(--accent-red)] text-xs"><i class="fa-solid fa-trash"></i></button>
+                            </div>
+                        </div>
                         <div class="grid grid-cols-2 gap-3">
                             <div>
-                                <label class="text-xs text-[var(--text-secondary)]">字体</label>
-                                <input v-model="configForm.subtitle.ass_style.font_name" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
+                                <label class="text-xs text-[var(--text-secondary)] block mb-1">名称</label>
+                                <input v-model="p.name" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]" placeholder="DeepSeek">
                             </div>
                             <div>
-                                <label class="text-xs text-[var(--text-secondary)]">字号</label>
-                                <input v-model.number="configForm.subtitle.ass_style.font_size" type="number" min="8" max="48" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
+                                <label class="text-xs text-[var(--text-secondary)] block mb-1">类型</label>
+                                <select v-model="p.provider" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
+                                    <option value="openai">OpenAI 兼容</option>
+                                    <option value="deepseek">DeepSeek</option>
+                                    <option value="zhipu">智谱 GLM</option>
+                                </select>
+                            </div>
+                            <div class="col-span-2">
+                                <label class="text-xs text-[var(--text-secondary)] block mb-1">API Base</label>
+                                <input v-model="p.api_base" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-[var(--accent-amber)]" placeholder="https://api.deepseek.com/v1">
                             </div>
                             <div>
-                                <label class="text-xs text-[var(--text-secondary)]">主色 (AABBGGRR)</label>
-                                <input v-model="configForm.subtitle.ass_style.primary_colour" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-[var(--accent-amber)]">
+                                <label class="text-xs text-[var(--text-secondary)] block mb-1">API Key</label>
+                                <input v-model="p.api_key" type="password" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]" placeholder="sk-...">
                             </div>
                             <div>
-                                <label class="text-xs text-[var(--text-secondary)]">描边色</label>
-                                <input v-model="configForm.subtitle.ass_style.outline_colour" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-[var(--accent-amber)]">
-                            </div>
-                            <div>
-                                <label class="text-xs text-[var(--text-secondary)]">描边宽度</label>
-                                <input v-model.number="configForm.subtitle.ass_style.outline_width" type="number" step="0.5" min="0" max="5" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
-                            </div>
-                            <div>
-                                <label class="text-xs text-[var(--text-secondary)]">底部边距</label>
-                                <input v-model.number="configForm.subtitle.ass_style.margin_v" type="number" min="0" max="200" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
+                                <label class="text-xs text-[var(--text-secondary)] block mb-1">模型</label>
+                                <input v-model="p.model" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]" placeholder="deepseek-chat">
                             </div>
                         </div>
-                        <p class="text-[10px] text-[var(--text-muted)]">颜色格式: &HBBGGRR (Alpha 可选前缀)，如白色 = &H00FFFFFF</p>
+                        <div class="mt-3 flex items-center gap-3">
+                            <label class="flex items-center gap-2 cursor-pointer text-xs">
+                                <input type="checkbox" v-model="p.enabled" class="form-checkbox h-3.5 w-3.5 text-[var(--accent-amber)] bg-[var(--bg-void)] border-[var(--border-dim)] rounded">
+                                <span class="text-[var(--text-secondary)]">启用</span>
+                            </label>
+                            <span class="text-[10px] text-[var(--text-muted)]">优先级: {{ idx + 1 }} (越小越优先)</span>
+                        </div>
                     </div>
-                    <!-- 注释设置 -->
-                    <div class="bg-[var(--bg-elevated)] rounded-sm p-4 border border-[var(--border-dim)] space-y-3">
-                        <h4 class="text-xs font-medium text-[var(--text-primary)]"><i class="fa-solid fa-language mr-1 text-[var(--accent-amber)]"></i>字幕注释</h4>
+                    <button @click="(configForm.llm_providers || (configForm.llm_providers = [])).push({name:'',provider:'openai',api_base:'',api_key:'',model:'',enabled:true})"
+                        class="w-full py-2 border border-dashed border-[var(--border-dim)] rounded-sm text-[var(--text-secondary)] hover:text-white hover:border-[var(--text-muted)] transition-colors text-sm">
+                        <i class="fa-solid fa-plus mr-1"></i>添加 LLM 提供商
+                    </button>
+                </div>
+
+                <!-- Media Library Tab -->
+                <div v-if="settingsTab === 'media'" class="space-y-4">
+                    <p class="text-xs text-[var(--text-muted)]">配置媒体库扫描路径，自动化扫描将检查这些目录中的视频是否缺少字幕。</p>
+                    <div v-for="(path, idx) in configForm.automation.scan_paths || []" :key="idx" class="flex items-center gap-2">
+                        <input v-model="configForm.automation.scan_paths[idx]" class="flex-1 bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-[var(--accent-amber)]" placeholder="/media/movies">
+                        <button @click="configForm.automation.scan_paths.splice(idx, 1)" class="text-[var(--accent-red)] hover:text-[var(--accent-red)] text-sm p-2"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                    <button @click="(configForm.automation.scan_paths || (configForm.automation.scan_paths = [])).push('')"
+                        class="w-full py-2 border border-dashed border-[var(--border-dim)] rounded-sm text-[var(--text-secondary)] hover:text-white hover:border-[var(--text-muted)] transition-colors text-sm">
+                        <i class="fa-solid fa-plus mr-1"></i>添加扫描路径
+                    </button>
+                    <div class="bg-[var(--bg-elevated)] rounded-sm p-4 border border-[var(--border-dim)] space-y-3 mt-4">
+                        <h4 class="text-xs font-medium text-[var(--text-primary)]"><i class="fa-solid fa-sliders mr-1 text-[var(--accent-blue)]"></i>扫描选项</h4>
+                        <label class="flex items-center space-x-3 cursor-pointer">
+                            <input type="checkbox" v-model="configForm.automation.scan_recursive" class="form-checkbox h-4 w-4 text-[var(--accent-amber)] bg-[var(--bg-void)] border-[var(--border-dim)] rounded">
+                            <span class="text-sm text-[var(--text-primary)]">递归扫描子目录</span>
+                        </label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="text-xs text-[var(--text-secondary)] block mb-1">最近 N 天内的视频</label>
+                                <input v-model.number="configForm.automation.scan_recent_days" type="number" min="1" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
+                            </div>
+                            <div>
+                                <label class="text-xs text-[var(--text-secondary)] block mb-1">每次最多任务数</label>
+                                <input v-model.number="configForm.automation.max_tasks_per_scan" type="number" min="1" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Transcribe Tab -->
+                <div v-if="settingsTab === 'transcribe'" class="space-y-4">
+                    <div>
+                        <label class="text-xs text-[var(--text-secondary)] block mb-2">Whisper 模型</label>
+                        <div class="space-y-2">
+                            <div v-for="m in whisperModels" :key="m.id"
+                                @click="configForm.transcribe.model = m.id"
+                                class="flex items-center gap-3 p-3 rounded-sm border cursor-pointer transition-all"
+                                :class="configForm.transcribe.model === m.id ? 'border-[var(--accent-amber)] bg-[var(--accent-amber)]/5' : 'border-[var(--border-dim)] hover:border-[var(--text-muted)]'">
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-sm font-medium" :class="configForm.transcribe.model === m.id ? 'text-[var(--accent-amber)]' : 'text-[var(--text-primary)]'">{{ m.name }}</span>
+                                        <code class="text-[10px] px-1.5 py-0.5 rounded bg-[var(--bg-void)] text-[var(--text-muted)]">{{ m.id }}</code>
+                                        <span v-if="configForm.transcribe.model === m.id" class="text-[10px] px-1.5 py-0.5 rounded bg-[var(--accent-amber)]/15 text-[var(--accent-amber)]">当前</span>
+                                    </div>
+                                    <div class="text-[10px] text-[var(--text-muted)] mt-1">
+                                        {{ m.size_mb }} MB · 显存 ~{{ m.vram_mb }} MB · 速度: {{ m.speed }} · 质量: {{ m.quality }}
+                                    </div>
+                                </div>
+                                <div class="flex-shrink-0">
+                                    <span v-if="m.downloaded" class="text-[10px] px-1.5 py-0.5 rounded bg-[var(--accent-green)]/10 text-[var(--accent-green)]">
+                                        <i class="fa-solid fa-check mr-1"></i>已下载
+                                    </span>
+                                    <span v-else class="text-[10px] px-1.5 py-0.5 rounded bg-[var(--bg-elevated)] text-[var(--text-muted)]">
+                                        未下载
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
                         <div>
-                            <label class="text-xs text-[var(--text-secondary)] block mb-1">注释模式</label>
-                            <select v-model="configForm.annotation.mode" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
-                                <option value="off">关闭</option>
-                                <option value="auto">自动 (根据内容复杂度)</option>
-                                <option value="on">始终开启</option>
+                            <label class="text-xs text-[var(--text-secondary)] block mb-1">计算设备</label>
+                            <select v-model="configForm.transcribe.device" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
+                                <option value="auto">自动</option>
+                                <option value="cuda">CUDA (GPU)</option>
+                                <option value="cpu">CPU</option>
                             </select>
-                            <p class="text-[10px] text-[var(--text-muted)] mt-1">自动模式: 翻译时检测文化密度，高/中等复杂度时自动生成注释</p>
                         </div>
-                        <div v-if="configForm.annotation.mode === 'auto'">
-                            <label class="text-xs text-[var(--text-secondary)] block mb-1">质量阈值</label>
-                            <input v-model.number="configForm.annotation.quality_threshold" type="number" min="0" max="100" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
-                            <p class="text-[10px] text-[var(--text-muted)] mt-1">auto 模式下，字幕质量评分达到此阈值才生成注释 (默认 75)</p>
+                        <div>
+                            <label class="text-xs text-[var(--text-secondary)] block mb-1">计算精度</label>
+                            <select v-model="configForm.transcribe.compute_type" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
+                                <option value="auto">自动</option>
+                                <option value="float16">float16</option>
+                                <option value="int8">int8</option>
+                            </select>
                         </div>
+                    </div>
+                    <label class="flex items-center space-x-3 cursor-pointer">
+                        <input type="checkbox" v-model="configForm.transcribe.vad_filter" class="form-checkbox h-4 w-4 text-[var(--accent-amber)] bg-[var(--bg-void)] border-[var(--border-dim)] rounded">
+                        <span class="text-sm text-[var(--text-primary)]">启用 VAD 过滤</span>
+                    </label>
+                </div>
+
+                <!-- Translate Tab -->
+                <div v-if="settingsTab === 'translate'" class="space-y-4">
+                    <div>
+                        <label class="text-xs text-[var(--text-secondary)] block mb-1">目标语言</label>
+                        <select v-model="configForm.translate.target_lang" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
+                            <option value="zh">简体中文</option>
+                            <option value="en">English</option>
+                            <option value="ja">日本語</option>
+                            <option value="ko">한국어</option>
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-xs text-[var(--text-secondary)] block mb-1">并发数</label>
+                            <input v-model.number="configForm.translate.thread_num" type="number" min="1" max="10" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
+                        </div>
+                        <div>
+                            <label class="text-xs text-[var(--text-secondary)] block mb-1">批量大小</label>
+                            <input v-model.number="configForm.translate.batch_size" type="number" min="1" max="50" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
+                        </div>
+                    </div>
+                    <label class="flex items-center space-x-3 cursor-pointer">
+                        <input type="checkbox" v-model="configForm.translate.need_reflect" class="form-checkbox h-4 w-4 text-[var(--accent-amber)] bg-[var(--bg-void)] border-[var(--border-dim)] rounded">
+                        <span class="text-sm text-[var(--text-primary)]">反思翻译 (二次审校)</span>
+                    </label>
+                </div>
+
+                <!-- Annotation Tab -->
+                <div v-if="settingsTab === 'annotation'" class="space-y-4">
+                    <div>
+                        <label class="text-xs text-[var(--text-secondary)] block mb-1">注释模式</label>
+                        <select v-model="configForm.annotation.mode" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
+                            <option value="off">关闭</option>
+                            <option value="auto">自动 (根据内容复杂度)</option>
+                            <option value="on">始终开启</option>
+                        </select>
+                        <p class="text-[10px] text-[var(--text-muted)] mt-1">自动模式: 翻译时检测文化密度，高/中等复杂度时自动生成注释</p>
+                    </div>
+                    <div v-if="configForm.annotation.mode === 'auto'">
+                        <label class="text-xs text-[var(--text-secondary)] block mb-1">质量阈值</label>
+                        <input v-model.number="configForm.annotation.quality_threshold" type="number" min="0" max="100" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
+                        <p class="text-[10px] text-[var(--text-muted)] mt-1">auto 模式下，字幕质量评分达到此阈值才生成注释 (默认 75)</p>
                     </div>
                 </div>
 
@@ -1285,38 +1499,119 @@
                             class="w-full py-2 border border-dashed border-[var(--border-dim)] rounded-sm text-[var(--text-secondary)] hover:text-white hover:border-[var(--text-muted)] transition-colors text-sm">
                             <i class="fa-solid fa-plus mr-1"></i>添加通知渠道
                         </button>
-                        <div class="mt-3 flex justify-end">
-                            <button @click="testNotification" class="text-xs text-[var(--accent-cyan)] hover:text-[var(--accent-cyan)] px-3 py-1.5 border border-[var(--accent-cyan)]/20 rounded-sm hover:bg-[var(--accent-cyan)]/10 transition-colors">
-                                <i class="fa-solid fa-paper-plane mr-1"></i>发送测试通知
-                            </button>
-                        </div>
                     </div>
-                    <div v-else class="text-center text-[var(--text-muted)] py-6">
-                        <i class="fa-solid fa-bell-slash text-2xl mb-2"></i>
-                        <p class="text-sm">通知未启用</p>
+                </div>
+
+                <!-- Subtitle Tab -->
+                <div v-if="settingsTab === 'subtitle'" class="space-y-4">
+                    <div>
+                        <label class="text-xs text-[var(--text-secondary)] block mb-1">输出模式</label>
+                        <select v-model="configForm.subtitle.output_mode" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
+                            <option value="single">单语翻译</option>
+                            <option value="bilingual">中英双语</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-xs text-[var(--text-secondary)] block mb-1">输出格式</label>
+                        <select v-model="configForm.subtitle.output_format" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
+                            <option value="srt">SRT</option>
+                            <option value="ass">ASS</option>
+                        </select>
+                    </div>
+                    <div v-if="configForm.subtitle.output_format === 'ass'" class="bg-[var(--bg-elevated)] rounded-sm p-4 border border-[var(--border-dim)] space-y-3">
+                        <h4 class="text-xs font-medium text-[var(--text-primary)]"><i class="fa-solid fa-palette mr-1 text-[var(--accent-blue)]"></i>ASS 字幕样式</h4>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="text-xs text-[var(--text-secondary)]">字体</label>
+                                <input v-model="configForm.subtitle.ass_style.font_name" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
+                            </div>
+                            <div>
+                                <label class="text-xs text-[var(--text-secondary)]">字号</label>
+                                <input v-model.number="configForm.subtitle.ass_style.font_size" type="number" min="8" max="48" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
+                            </div>
+                            <div>
+                                <label class="text-xs text-[var(--text-secondary)]">主色 (AABBGGRR)</label>
+                                <input v-model="configForm.subtitle.ass_style.primary_colour" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-[var(--accent-amber)]">
+                            </div>
+                            <div>
+                                <label class="text-xs text-[var(--text-secondary)]">描边色</label>
+                                <input v-model="configForm.subtitle.ass_style.outline_colour" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-[var(--accent-amber)]">
+                            </div>
+                            <div>
+                                <label class="text-xs text-[var(--text-secondary)]">描边宽度</label>
+                                <input v-model.number="configForm.subtitle.ass_style.outline_width" type="number" step="0.5" min="0" max="5" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
+                            </div>
+                            <div>
+                                <label class="text-xs text-[var(--text-secondary)]">底部边距</label>
+                                <input v-model.number="configForm.subtitle.ass_style.margin_v" type="number" min="0" max="200" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
+                            </div>
+                        </div>
+                        <p class="text-[10px] text-[var(--text-muted)]">颜色格式: &HBBGGRR (Alpha 可选前缀)，如白色 = &H00FFFFFF</p>
                     </div>
                 </div>
 
                 <!-- Security Tab -->
                 <div v-if="settingsTab === 'security'" class="space-y-4">
+                    <!-- 安全状态总览 -->
                     <div class="bg-[var(--bg-elevated)] rounded-sm p-4 border border-[var(--border-dim)]">
-                        <h4 class="text-sm font-medium text-[var(--text-primary)] mb-3"><i class="fa-solid fa-key mr-1 text-[var(--accent-amber)]"></i>API Token</h4>
-                        <p class="text-xs text-[var(--text-muted)] mb-3">配置后所有 API 请求需携带此 Token，留空则不验证（向后兼容）</p>
+                        <h4 class="text-sm font-medium text-[var(--text-primary)] mb-3"><i class="fa-solid fa-shield-halved mr-1 text-[var(--accent-cyan)]"></i>安全状态</h4>
+                        <div class="space-y-2">
+                            <div class="flex items-center gap-2 text-xs">
+                                <i :class="configForm.security?.api_token && configForm.security.api_token !== '***' ? 'fa-solid fa-circle-check text-[var(--accent-green)]' : 'fa-solid fa-triangle-exclamation text-[var(--accent-red)]'"></i>
+                                <span>API Token: {{ configForm.security?.api_token && configForm.security.api_token !== '***' ? '已设置' : '未设置（任何人可访问所有接口）' }}</span>
+                            </div>
+                            <div class="flex items-center gap-2 text-xs">
+                                <i :class="configForm.security?.worker_token && configForm.security.worker_token !== '***' ? 'fa-solid fa-circle-check text-[var(--accent-green)]' : 'fa-solid fa-triangle-exclamation text-[var(--accent-amber)]'"></i>
+                                <span>Worker Token: {{ configForm.security?.worker_token && configForm.security.worker_token !== '***' ? '已设置' : '未设置（Worker 回调无认证）' }}</span>
+                            </div>
+                            <div class="flex items-center gap-2 text-xs">
+                                <i :class="(configForm.security?.cors_origins || []).length > 0 && !(configForm.security?.cors_origins || []).includes('*') ? 'fa-solid fa-circle-check text-[var(--accent-green)]' : 'fa-solid fa-triangle-exclamation text-[var(--accent-amber)]'"></i>
+                                <span>CORS: {{ (configForm.security?.cors_origins || []).includes('*') ? '允许所有来源（建议收紧）' : '受限' }}</span>
+                            </div>
+                        </div>
+                        <div class="mt-3 p-2 rounded bg-[var(--accent-amber)]/5 border border-[var(--accent-amber)]/10">
+                            <p class="text-[10px] text-[var(--accent-amber)]"><i class="fa-solid fa-info-circle mr-1"></i>安全建议：务必设置 API Token 保护接口；公网部署时请使用 Tailscale 或 Nginx + HTTPS；不要将端口直接暴露到公网。</p>
+                        </div>
+                    </div>
+
+                    <!-- Token 配置 -->
+                    <div class="bg-[var(--bg-elevated)] rounded-sm p-4 border border-[var(--border-dim)]">
+                        <h4 class="text-sm font-medium text-[var(--text-primary)] mb-3"><i class="fa-solid fa-key mr-1 text-[var(--accent-amber)]"></i>Token 配置</h4>
+                        <p class="text-xs text-[var(--text-muted)] mb-3">首次启动时自动生成，保存后生效。Worker 端需配置相同 Token 才能连接。</p>
                         <div>
                             <label class="text-xs text-[var(--text-secondary)] block mb-1">API 访问令牌</label>
                             <input v-model="configForm.security.api_token" type="password"
                                 class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]"
-                                placeholder="留空则不验证">
+                                placeholder="留空则不验证（不推荐）">
                         </div>
                         <div class="mt-3">
                             <label class="text-xs text-[var(--text-secondary)] block mb-1">Worker 回调令牌</label>
                             <input v-model="configForm.security.worker_token" type="password"
                                 class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]"
-                                placeholder="Worker 回调验证，留空则不验证">
+                                placeholder="Worker 回调验证">
                         </div>
                     </div>
+
+                    <!-- CORS 配置 -->
                     <div class="bg-[var(--bg-elevated)] rounded-sm p-4 border border-[var(--border-dim)]">
-                        <h4 class="text-sm font-medium text-[var(--text-primary)] mb-3"><i class="fa-solid fa-shield-halved mr-1 text-[var(--accent-green)]"></i>当前会话</h4>
+                        <h4 class="text-sm font-medium text-[var(--text-primary)] mb-3"><i class="fa-solid fa-globe mr-1 text-[var(--accent-blue)]"></i>CORS 跨域</h4>
+                        <p class="text-xs text-[var(--text-muted)] mb-3">允许哪些来源访问 API。默认仅允许本机，公网部署时需设置为实际域名。</p>
+                        <div class="flex flex-wrap gap-1.5 mb-2">
+                            <span v-for="(origin, oi) in (configForm.security?.cors_origins || [])" :key="oi"
+                                class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] rounded bg-[var(--bg-void)] border border-[var(--border-dim)] text-[var(--text-secondary)]">
+                                {{ origin }}
+                                <button @click="configForm.security.cors_origins.splice(oi, 1)" class="text-[var(--accent-red)] hover:text-[var(--accent-red)] ml-0.5"><i class="fa-solid fa-xmark text-[8px]"></i></button>
+                            </span>
+                        </div>
+                        <div class="flex gap-2">
+                            <input v-model="newCorsOrigin" class="flex-1 bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]" placeholder="https://your-domain.com">
+                            <button @click="if(newCorsOrigin) { (configForm.security.cors_origins || (configForm.security.cors_origins = [])).push(newCorsOrigin); newCorsOrigin = ''; }" class="px-3 py-1.5 text-xs bg-[var(--accent-amber)]/10 text-[var(--accent-amber)] rounded hover:bg-[var(--accent-amber)]/20 transition-colors">添加</button>
+                        </div>
+                    </div>
+
+                    <!-- 当前会话 -->
+                    <div class="bg-[var(--bg-elevated)] rounded-sm p-4 border border-[var(--border-dim)]">
+                        <h4 class="text-sm font-medium text-[var(--text-primary)] mb-3"><i class="fa-solid fa-user-shield mr-1 text-[var(--accent-green)]"></i>当前会话</h4>
                         <div class="flex items-center justify-between">
                             <div>
                                 <span class="text-xs text-[var(--text-secondary)]">认证状态：</span>
@@ -1350,8 +1645,6 @@
                             <div class="text-xs text-[var(--text-secondary)] mt-1">失败</div>
                         </div>
                     </div>
-
-                    <!-- 7-day trend (simple bar chart) -->
                     <div v-if="statsData?.by_day?.length" class="bg-[var(--bg-elevated)] rounded-sm p-4">
                         <h4 class="text-sm font-medium text-[var(--text-primary)] mb-3"><i class="fa-solid fa-chart-bar mr-1"></i>近 7 天趋势</h4>
                         <div class="flex items-end gap-2 h-32">
@@ -1363,8 +1656,6 @@
                             </div>
                         </div>
                     </div>
-
-                    <!-- Average duration -->
                     <div v-if="statsData" class="bg-[var(--bg-elevated)] rounded-sm p-4">
                         <div class="flex justify-between items-center">
                             <span class="text-sm text-[var(--text-primary)]"><i class="fa-solid fa-clock mr-1"></i>平均处理耗时</span>
@@ -1373,8 +1664,6 @@
                             </span>
                         </div>
                     </div>
-
-                    <!-- Worker stats -->
                     <div v-if="workerStatsData && Object.keys(workerStatsData).length" class="bg-[var(--bg-elevated)] rounded-sm p-4">
                         <h4 class="text-sm font-medium text-[var(--text-primary)] mb-3"><i class="fa-solid fa-server mr-1"></i>Worker 统计</h4>
                         <div class="space-y-3">
@@ -1389,27 +1678,145 @@
                             </div>
                         </div>
                     </div>
-
                     <div v-if="!statsData" class="text-center text-[var(--text-muted)] py-8">
                         <i class="fa-solid fa-chart-pie text-3xl mb-2"></i>
                         <p>加载统计数据中...</p>
                     </div>
                 </div>
-            </div>
 
-            <div class="p-4 border-t border-[var(--border-dim)] flex justify-between items-center bg-[var(--bg-elevated)] rounded-b-sm">
-                <a href="/docs" target="_blank" class="text-xs text-[var(--text-muted)] hover:text-[var(--accent-cyan)] transition-colors">
-                    <i class="fa-solid fa-book mr-1"></i>API 文档
-                </a>
-                <div class="flex space-x-3">
-                <button @click="showSettings = false" class="px-4 py-2 text-sm text-[var(--text-secondary)] hover:text-white transition-colors">取消</button>
-                <button @click="saveSettings" :disabled="savingSettings" class="btn-primary text-white text-sm font-medium py-2 px-6 rounded-sm flex items-center">
-                    <i class="fa-solid fa-check mr-1.5" v-if="!savingSettings"></i>
-                    <i class="fa-solid fa-circle-notch fa-spin mr-1.5" v-else></i>
-                    {{ savingSettings ? '保存中...' : '保存并重载' }}
-                </button>
+                <!-- Notifications test button -->
+                <div v-if="settingsTab === 'notifications' && configForm.notifications?.enabled" class="flex justify-end">
+                    <button @click="testNotification" class="text-xs text-[var(--accent-cyan)] hover:text-[var(--accent-cyan)] px-3 py-1.5 border border-[var(--accent-cyan)]/20 rounded-sm hover:bg-[var(--accent-cyan)]/10 transition-colors">
+                        <i class="fa-solid fa-paper-plane mr-1"></i>发送测试通知
+                    </button>
+                </div>
+
+                <!-- Save Button -->
+                <div class="pt-4 border-t border-[var(--border-dim)] flex justify-between items-center">
+                    <a href="/docs" target="_blank" class="text-xs text-[var(--text-muted)] hover:text-[var(--accent-cyan)] transition-colors">
+                        <i class="fa-solid fa-book mr-1"></i>API 文档
+                    </a>
+                    <button @click="saveSettings" :disabled="savingSettings" class="btn-primary text-white text-sm font-medium py-2 px-6 rounded-sm flex items-center">
+                        <i class="fa-solid fa-check mr-1.5" v-if="!savingSettings"></i>
+                        <i class="fa-solid fa-circle-notch fa-spin mr-1.5" v-else></i>
+                        {{ savingSettings ? '保存中...' : '保存并重载' }}
+                    </button>
                 </div>
             </div>
+        </div>
+    </div><!-- end settings tab -->
+
+    </div><!-- end scrollable area -->
+    </div><!-- end main area -->
+
+    <!-- File Browser Modal -->
+    <div v-if="showBrowser" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" @keydown.escape="showBrowser = false">
+        <div class="glass-panel w-full max-w-4xl flex flex-col h-[80vh] border border-[var(--border-dim)]">
+            <!-- Modal Header -->
+            <div class="p-4 border-b border-[var(--border-dim)] flex justify-between items-center bg-[var(--bg-panel)] rounded-t-sm">
+                <h3 class="font-bold text-lg"><i class="fa-solid fa-server mr-2 text-[var(--accent-cyan)]"></i>服务器文件系统</h3>
+                <button @click="showBrowser = false" class="text-[var(--text-secondary)] hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            
+            <!-- Address Bar -->
+            <div class="p-3 bg-[var(--bg-surface)] border-b border-[var(--border-dim)] flex items-center space-x-2">
+                <button @click="loadPath(browserData.parent_path)" :disabled="!browserData.parent_path" class="p-2 bg-[var(--bg-surface)] rounded hover:bg-[var(--bg-elevated)] disabled:opacity-50">
+                    <i class="fa-solid fa-arrow-up"></i>
+                </button>
+                <div class="flex-1 bg-black/30 px-3 py-2 rounded text-sm text-[var(--text-primary)] overflow-x-auto whitespace-nowrap border border-[var(--border-dim)] font-mono">
+                    {{ browserData.current_path || '根目录' }}
+                </div>
+                <button @click="loadPath(browserData.current_path)" class="p-2 bg-[var(--bg-surface)] rounded hover:bg-[var(--bg-elevated)] text-[var(--accent-cyan)]">
+                    <i class="fa-solid fa-rotate-right" :class="{'fa-spin': browsing}"></i>
+                </button>
+            </div>
+
+            <!-- File List -->
+            <div class="flex-1 overflow-y-auto p-2 bg-black/20">
+                <div v-if="browsing" class="flex justify-center items-center h-full text-[var(--accent-blue)] text-2xl">
+                    <i class="fa-solid fa-circle-notch fa-spin"></i>
+                </div>
+                <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                    <!-- Directories -->
+                    <div v-for="d in browserData.dirs" :key="'d-'+d" @click="loadPath((browserData.current_path ? browserData.current_path + '/' : '') + d)" 
+                        class="flex items-center p-3 rounded hover:bg-[var(--text-primary)]/5 cursor-pointer transition-colors border border-transparent hover:border-[var(--border-dim)]">
+                        <i class="fa-solid fa-folder text-[var(--accent-amber)] text-xl mr-3 w-6 text-center"></i>
+                        <span class="truncate text-sm font-medium">{{ d }}</span>
+                    </div>
+                    <!-- Files -->
+                    <div v-for="f in browserData.files" :key="'f-'+f.name" @click="selectFile((browserData.current_path ? browserData.current_path + '/' : '') + f.name)"
+                        class="flex items-center p-3 rounded hover:bg-[var(--accent-cyan)]/15 cursor-pointer transition-colors border border-transparent hover:border-[var(--accent-cyan)]/30 group">
+                        <i class="fa-solid fa-file-video text-[var(--accent-cyan)] text-xl mr-3 w-6 text-center group-hover:text-[var(--accent-cyan)]"></i>
+                        <div class="flex-1 min-w-0">
+                            <div class="truncate text-sm font-light text-[var(--text-primary)] group-hover:text-white">{{ f.name }}</div>
+                            <div class="text-[10px] text-[var(--text-muted)] mt-0.5">{{ f.size_mb }} MB</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Empty State -->
+                    <div v-if="browserData.dirs?.length === 0 && browserData.files?.length === 0" class="col-span-full py-12 text-center text-[var(--text-muted)]">
+                        <i class="fa-regular fa-folder-open text-4xl mb-3 opacity-50"></i>
+                        <p>该文件夹为空或没有可处理的视频</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast 通知容器 -->
+    <div class="toast-container">
+        <div v-for="t in toasts" :key="t.id" class="toast" :class="['toast-' + t.type, t.exiting ? 'fade-out' : '']">
+            <i class="toast-icon" :class="{
+                'fa-solid fa-circle-check': t.type === 'success',
+                'fa-solid fa-circle-xmark': t.type === 'error',
+                'fa-solid fa-triangle-exclamation': t.type === 'warning',
+                'fa-solid fa-circle-info': t.type === 'info',
+            }"></i>
+            <span class="flex-1">{{ t.message }}</span>
+        </div>
+    </div>
+
+    <!-- 确认对话框 -->
+    <div v-if="confirmState.show" class="confirm-overlay" @click.self="confirmResolve(false)" @keydown.escape="confirmResolve(false)" tabindex="0">
+        <div class="confirm-dialog">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-full bg-[var(--accent-amber-dim)] flex items-center justify-center flex-shrink-0">
+                    <i class="fa-solid fa-question text-[var(--accent-amber)]"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-white">{{ confirmState.title || '确认操作' }}</h3>
+            </div>
+            <p class="text-[var(--text-primary)] text-sm mb-6 pl-13">{{ confirmState.message }}</p>
+            <div class="flex justify-end gap-3">
+                <button @click="confirmResolve(false)" class="px-4 py-2 text-sm text-[var(--text-secondary)] hover:text-white transition-colors rounded-sm border border-[var(--border-dim)] hover:border-[var(--text-muted)]">取消</button>
+                <button @click="confirmResolve(true)" class="px-4 py-2 text-sm text-white bg-[var(--accent-red)] hover:bg-[var(--accent-red)] transition-colors rounded-sm font-medium">确认</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 登录弹窗 -->
+    <div v-if="showLoginDialog" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4" @click.self="showLoginDialog = false" @keydown.escape="showLoginDialog = false">
+        <div class="glass-panel w-full max-w-sm p-6 border border-[var(--border-dim)] relative" role="dialog" aria-modal="true" aria-label="API 认证">
+            <button @click="showLoginDialog = false" class="absolute top-3 right-3 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"><i class="fa-solid fa-xmark"></i></button>
+            <div class="text-center mb-6">
+                <div class="w-16 h-16 rounded-full bg-[var(--accent-cyan-dim)] flex items-center justify-center mx-auto mb-4">
+                    <i class="fa-solid fa-lock text-2xl text-[var(--accent-cyan)]"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-white">需要认证</h3>
+                <p class="text-sm text-[var(--text-secondary)] mt-1">请输入 API Token 以访问控制台</p>
+            </div>
+            <form @submit.prevent="submitLogin">
+                <div class="mb-4">
+                    <input v-model="loginToken" type="password"
+                        class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded-sm px-4 py-2.5 text-sm text-white placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-amber)]"
+                        placeholder="输入 API Token..." autofocus>
+                    <p v-if="loginError" class="text-[var(--accent-red)] text-xs mt-2"><i class="fa-solid fa-exclamation-circle mr-1"></i>{{ loginError }}</p>
+                </div>
+                <button type="submit" :disabled="loginLoading"
+                    class="w-full btn-primary text-white text-sm font-medium py-2.5 rounded-sm flex items-center justify-center">
+                    <i class="fa-solid fa-right-to-bracket mr-2"></i>
+                    {{ loginLoading ? '验证中...' : '登录' }}
+                </button>
+            </form>
         </div>
     </div>
 
@@ -1555,6 +1962,14 @@
 
     createApp({
         setup() {
+            // Tab navigation
+            const currentTab = ref('dashboard');
+            const mainTabs = [
+                { key: 'dashboard', label: '看板', icon: 'fa-solid fa-gauge-high' },
+                { key: 'tasks', label: '任务', icon: 'fa-solid fa-list-check' },
+                { key: 'settings', label: '配置', icon: 'fa-solid fa-gear' },
+            ];
+
             const sysInfo = ref({});
             const tasks = ref([]);
             const loading = ref(true);
@@ -1584,6 +1999,65 @@
             // Worker detail state
             const showWorkerDetail = ref(false);
             const workerDetail = ref(null);
+
+            // Media list state
+            const mediaList = ref([]);
+            const mediaTotal = ref(0);
+            const mediaFilter = ref('all');
+            const mediaLoading = ref(false);
+            const mediaScanPaths = ref([]);
+            const mediaPage = ref(1);
+
+            // Whisper models state
+            const whisperModels = ref([]);
+            const newCorsOrigin = ref('');
+            const fetchWhisperModels = async () => {
+                try {
+                    const res = await fetch('/api/whisper/models');
+                    if (res.ok) {
+                        const data = await res.json();
+                        whisperModels.value = data.models || [];
+                    }
+                } catch (e) {
+                    console.error('Failed to fetch whisper models:', e);
+                }
+            };
+
+            const fetchMediaList = async () => {
+                mediaLoading.value = true;
+                try {
+                    const res = await fetch(`/api/media/list?filter_type=${mediaFilter.value}&page=${mediaPage.value}&page_size=50`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        mediaList.value = data.items || [];
+                        mediaTotal.value = data.total || 0;
+                        mediaScanPaths.value = data.scan_paths || [];
+                    }
+                } catch (e) {
+                    console.error('Failed to fetch media list:', e);
+                } finally {
+                    mediaLoading.value = false;
+                }
+            };
+
+            const submitMediaTask = async (item) => {
+                try {
+                    const res = await fetch('/api/tasks', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ media_path: item.path }),
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        showToast(`已提交: ${item.stem}`, 'success');
+                        fetchData();
+                    } else {
+                        showToast(`提交失败: ${data.message || '未知错误'}`, 'error');
+                    }
+                } catch (e) {
+                    showToast(`提交失败: ${e.message}`, 'error');
+                }
+            };
 
             // Search
             let searchDebounce = null;
@@ -1708,7 +2182,12 @@
             const settingsTab = ref('workers');
             const settingsTabs = [
                 { key: 'workers', label: 'Worker 节点', icon: 'fa-solid fa-server' },
-                { key: 'subtitle', label: '字幕设置', icon: 'fa-solid fa-closed-captioning' },
+                { key: 'llm', label: 'LLM 提供商', icon: 'fa-solid fa-brain' },
+                { key: 'media', label: '媒体库', icon: 'fa-solid fa-folder-open' },
+                { key: 'transcribe', label: '转写', icon: 'fa-solid fa-microphone' },
+                { key: 'translate', label: '翻译', icon: 'fa-solid fa-language' },
+                { key: 'subtitle', label: '字幕', icon: 'fa-solid fa-closed-captioning' },
+                { key: 'annotation', label: '注释', icon: 'fa-solid fa-quote-left' },
                 { key: 'automation', label: '自动化', icon: 'fa-solid fa-robot' },
                 { key: 'emby', label: 'Emby', icon: 'fa-solid fa-play' },
                 { key: 'security', label: '安全', icon: 'fa-solid fa-shield-halved' },
@@ -1851,15 +2330,20 @@
                         const data = await res.json();
                         // 确保嵌套字段存在
                         if (!data.security) data.security = { api_token: '', worker_token: '' };
-                        if (!data.automation) data.automation = { enabled: false };
+                        if (!data.automation) data.automation = { enabled: false, scan_paths: [] };
+                        if (!data.automation.scan_paths) data.automation.scan_paths = [];
                         if (!data.subtitle) data.subtitle = { output_mode: 'single', output_format: 'srt' };
                         if (!data.subtitle.ass_style) data.subtitle.ass_style = { font_name: 'Noto Sans', font_size: 12, primary_colour: '&H00FFFFFF', outline_colour: '&H000000FF', outline_width: 1.5, margin_v: 30 };
                         if (!data.notifications) data.notifications = { enabled: false, channels: [] };
                         if (!data.annotation) data.annotation = { mode: 'off', quality_threshold: 75 };
+                        if (!data.llm_providers) data.llm_providers = [];
+                        if (!data.translate) data.translate = { target_lang: 'zh', thread_num: 3, batch_size: 10, need_reflect: false };
+                        if (!data.transcribe) data.transcribe = { model: 'large-v3-turbo', device: 'auto', compute_type: 'auto', vad_filter: true };
                         configForm.value = data;
                     }
                 } catch(e) { console.error('load config error', e); }
                 fetchStats();
+                fetchWhisperModels();
             };
 
             const addWorker = () => {
@@ -1875,6 +2359,30 @@
                 showToast('Worker 已移除（保存后生效）', 'info');
             };
 
+            const testLlmProvider = async (idx) => {
+                const p = configForm.value.llm_providers[idx];
+                if (!p.api_base || !p.api_key) {
+                    showToast('请先填写 API Base 和 API Key', 'warning');
+                    return;
+                }
+                showToast(`测试 ${p.name || 'Provider'}...`, 'info');
+                try {
+                    const res = await fetch('/api/llm/test', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ api_base: p.api_base, api_key: p.api_key, model: p.model || 'gpt-4o-mini' }),
+                    });
+                    const data = await res.json();
+                    if (data.ok) {
+                        showToast(`${p.name || 'Provider'} 连通成功 (${data.latency_ms}ms)`, 'success');
+                    } else {
+                        showToast(`${p.name || 'Provider'} 连通失败: ${data.error}`, 'error');
+                    }
+                } catch (e) {
+                    showToast(`测试失败: ${e.message}`, 'error');
+                }
+            };
+
             const saveSettings = async () => {
                 savingSettings.value = true;
                 try {
@@ -1884,7 +2392,6 @@
                         body: JSON.stringify(configForm.value),
                     });
                     if (res.ok) {
-                        showSettings.value = false;
                         showToast('配置已保存，服务正在热重载', 'success');
                         setTimeout(fetchData, 1000);
                     } else {
@@ -1939,17 +2446,54 @@
                 if (task.status === 'failed' && task.failed_stage === stageKey) return 'failed';
                 if (task.status === 'completed') return 'done';
                 if (task.status === 'skipped') return 'pending';
-                
+
                 const currentIdx = stageOrder[task.status];
                 const thisIdx = stageOrder[stageKey];
-                
+
                 if (currentIdx === undefined) {
-                    // pending 或其他非阶段状态
                     return 'pending';
                 }
                 if (thisIdx < currentIdx) return 'done';
                 if (thisIdx === currentIdx) return 'active';
                 return 'pending';
+            };
+
+            // Segmented progress bar helpers
+            const stageColors = {
+                done: 'bg-[var(--accent-green)]',
+                active: 'bg-[var(--accent-cyan)]',
+                failed: 'bg-[var(--accent-red)]',
+                pending: 'bg-[var(--bg-elevated)]',
+            };
+            const getStageBarClass = (task, stageKey) => stageColors[getStageClass(task, stageKey)] || stageColors.pending;
+
+            const getCurrentStageKey = (task) => {
+                if (task.status === 'completed') return pipelineStages[pipelineStages.length - 1]?.key;
+                if (task.status === 'failed') return task.failed_stage;
+                return task.status;
+            };
+
+            const getCurrentStageLabel = (task) => {
+                const key = getCurrentStageKey(task);
+                const stage = pipelineStages.find(s => s.key === key);
+                return stage?.label || getStatusLabel(task.status);
+            };
+
+            const isTaskRunning = (status) => {
+                return ['extracting', 'uploading', 'transcribing', 'optimizing', 'translating', 'annotating', 'aligning'].includes(status);
+            };
+
+            const getElapsed = (startedAt) => {
+                if (!startedAt) return '';
+                const sec = Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000);
+                return formatDuration(sec);
+            };
+
+            const formatDuration = (sec) => {
+                if (!sec || sec < 0) return '';
+                const m = Math.floor(sec / 60);
+                const s = Math.floor(sec % 60);
+                return m > 0 ? `${m}:${s.toString().padStart(2, '0')}` : `${s}s`;
             };
 
             // 格式化功能
@@ -2089,6 +2633,17 @@
 
             // Watch filter change
             watch(filterStatus, () => { currentPage.value = 1; fetchTasks(); });
+
+            // Tab hash sync + auto-load config on settings tab
+            watch(currentTab, (val) => {
+                window.location.hash = val;
+                if (val === 'settings' && Object.keys(configForm.value).length === 0) {
+                    openSettings();
+                }
+                if (val === 'dashboard') {
+                    fetchMediaList();
+                }
+            });
 
             // Retry task
             const retryTask = async (taskId) => {
@@ -2441,10 +2996,33 @@
                 showWorkerDetail.value = true;
             };
 
+            // Navigate to settings sub-tab
+            const goToSettings = (subTab) => {
+                currentTab.value = 'settings';
+                settingsTab.value = subTab;
+            };
+
             onMounted(() => {
+                // URL hash sync
+                const hash = window.location.hash.slice(1);
+                if (['dashboard', 'tasks', 'settings'].includes(hash)) {
+                    currentTab.value = hash;
+                }
+                window.addEventListener('hashchange', () => {
+                    const h = window.location.hash.slice(1);
+                    if (['dashboard', 'tasks', 'settings'].includes(h)) {
+                        currentTab.value = h;
+                    }
+                });
+
                 fetchData();
                 fetchLogs(); // 初始加载一次（REST fallback）
                 fetchAutoStatus();
+                fetchMediaList();
+                // Pre-load config for dashboard cards (LLM count etc.)
+                fetch('/api/config').then(r => r.json()).then(data => {
+                    if (data.llm_providers) configForm.value.llm_providers = data.llm_providers;
+                }).catch(() => {});
                 startPolling();
                 connectLogWs(); // 建立 WebSocket 日志流
                 document.addEventListener('visibilitychange', onVisibilityChange);
@@ -2453,17 +3031,16 @@
                         if (showSubtitlePreview.value) { showSubtitlePreview.value = false; }
                         else if (showAnnotationPreview.value) { showAnnotationPreview.value = false; }
                         else if (showWorkerDetail.value) { showWorkerDetail.value = false; }
-                        else if (showSettings.value) { showSettings.value = false; }
                         else if (showBrowser.value) { showBrowser.value = false; }
                         else if (confirmState.value.show) { confirmResolve(false); }
                     }
                     // Ctrl+F: focus search box
-                    if (e.ctrlKey && e.key === 'f' && !showSettings.value) {
+                    if (e.ctrlKey && e.key === 'f' && currentTab.value === 'tasks') {
                         e.preventDefault();
                         document.getElementById('task-search')?.focus();
                     }
                     // Ctrl+Enter: submit task
-                    if (e.ctrlKey && e.key === 'Enter' && !showSettings.value && !showBrowser.value && !showSubtitlePreview.value) {
+                    if (e.ctrlKey && e.key === 'Enter' && currentTab.value === 'tasks' && !showBrowser.value && !showSubtitlePreview.value) {
                         submitTask();
                     }
                 });
@@ -2476,13 +3053,14 @@
             });
 
             return {
+                currentTab, mainTabs,
                 sysInfo, tasks, loading, form, submitting, submitResult,
                 showBrowser, browsing, browserData, openBrowser, loadPath, selectFile,
                 showLogs, sysLogs, logContainer, toggleLogs, getLogColor,
                 autoStatus, scanning, triggerScan, toggleAutomation,
                 onlineCount, toggleWorker,
                 showSettings, settingsTab, settingsTabs, configForm, savingSettings,
-                openSettings, addWorker, removeWorker, saveSettings,
+                openSettings, addWorker, removeWorker, testLlmProvider, saveSettings,
                 showLoginDialog, loginToken, loginError, loginLoading, isAuthenticated,
                 openLogin, submitLogin, logout, testNotification,
                 filterStatus, searchQuery, onSearchInput, expandedTask, currentPage, pageSize, totalTasks, pipelineStages,
@@ -2492,7 +3070,7 @@
                 selectedTasks, selectAll, selectedCount, toggleSelect, clearSelection,
                 batchRetry, batchCancel, batchDelete,
                 getFileName, formatDate, formatUptime, getStatusLabel, getStatusColor, getBarColor, getErrorLabel, isRetryable,
-                getStageClass, toggleDetail, retryTask, updatePriority,
+                getStageClass, getStageBarClass, getCurrentStageKey, getCurrentStageLabel, isTaskRunning, getElapsed, formatDuration, toggleDetail, retryTask, updatePriority,
                 fetchData, submitTask,
                 // Phase 1 additions
                 toasts, showToast, confirmState, confirmResolve, showConfirm,
@@ -2504,7 +3082,16 @@
                 // Statistics
                 statsData, workerStatsData, fetchStats,
                 // Annotation preview
-                showAnnotationPreview, annotationPreviewTitle, annotationAssContent, openAnnotationPreview
+                showAnnotationPreview, annotationPreviewTitle, annotationAssContent, openAnnotationPreview,
+                // Dashboard navigation
+                goToSettings,
+                // Media list
+                mediaList, mediaTotal, mediaFilter, mediaLoading, mediaScanPaths, mediaPage,
+                fetchMediaList, submitMediaTask,
+                // Whisper models
+                whisperModels, fetchWhisperModels,
+                // Security
+                newCorsOrigin
             };
         }
     }).mount('#app');

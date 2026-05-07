@@ -103,6 +103,10 @@
 ## 远期愿景
 
 ### V1.0：开箱即用（进行中）
+- **WebUI 侧边栏重构** ✅：单页应用重构为侧边栏三 tab 架构（看板/任务/配置）。看板 tab 含 4 个可点击状态卡片（Worker 集群/任务概览/LLM 提供商/快速操作）+ 影视资源列表（扫描媒体库、显示字幕状态、一键生成字幕）；任务 tab 含分段式进度条（阶段色块 + 百分比 + 已耗时 + 预估剩余）+ 行内快捷操作；配置 tab 改为左导航右表单，覆盖 Worker 节点/LLM 提供商/媒体库/转写/翻译/字幕/注释/自动化/Emby/安全/通知/数据洞察 12 个分组。URL hash 同步，切换动画，版本号从 API 实时读取。
+- **配置统管** ✅：Coordinator 统一管理 LLM 提供商、转写、翻译等配置，自动推送到在线 Worker。LLM 提供商支持卡片式编辑器（拖拽排序、测试连通性）。转写模型选择显示本地下载状态、大小、显存需求、速度、质量评级。媒体库路径可视化编辑。
+- **安全加固** ✅：首次启动自动生成 API Token + Worker Token 并持久化到 config.yaml；CORS 默认收紧为 localhost；IP 级速率限制（POST 60/min）；media_path 路径校验防止越权访问；Worker 认证中间件 bug 修复；安全设置 tab 新增状态总览（红绿灯）+ CORS 编辑器。
+- **后端 API 扩展** ✅：新增 `/api/media/list`（媒体资源列表含字幕状态）、`/api/whisper/models`（模型本地状态）、`/api/llm/test`（LLM 连通性测试）。CoordinatorConfig 模型新增 `llm_providers`/`translate`/`transcribe` 字段，配置 YAML 与模型完全同步。
 - **跨平台打包**：Coordinator (Nuitka) + Worker (PyInstaller) 构建脚本，GitHub Actions CI/CD 自动构建 + Release。支持 Windows/Linux，CUDA 11/12 变体。
 - **Worker 桌面启动器 (PySide6)**：电影级暗色主题 GUI，集成环境检测、服务管理（启动/停止/重启）、实时日志、配置编辑、系统托盘、自动更新检查。
 - **首次运行引导 (OOBE)**：无 config.yaml 时自动弹出分步向导 — 连接 Coordinator → 选择 Whisper 模型 → 配置 LLM API → 完成。

@@ -17,6 +17,7 @@ from typing import Optional
 
 import httpx
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import JSONResponse
 
 from shared.constants import VERSION, PROJECT_NAME
 from shared.models import (
@@ -241,7 +242,7 @@ async def verify_worker_token(request: Request, call_next):
     needs_auth = False
     if method == "PUT" and path == "/api/config":
         needs_auth = True
-    elif method == "POST" and (path in _PROTECTED_PATHS or path.startswith("/api/task/upload_chunk")):
+    elif method == "POST" and (path in _PROTECTED_PATHS or path.startswith("/api/task/") or path.startswith("/api/models/")):
         needs_auth = True
     elif method == "DELETE":
         needs_auth = True
@@ -249,7 +250,7 @@ async def verify_worker_token(request: Request, call_next):
     if needs_auth:
         req_token = request.headers.get("X-Worker-Token", "")
         if req_token != token:
-            return HTTPException(status_code=401, detail="Unauthorized")
+            return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
 
     return await call_next(request)
 

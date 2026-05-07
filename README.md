@@ -1,258 +1,235 @@
-# 🎬 SSUBB — 看片自动补字幕
+# SSUBB — 分布式字幕转写翻译系统
 
-> **一句话说明**：家里 NAS 自动发现没字幕的电影/电视剧 → 发到公司 GPU 转写翻译 → 字幕自动写回 Emby。
-
----
-
-## 这个项目能干什么？
-
-你有一台 **NAS**（或任何能跑 Python 的家用机），又有一台 **有 GPU 的电脑**（公司的、云服务器、或者你自己的游戏电脑）。
-
-SSUBB 会：
-1. 🔍 扫描你的影视库，找到没有中文字幕的视频
-2. 🎵 提取音频，上传到 GPU 机器
-3. 🗣️ 用 Whisper AI 把语音转成文字
-4. 🌐 用大模型（DeepSeek / GPT 等）翻译成中文
-5. 📝 自动把字幕文件写回到视频旁边
-6. 📺 通知 Emby/Jellyfin 刷新，打开就能看
-
-**全程自动，你不用做任何操作。**
+> NAS 自动发现没字幕的影视 → 发到 GPU 机器转写翻译 → 字幕自动写回。全程无需人工干预。
 
 ---
 
-## ⚡ 快速开始（5 分钟上手）
+## 它能做什么
 
-### 你需要准备的东西
+```
+NAS (存储)                    GPU (算力)
+┌──────────────┐    音频     ┌──────────────┐
+│ 扫描影视库    │  ───────→  │ Whisper 转写  │
+│ 提取音频      │            │ LLM 翻译     │
+│ 写回字幕      │  ←───────  │ 质量评分     │
+│ 通知 Emby     │    字幕     │              │
+└──────────────┘            └──────────────┘
+```
 
-| 东西 | 说明 |
-|---|---|
-| **家用机/NAS** | 能跑 Python 3.10+，有 FFmpeg，不需要 GPU |
-| **GPU 机器** | 有 NVIDIA 显卡（4GB+ 显存），装了 Python 和 CUDA |
-| **LLM API Key** | 推荐 [DeepSeek](https://platform.deepseek.com/)，便宜好用（翻译一部电影约 ¥0.1） |
-| **两台机器能互相访问** | 在同一个局域网，或者通过内网穿透/Tailscale 连通 |
+- 扫描影视库，自动发现缺少中文字幕的视频
+- Whisper AI 语音转文字（支持 99 种语言自动检测）
+- LLM 翻译成中文（DeepSeek / OpenAI / 智谱等，支持多源容灾）
+- 字幕自动写回视频旁，通知 Emby/Jellyfin 刷新
+- 支持多 GPU 节点并发、优先级队列、故障自动迁移
 
 ---
 
-### 第一步：在 NAS 上启动 Coordinator（推荐用 Docker）
+## 快速开始
 
-Coordinator 是管理任务的大脑，适合部署在 NAS 上。
+### 准备
 
-**方式一：Docker 部署（强烈推荐，适合群晖/威联通/Unraid）**
+| 需要 | 说明 |
+|------|------|
+| NAS / 家用机 | Python 3.10+，FFmpeg，不需要 GPU |
+| GPU 机器 | NVIDIA 显卡 4GB+，Python + CUDA |
+| LLM API Key | 推荐 [DeepSeek](https://platform.deepseek.com/)（翻译一部电影约 ¥0.1） |
+| 网络互通 | 同一局域网，或 Tailscale 内网穿透 |
 
+### 第一步：NAS 端启动 Coordinator
+
+**Docker（推荐）**：
 ```bash
-# 1. 下载项目
-git clone https://github.com/你的仓库/SSUBB.git
-cd SSUBB
-
-# 2. 运行配置向导，它会问你几个简单问题，自动生成 config.yaml
-# 如果你的机器没有 python，也可以手动把 config.minimal.yaml 复制成 config.yaml 填一下
-python3 -m coordinator.setup_wizard
-
-# 3. 启动
+git clone https://github.com/Magnoliar/SSUBB.git && cd SSUBB
+python3 -m coordinator.setup_wizard   # 生成 config.yaml
 docker compose up -d
 ```
-*提示：打开 `docker-compose.yml`，把里面的 `/volume1/media:/media` 改成你实际的影视库路径。*
 
-**方式二：直接运行（适合 Windows/裸机 Linux）**
+**裸机**：Windows 双击 `start_coordinator.bat`，Linux 运行 `bash start_coordinator.sh`。
 
-- **Windows 用户**：双击 `start_coordinator.bat`
-- **Linux/Mac 用户**：运行 `bash start_coordinator.sh`
+启动后访问 `http://NAS_IP:8787`，首次启动会自动生成 API Token（显示在终端日志中，登录需要）。
 
-> 脚本会**自动弹出一个向导**，你只需跟着提示输入 Worker 的 IP，然后一路回车就行，不用自己改复杂的配置文件！
-
-完成后，打开浏览器访问 `http://NAS的IP:8787`，看到控制台就成功了！🎉
-
----
-
-### 第二步：在 GPU 机器上启动 Worker
-
-**方式一：桌面启动器（V1.0 推荐，双击即用）**
-
-下载 `ssubb-launcher` 可执行文件（[GitHub Releases](https://github.com/Magnoliar/SSUBB/releases)），双击启动。首次运行会弹出配置向导，引导你完成所有设置。
-
-启动器功能：
-- 环境检测（GPU / CUDA / FFmpeg / 模型）
-- 一键启动/停止/重启 Worker
-- 实时日志查看
-- 配置编辑（无需手写 YAML）
-- 系统托盘常驻
-- 自动更新检查
-
-**方式二：CLI 模式（开发者 / 无 PySide6）**
+### 第二步：GPU 端启动 Worker
 
 ```bash
-git clone https://github.com/Magnoliar/SSUBB.git
-cd SSUBB
-
-# Windows:
-worker\run_worker.bat
-
-# Linux/Mac:
-bash worker/run_worker.sh
+git clone https://github.com/Magnoliar/SSUBB.git && cd SSUBB
+# Windows: worker\run_worker.bat  |  Linux: bash worker/run_worker.sh
 ```
 
-启动脚本会自动：
-1. ✅ 安装 Python 依赖
-2. ✅ 检查 GPU / FFmpeg 等环境
-3. ✅ 引导你填写配置（NAS 地址、LLM API Key 等）
-4. ✅ 下载 Whisper 模型（约 1.6 GB，首次需要等一会）
-5. ✅ 启动 Worker 服务
+脚本自动安装依赖、检测 GPU/FFmpeg、引导配置、下载 Whisper 模型。
 
-> **没有 GPU？** 也能用，只是转写会很慢。配置向导会自动检测并切换到 CPU 模式。
+### 第三步：测试
 
-> **多台 GPU？** V0.6 起支持多 Worker 并发。在 NAS 端的 `config.yaml` 中配置 `workers` 列表即可，Coordinator 会自动按权重分配任务。详见 [配置手册](docs/configuration.md)。
-
-> **懒得填 IP？** V0.7 起支持局域网自动发现。Worker 启动后会自动广播自身信息，Coordinator 收到后自动注册，无需手动填写 IP 地址。
-
-> **要接入其他系统？** V0.8 起支持通用 Webhook。发送 `POST /api/webhook` 即可创建任务，详见 `/docs` API 文档。
-
-> **批量管理？** V0.9 起支持批量重试/取消/删除任务。任务列表勾选后一键操作，还有数据洞察面板查看历史趋势和 Worker 利用率。
-
-> **LLM 容灾？** V0.10 起支持配置多个 LLM 提供商（DeepSeek/OpenAI/智谱等），按优先级自动切换，单点故障不再影响全局。
-
-> **字幕可编辑？** V0.10 起完成任务后可在 WebUI 预览、编辑字幕，还能勾选段落重新调用 AI 优化。
-
-> **安全认证？** V0.11 起支持 API Token 鉴权，防止未授权访问。WebUI 登录后自动携带 Token。
-
-> **术语提取？** V0.11 起翻译前自动提取专有名词，搜索豆瓣/维基百科获取官方译名，确保人名、地名翻译一致。
-
-> **字幕注释？** V0.12 起自动生成文化注释（双关语、典故），类似字幕组的翻译备注。
-
-> **跨平台打包？** V1.0 起提供独立可执行文件，无需安装 Python 环境。
+打开 `http://NAS_IP:8787` → 选择文件 → 提交任务 → 等几分钟 → 字幕出现在视频旁。
 
 ---
 
-### 第三步：测试一下
+## 功能一览
 
-1. 打开 NAS 端控制台 `http://NAS的IP:8787`
-2. 点击「选择文件」→ 找到一个没有中文字幕的视频
-3. 点击「提交任务」
-4. 等几分钟，字幕就自动出现在视频旁边了！
+### 核心能力
+| 功能 | 版本 | 说明 |
+|------|------|------|
+| 多节点并发 | V0.6+ | 多个 GPU Worker 按权重分配任务 |
+| 优先级队列 | V0.8+ | 1-5 级优先级，高优先级优先处理 |
+| 故障自动迁移 | V0.8+ | Worker 离线后任务自动转移 |
+| MoviePilot 集成 | V0.2+ | 入库自动触发字幕生成 |
+| 自动扫描 | V0.2+ | 定时扫描影视库，补齐缺失字幕 |
+| 音轨智能选择 | V0.12+ | FFprobe 分析音轨，优先英语音轨 |
 
----
+### 字幕质量
+| 功能 | 版本 | 说明 |
+|------|------|------|
+| 反思翻译 | V0.10+ | 翻译后二次审校提升质量 |
+| 质量评分 | V0.8+ | 0-100 分自动评估，低分自动重试 |
+| 术语提取 | V0.11+ | 豆瓣/维基搜索专有名词官方译名 |
+| 文化注释 | V0.12+ | 自动生成双关语、典故翻译备注 |
+| 智能排版 | V0.4+ | 分片翻译、时轴矫正、ASS 特效 |
+| 断句优化 | V0.10+ | 长句防截断，按语言约束行长 |
 
-## 📋 配置速查
+### 控制台 (WebUI)
+| 功能 | 版本 | 说明 |
+|------|------|------|
+| 侧边栏三 tab | V1.0 | 看板 / 任务 / 配置，URL hash 同步 |
+| 影视资源列表 | V1.0 | 扫描媒体库，显示字幕状态，一键生成 |
+| 分段进度条 | V1.0 | 阶段色块 + 百分比 + 已耗时 + 预估剩余 |
+| 配置统管 | V1.0 | Coordinator 统一管理 LLM/转写/翻译配置 |
+| LLM 提供商管理 | V1.0 | 卡片式编辑器，测试连通性，多源容灾 |
+| 转写模型选择 | V1.0 | 显示本地下载状态、大小、显存、速度、质量 |
+| 字幕预览编辑 | V1.0+ | 在线预览 SRT，手动编辑，AI 优化 |
+| 批量操作 | V0.9+ | 勾选后批量重试/取消/删除 |
+| 数据洞察 | V0.9+ | 30 天趋势、成功率、Worker 利用率 |
 
-你**只需要关心这几项**（其他全部用默认值）：
+### 安全
+| 功能 | 版本 | 说明 |
+|------|------|------|
+| Token 自动生成 | V1.0 | 首次启动自动生成 API Token + Worker Token |
+| 速率限制 | V1.0 | IP 级限流（POST 60/min, PUT 30/min） |
+| 路径校验 | V1.0 | media_path 限制在媒体库范围内 |
+| CORS 收紧 | V1.0 | 默认仅允许 localhost |
+| API Token 鉴权 | V0.11+ | Bearer Token 认证，WebUI 登录 |
+| Worker Token | V0.11+ | Worker 回调认证 |
 
-| 配置项 | 在哪里填 | 说明 |
-|---|---|---|
-| `coordinator.workers` | NAS 端 config.yaml | GPU 节点列表（支持多个），如 `[{url: "http://192.168.1.50:8788"}]` |
-| `worker.coordinator_url` | GPU 端 config.yaml | NAS 地址，如 `http://192.168.1.10:8787` |
-| `worker.llm.api_base` | GPU 端 config.yaml | LLM API 地址，如 `https://api.deepseek.com/v1` |
-| `worker.llm.api_key` | GPU 端 config.yaml | 你的 LLM API Key |
-| `worker.llm.model` | GPU 端 config.yaml | 模型名称，如 `deepseek-chat` |
-| `coordinator.security.api_token` | NAS 端 config.yaml | API 鉴权 Token（推荐设置，V0.11+） |
-| `coordinator.notifications` | NAS 端 WebUI | 通知渠道配置（Bark/PushPlus 等，V0.11+） |
-| `coordinator.logging` | NAS 端 config.yaml | 日志轮转配置（V0.11+） |
-
-> 💡 **小贴士**：如果你用 `run_worker.bat` 或 `run_worker.sh` 首次启动 Worker，配置向导会一步步问你这些信息，**不需要手动编辑 YAML 文件**。
-
----
-
-## 🔌 搭配 MoviePilot 使用（全自动模式）
-
-如果你用 [MoviePilot](https://github.com/jxxghp/MoviePilot) 管理下载和入库：
-
-1. 把 `moviepilot-plugin/ssubb` 文件夹复制到 MoviePilot 的插件目录
-2. 在 MoviePilot → 插件 → SSUBB 字幕转写 → 设置中填写 Coordinator 地址
-3. 打开「入库自动触发」开关
-
-之后每次 MoviePilot 下载入库新影片，就会**自动通知 SSUBB 生成字幕**。
-
----
-
-## ❓ 常见问题
-
-### Q: 两台机器不在同一个网络怎么办？
-
-推荐用 [Tailscale](https://tailscale.com/)（免费），装上后两台机器就像在同一个局域网，填 Tailscale 分配的 IP 即可。
-
-### Q: 没有 NVIDIA 显卡能用吗？
-
-能用，但转写会非常慢（可能 10 倍以上）。建议至少 GTX 1060 / RTX 3050 以上。
-
-### Q: LLM API Key 怎么获取？
-
-- **DeepSeek**（推荐）：去 [platform.deepseek.com](https://platform.deepseek.com/) 注册，充值 10 元能用很久
-- **OpenAI**：去 [platform.openai.com](https://platform.openai.com/) 注册
-- **其他兼容的**：任何 OpenAI 兼容 API 都行（如 GLM-4、通义千问等）
-
-### Q: 一部电影大概多久？
-
-取决于片长和 GPU 性能。参考值（RTX 3060）：
-- 90 分钟电影 → 转写约 3~5 分钟，翻译约 1~2 分钟
-- 45 分钟剧集 → 转写约 1~3 分钟，翻译约 1 分钟
-
-### Q: 支持什么语言？
-
-源语言：Whisper 支持 99 种语言，会自动检测。
-目标语言：中文（默认）、英文、日语、韩语、法语、德语等。
-
-### Q: 字幕质量怎么样？
-
-Whisper large-v3-turbo + DeepSeek 翻译的质量已经**超过大部分网上下载的字幕**。
-如果想要更高质量，可以开启「反思翻译」（config.yaml 里 `need_reflect: true`）。
+### 通知 & 集成
+| 功能 | 版本 | 说明 |
+|------|------|------|
+| 多渠道通知 | V0.11+ | Bark / PushPlus / Gotify / 通用 Webhook |
+| Emby/Jellyfin | V0.1+ | 自动通知刷新媒体库 |
+| 通用 Webhook | V0.8+ | `POST /api/webhook` 触发任务 |
+| 局域网自动发现 | V0.7+ | UDP 广播自动注册 Worker |
 
 ---
 
-## 📚 详细文档与项目结构
+## 配置速查
 
-更多进阶用法和底层架构原理，请参考 `docs/` 目录下的相关文档：
+大多数配置可通过 WebUI 设置页面完成，无需手动编辑 YAML。
 
-- [架构设计 (architecture.md)](docs/architecture.md)：SSUBB 是如何分离算力与存储的？
-- [配置详解 (configuration.md)](docs/configuration.md)：YAML 文件中所有高级参数的详细说明。
-- [开发路线 (roadmap.md)](docs/roadmap.md)：项目的历史演进与未来功能计划。
-- **API 文档**：Coordinator 启动后访问 `http://<NAS_IP>:8787/docs` 查看完整 REST API。
+| 配置项 | 位置 | 说明 |
+|--------|------|------|
+| `coordinator.workers` | Coordinator WebUI | GPU 节点列表 |
+| `coordinator.llm_providers` | Coordinator WebUI | LLM 提供商（支持多个，自动容灾） |
+| `coordinator.transcribe` | Coordinator WebUI | 转写模型/设备/精度 |
+| `coordinator.security.api_token` | 自动生成 | API 鉴权 Token |
+| `worker.coordinator_url` | Worker config | Coordinator 地址 |
+| `worker.coordinator_token` | Worker config | Worker Token（与 Coordinator 匹配） |
 
-项目代码结构（供开发者参考）：
-- `coordinator/`：NAS 端（任务调度 + WebUI + 字幕写入）
-- `worker/`：GPU 端（语音转写 + AI 翻译）
-- `shared/`：两端共用的数据模型与常量
-- `moviepilot-plugin/`：MoviePilot V2 专用自动触发插件
-
----
-
-## 🚧 已知边界与限制
-
-在当前版本中，系统仍有一些物理与架构层面的限制，请在使用前知悉：
-1. **单卡串行处理**：每个 Worker 端为了保证显存不溢出，任务排队串行处理。但 V0.6 起支持多 Worker 并发，不同节点可同时处理不同任务，配合流水线调度可显著提升吞吐量。
-2. **超大原盘耗时**：对于 50GB 甚至 100GB 的超大蓝光原盘，第一步“提取音频”和“网络回传”可能会受到局域网带宽和机械硬盘 I/O 的极大限制而耗时较久。
-3. **小众语言混叠**：对于方言、极端冷门语种或背景噪音极大的视频，Whisper 可能会出现幻听（可通过自行更换更大参数模型缓解）。
-4. **纯内网分发**：V0.8 起支持 Webhook Token 认证，V0.9 增加了路径遍历防护和配置并发锁，V0.11 增加了 API Token 鉴权，但仍建议**不要将其直接暴露在公网**，搭配局域网、Tailscale 或带认证的 Nginx 反向代理使用。
+完整配置说明见 [docs/configuration.md](docs/configuration.md)。
 
 ---
 
-## 💻 开发方式
+## 技术栈
 
-本项目由纯 **AI 结对编程** (AI Pair Programming) 驱动开发构建。
-- **技术栈**：后端采用 `FastAPI` (高并发异步调度)，前端采用 `Vue 3` + `TailwindCSS` 打造极简的极客风控制台。
-- **AI 协作**：从核心架构设计、分布式通信实现，到美观的 UI 组件与重试容错机制，均系与先进的大语言模型共同思考迭代完成，代码具有极高的现代化标准与注释覆盖率。
+- **后端**：Python 3.10+ / FastAPI / SQLite / asyncio
+- **前端**：Vue 3 + Tailwind CSS（单文件 SPA，无构建工具）
+- **转写**：Faster-Whisper（CTranslate2 加速）
+- **翻译**：OpenAI 兼容 API（DeepSeek / GPT / 智谱等）
+- **部署**：Docker Compose / 裸机脚本
+
+```
+coordinator/          NAS 端（任务调度 + WebUI + 字幕写入）
+  ├── main.py         FastAPI 入口，39 个 API 端点
+  ├── config.py       Pydantic 配置模型（21 字段）
+  ├── task_manager.py 任务生命周期管理
+  ├── scanner.py      影视库扫描
+  └── static/index.html  190KB 单文件 SPA
+
+worker/               GPU 端（转写 + 翻译）
+  ├── main.py         Worker API 服务
+  ├── task_executor.py 转写 + 翻译执行器
+  └── translator.py   LLM 翻译（多源容灾）
+
+shared/               共用数据模型与常量
+moviepilot-plugin/    MoviePilot 自动触发插件
+```
 
 ---
 
-## 🙏 致谢
+## 版本进度
 
-SSUBB 的诞生离不开开源社区的伟大贡献，特别感谢以下项目和技术（包含直接引用或灵感参考）：
-- [OpenAI Whisper](https://github.com/openai/whisper) / [Faster-Whisper](https://github.com/SYSTRAN/faster-whisper)：提供卓越的语音转写基础。
-- [MoviePilot](https://github.com/jxxghp/MoviePilot)：极其优秀的自动化媒体库管理系统。
-- [subgen](https://github.com/McCloudS/subgen)：启发了本项目网络分布式提取与字幕工作流的灵感。
-- [VideoCaptioner](https://github.com/WEIFENG2333/VideoCaptioner)：启发了长视频大语言模型分片翻译防截断优化思路。
-- DeepSeek / 智谱 等 API 厂商：让高质量 AI 翻译变得廉价可及。
+| 版本 | 状态 | 核心内容 |
+|------|------|----------|
+| V0.1~V0.5 | ✅ 完成 | 核心链路、容错、自动化、WebUI、Docker |
+| V0.6~V0.7 | ✅ 完成 | 多节点并发、自动发现、WebUI 体验升级 |
+| V0.8~V0.9 | ✅ 完成 | 智能调度、Webhook、批量操作、数据洞察 |
+| V0.10~V0.12 | ✅ 完成 | LLM 容灾、字幕编辑、术语提取、注释系统 |
+| **V1.0** | **进行中** | WebUI 重构 + 配置统管 + 安全加固 + 打包 + 启动器 |
+
+### V1.0 剩余工作
+
+- [ ] 跨平台打包（Nuitka + PyInstaller + GitHub Actions CI/CD）
+- [ ] Worker 桌面启动器（PySide6 GUI + 环境检测 + 系统托盘）
+- [ ] 首次运行引导 OOBE（无 config.yaml 时弹出分步向导）
+- [ ] 自动更新（GitHub Releases 检查 + 下载替换 + 回滚）
+
+详见 [docs/roadmap.md](docs/roadmap.md) 和 [docs/v1.0-plan.md](docs/v1.0-plan.md)。
 
 ---
 
-## 📄 分发与版权 (License)
+## 已知限制
 
-本项目基于 **MIT License** 协议开源。
-您可以自由地使用、修改、分发甚至用于商业用途，只需保留原作者的版权声明即可。
-
-> **免责声明**：本项目仅供学习与技术交流使用，请勿用于任何违反法律法规的用途。由于 AI 翻译存在不可控性，开发者不对生成字幕的准确性、适用性负责。
+1. **单卡串行**：每个 Worker 串行处理（多 Worker 可并发）
+2. **大文件耗时**：50GB+ 蓝光原盘受带宽和 I/O 限制
+3. **小众语言**：方言或极端噪音下 Whisper 可能幻听
+4. **内网优先**：建议不要直接暴露公网，搭配 Tailscale 或 Nginx
 
 ---
 
-## 🙋 遇到问题？
+## 常见问题
 
-1. 优先查看 NAS 控制台（`http://NAS的IP:8787`）的实时日志看板。
-2. 检查 Worker 终端的输出。
-3. 大部分问题是网络不通或配置（尤其是 IP 地址和端口）填错，请善用 `scripts/check_env.ps1` 进行自检。
+**Q: 两台机器不在同一网络？** → 用 [Tailscale](https://tailscale.com/)（免费）
+
+**Q: 没有 GPU？** → 能用，但转写慢 10 倍+。建议 GTX 1060 以上。
+
+**Q: 一部电影多久？** → RTX 3060 参考：90 分钟电影转写 3~5 分钟，翻译 1~2 分钟。
+
+**Q: 字幕质量？** → large-v3-turbo + DeepSeek 超过大部分网上下载字幕。开启 `need_reflect: true` 可进一步提升。
+
+---
+
+## 开发方式
+
+纯 **AI 结对编程** 驱动开发。后端 FastAPI 高并发异步调度，前端 Vue 3 + TailwindCSS 极简控制台。
+
+---
+
+## 致谢
+
+- [Faster-Whisper](https://github.com/SYSTRAN/faster-whisper)：语音转写基础
+- [MoviePilot](https://github.com/jxxghp/MoviePilot)：自动化媒体库管理
+- [subgen](https://github.com/McCloudS/subgen)：分布式字幕工作流灵感
+- [VideoCaptioner](https://github.com/WEIFENG2333/VideoCaptioner)：分片翻译防截断思路
+- DeepSeek / 智谱等：让高质量 AI 翻译廉价可及
+
+---
+
+## License
+
+MIT License。详见 [LICENSE](LICENSE)。
+
+> **免责声明**：仅供学习与技术交流，AI 翻译存在不可控性，开发者不对生成字幕的准确性负责。
+
+---
+
+## 遇到问题？
+
+1. 查看 WebUI 实时日志（`http://NAS_IP:8787`）
+2. 检查 Worker 终端输出
+3. 大部分问题是网络不通或配置填错

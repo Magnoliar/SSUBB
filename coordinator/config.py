@@ -114,7 +114,7 @@ class SecurityConfig(BaseModel):
     """API 安全配置"""
     api_token: str = ""              # API 访问令牌（空=不验证，向后兼容）
     worker_token: str = ""           # Worker 回调令牌（空=不验证）
-    cors_origins: list[str] = Field(default_factory=lambda: ["*"])
+    cors_origins: list[str] = Field(default_factory=list)
 
 
 class LoggingConfig(BaseModel):
@@ -159,6 +159,32 @@ class WorkerNodeConfig(BaseModel):
     enabled: bool = True       # 可关闭而不删除
 
 
+class LLMProviderConfig(BaseModel):
+    """单个 LLM 提供商配置"""
+    name: str = ""
+    provider: str = "openai"         # openai / deepseek / zhipu
+    api_base: str = ""
+    api_key: str = ""
+    model: str = ""
+    enabled: bool = True
+
+
+class TranslateConfig(BaseModel):
+    """翻译配置"""
+    target_lang: str = "zh"
+    thread_num: int = 3
+    batch_size: int = 10
+    need_reflect: bool = False
+
+
+class TranscribeConfig(BaseModel):
+    """转写配置"""
+    model: str = "large-v3-turbo"
+    device: str = "auto"
+    compute_type: str = "auto"
+    vad_filter: bool = True
+
+
 class CoordinatorConfig(BaseModel):
     host: str = "0.0.0.0"
     port: int = 8787
@@ -178,6 +204,9 @@ class CoordinatorConfig(BaseModel):
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     notifications: NotificationConfig = Field(default_factory=NotificationConfig)
     annotation: AnnotationConfig = Field(default_factory=AnnotationConfig)
+    llm_providers: list[LLMProviderConfig] = Field(default_factory=list)
+    translate: TranslateConfig = Field(default_factory=TranslateConfig)
+    transcribe: TranscribeConfig = Field(default_factory=TranscribeConfig)
 
 
 def load_config(config_path: Optional[str] = None) -> CoordinatorConfig:
