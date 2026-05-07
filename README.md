@@ -188,13 +188,22 @@ Worker 首次启动会弹出配置向导，需要填写：
 
 | 文件 | 平台 | 说明 |
 |------|------|------|
-| `ssubb-worker-*-win64-cuda12.exe` | Windows + CUDA 12 | Worker（推荐） |
-| `ssubb-worker-*-win64-cuda11.exe` | Windows + CUDA 11 | Worker（旧显卡） |
-| `ssubb-worker-*-linux-x64-cuda12` | Linux + CUDA 12 | Worker |
-| `ssubb-launcher-*-win64.exe` | Windows | 桌面启动器（GUI） |
-| `ssubb-launcher-*-linux-x64` | Linux | 桌面启动器（GUI） |
+| `ssubb-worker-*-win64-cuda12.exe` | Windows + CUDA 12 | Worker 主程序（推荐） |
+| `ssubb-worker-*-win64-cuda11.exe` | Windows + CUDA 11 | Worker 主程序（旧显卡） |
+| `ssubb-worker-*-linux-x64-cuda12` | Linux + CUDA 12 | Worker 主程序 |
+| `ssubb-launcher-*-win64.exe` | Windows | Worker 桌面启动器（可选） |
+| `ssubb-launcher-*-linux-x64` | Linux | Worker 桌面启动器（可选） |
 
-> **前置要求**：需先安装 [PyTorch GPU 版](https://pytorch.org/get-started/locally/)，exe 本身不含 CUDA 运行时。
+**Worker** 是核心程序，负责转写翻译。命令行运行，接收任务、调用 Whisper + LLM。
+
+**Launcher** 是可选的桌面 GUI，提供：
+- 环境检测（GPU / CUDA / FFmpeg / 模型）
+- 一键启动/停止/重启 Worker
+- 实时日志查看
+- 配置编辑（不用手写 YAML）
+- 系统托盘常驻
+
+> **前置要求**：需先安装 [PyTorch GPU 版](https://pytorch.org/get-started/locally/)，exe 本身不含 CUDA 运行时。未安装时 Worker 会提示安装命令。
 
 ---
 

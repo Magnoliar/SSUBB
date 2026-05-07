@@ -169,23 +169,25 @@ jobs:
           path: artifacts
         continue-on-error: true
 
-      - name: List artifacts
-        run: find artifacts -type f | sort || echo "No artifacts found"
+      - name: Flatten artifacts for release
+        run: |
+          mkdir -p release
+          # 复制所有 exe 和可执行文件到 release 目录
+          find artifacts -type f -name "*.exe" -exec cp {} release/ \;
+          find artifacts -type f -name "ssubb-worker" -exec cp {} release/ \;
+          find artifacts -type f -name "ssubb-launcher" -exec cp {} release/ \;
+          ls -la release/
 
       - name: Generate checksums
         run: |
-          cd artifacts
-          find . -type f \( -name "*.exe" -o -name "ssubb-*" \) -exec sha256sum {} \; > checksums.sha256 || true
-          cat checksums.sha256 || echo "No checksums generated"
+          cd release
+          sha256sum * > checksums.sha256 || true
+          cat checksums.sha256
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           generate_release_notes: true
-          files: |
-            artifacts/**/*.exe
-            artifacts/**/ssubb-worker
-            artifacts/**/ssubb-launcher
-            artifacts/checksums.sha256
+          files: release/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

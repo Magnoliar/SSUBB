@@ -3,6 +3,26 @@
 公司 GPU 端的 HTTP 服务，接收 Coordinator 分发的任务，执行转写/翻译流水线。
 """
 
+# PyTorch 可用性检查（exe 打包不含 torch，需用户自行安装）
+try:
+    import torch  # noqa: F401
+except ImportError:
+    print("=" * 60)
+    print("  错误: PyTorch 未安装")
+    print("=" * 60)
+    print()
+    print("  SSUBB Worker 需要 PyTorch 才能运行。")
+    print()
+    print("  请安装 GPU 版本（推荐）:")
+    print("    pip install torch --index-url https://download.pytorch.org/whl/cu124")
+    print()
+    print("  或 CPU 版本（无 GPU 时）:")
+    print("    pip install torch --index-url https://download.pytorch.org/whl/cpu")
+    print()
+    print("  更多信息: https://pytorch.org/get-started/locally/")
+    print("=" * 60)
+    sys.exit(1)
+
 import asyncio
 import hashlib
 import json
