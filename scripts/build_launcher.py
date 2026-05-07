@@ -1,10 +1,9 @@
 """SSUBB Launcher 构建脚本 (PyInstaller)
 
 将 PySide6 桌面启动器打包为独立可执行文件。
-启动器管理 Worker 子进程，本身不含 Worker 逻辑。
 
 用法:
-    python scripts/build_launcher.py [--output-dir dist]
+    python scripts/build_launcher.py [--onefile] [--output-dir dist]
 
 前置条件:
     pip install pyinstaller PySide6
@@ -40,106 +39,46 @@ def build(args):
     print(f"[build] Platform: {system} ({arch})")
     print(f"[build] Output: {output_dir}")
 
-    # PyInstaller spec
-    spec_content = f"""# -*- mode: python ; coding: utf-8 -*-
-# SSUBB Launcher PyInstaller Spec
-
-from pathlib import Path
-
-block_cipher = None
-project_root = Path(r'{PROJECT_ROOT}')
-
-a = Analysis(
-    [str(project_root / 'launcher' / '__main__.py')],
-    pathex=[str(project_root)],
-    binaries=[],
-    datas=[
-        (str(project_root / 'shared'), 'shared'),
-    ],
-    hiddenimports=[
-        'shared',
-        'shared.constants',
-        'shared.models',
-        'launcher',
-        'launcher.app',
-        'launcher.env_check_panel',
-        'launcher.service',
-        'launcher.config_ui',
-        'launcher.log_viewer',
-        'launcher.tray',
-        'launcher.updater',
-        'worker',
-        'worker.config',
-        'worker.env_check',
-        'worker.model_manager',
-        'worker.health',
-        'PySide6.QtWidgets',
-        'PySide6.QtCore',
-        'PySide6.QtGui',
-        'yaml',
-        'pydantic',
-        'httpx',
-    ],
-    hookspath=[],
-    hooksconfig={{}},
-    runtime_hooks=[],
-    excludes=[
-        'matplotlib',
-        'numpy.testing',
-        'scipy',
-        'pandas',
-        'uvicorn',
-        'fastapi',
-        'torch',
-        'faster_whisper',
-        'stable_ts',
-        'openai',
-    ],
-    win_no_prefer_redirects=False,
-    win_private_assemblies=False,
-    cipher=block_cipher,
-    noarchive=False,
-)
-
-pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
-
-exe = EXE(
-    pyz,
-    a.scripts,
-    [],
-    exclude_binaries=True,
-    name='ssubb-launcher',
-    debug=False,
-    bootloader_ignore_signals=False,
-    strip=False,
-    upx=True,
-    console=False,
-    icon=None,
-)
-
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
-    name='ssubb-launcher',
-)
-"""
-
-    spec_path = output_dir / "ssubb-launcher.spec"
-    spec_path.write_text(spec_content, encoding="utf-8")
-
     cmd = [
         sys.executable, "-m", "PyInstaller",
-        str(spec_path),
+        "--name=ssubb-launcher",
         f"--distpath={output_dir}",
         f"--workpath={output_dir / 'build'}",
-        "--clean",
+        f"--specpath={output_dir}",
         "--noconfirm",
+        "--clean",
+        "--windowed",
+        "--collect-all=shared",
+        "--collect-all=launcher",
+        "--hidden-import=worker",
+        "--hidden-import=worker.config",
+        "--hidden-import=worker.env_check",
+        "--hidden-import=worker.model_manager",
+        "--hidden-import=worker.health",
+        "--hidden-import=PySide6.QtWidgets",
+        "--hidden-import=PySide6.QtCore",
+        "--hidden-import=PySide6.QtGui",
+        "--hidden-import=yaml",
+        "--hidden-import=pydantic",
+        "--hidden-import=httpx",
+        "--exclude-module=matplotlib",
+        "--exclude-module=numpy.testing",
+        "--exclude-module=scipy",
+        "--exclude-module=pandas",
+        "--exclude-module=uvicorn",
+        "--exclude-module=fastapi",
+        "--exclude-module=torch",
+        "--exclude-module=faster_whisper",
+        "--exclude-module=stable_ts",
+        "--exclude-module=openai",
     ]
+
+    if args.onefile:
+        cmd.append("--onefile")
+    else:
+        cmd.append("--onedir")
+
+    cmd.append(str(PROJECT_ROOT / "launcher" / "__main__.py"))
 
     print(f"[build] Running PyInstaller...")
     result = subprocess.run(cmd, cwd=str(PROJECT_ROOT))
@@ -148,12 +87,18 @@ coll = COLLECT(
         print("[build] FAILED")
         sys.exit(1)
 
-    dist_dir = output_dir / "ssubb-launcher"
-    if not dist_dir.exists():
-        dist_dir = output_dir
-
     exe_name = "ssubb-launcher.exe" if system == "windows" else "ssubb-launcher"
-    readme = dist_dir / "README.txt"
+    if args.onefile:
+        src = output_dir / exe_name
+    else:
+        src = output_dir / "ssubb-launcher" / exe_name
+
+    if src.exists():
+        print(f"[build] Output: {src}")
+    else:
+        print(f"[build] Warning: expected output not found at {src}")
+
+    readme = output_dir / "README.txt"
     readme.write_text(
         f"SSUBB Launcher v{version}\n"
         f"{'=' * 40}\n\n"
@@ -166,26 +111,18 @@ coll = COLLECT(
         f"  - 系统托盘常驻\n\n"
         f"需要配合 ssubb-worker 可执行文件使用。\n"
         f"将 ssubb-launcher 和 ssubb-worker 放在同一目录下。\n\n"
-        f"更多文档: https://github.com/anthropics/ssubb\n",
+        f"更多文档: https://github.com/Magnoliar/SSUBB\n",
         encoding="utf-8",
     )
 
-    print(f"\n[build] Done! Package contents:")
-    for item in sorted(dist_dir.iterdir()):
-        if item.is_dir():
-            count = len(list(item.iterdir()))
-            print(f"  {item.name}/ ({count} files)")
-        else:
-            print(f"  {item.name}")
-
-    zip_name = f"ssubb-launcher-{version}-{arch}"
-    print(f"\n[build] Creating {zip_name}.zip ...")
-    shutil.make_archive(str(output_dir / zip_name), "zip", str(dist_dir))
-    print(f"[build] Created: {output_dir / zip_name}.zip")
+    print(f"\n[build] Done!")
+    for item in sorted(output_dir.iterdir()):
+        print(f"  {item.name}")
 
 
 def main():
     parser = argparse.ArgumentParser(description="Build SSUBB Launcher with PyInstaller")
+    parser.add_argument("--onefile", action="store_true", help="Build as single file")
     parser.add_argument("--output-dir", default="dist/launcher", help="Output directory")
     args = parser.parse_args()
     build(args)

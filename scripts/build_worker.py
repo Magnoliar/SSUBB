@@ -1,10 +1,9 @@
 """SSUBB Worker 构建脚本 (PyInstaller)
 
 使用 PyInstaller 将 Worker 打包为独立可执行文件。
-PyInstaller 的 hook 机制更适合处理 GPU 相关依赖链。
 
 用法:
-    python scripts/build_worker.py [--onefile] [--output-dir dist]
+    python scripts/build_worker.py [--onefile] [--output-dir dist] [--cuda cuda12]
 
 前置条件:
     pip install pyinstaller
@@ -55,7 +54,6 @@ def detect_cuda_version() -> str:
 def build(args):
     version = get_version()
     system = platform.system().lower()
-    # 优先使用命令行指定的 CUDA 版本，否则自动检测
     cuda = args.cuda or detect_cuda_version()
     arch = "win64" if system == "windows" else "linux-x64"
     output_dir = Path(args.output_dir)
@@ -66,131 +64,61 @@ def build(args):
     print(f"[build] CUDA: {cuda}")
     print(f"[build] Output: {output_dir}")
 
-    # PyInstaller spec 内容
-    spec_content = f"""# -*- mode: python ; coding: utf-8 -*-
-# SSUBB Worker PyInstaller Spec
-
-import sys
-from pathlib import Path
-
-block_cipher = None
-project_root = Path(r'{PROJECT_ROOT}')
-
-a = Analysis(
-    [str(project_root / 'worker' / 'main.py')],
-    pathex=[str(project_root)],
-    binaries=[],
-    datas=[
-        (str(project_root / 'shared'), 'shared'),
-    ],
-    hiddenimports=[
-        'shared',
-        'shared.constants',
-        'shared.models',
-        'worker',
-        'worker.config',
-        'worker.task_executor',
-        'worker.translator',
-        'worker.optimizer',
-        'worker.annotator',
-        'worker.srt_parser',
-        'worker.llm_client',
-        'uvicorn',
-        'uvicorn.logging',
-        'uvicorn.loops',
-        'uvicorn.loops.auto',
-        'uvicorn.protocols',
-        'uvicorn.protocols.http',
-        'uvicorn.protocols.http.auto',
-        'uvicorn.protocols.websockets',
-        'uvicorn.protocols.websockets.auto',
-        'uvicorn.lifespan',
-        'uvicorn.lifespan.on',
-        'fastapi',
-        'pydantic',
-        'httpx',
-        'yaml',
-        'openai',
-    ],
-    hookspath=[],
-    hooksconfig={{}},
-    runtime_hooks=[],
-    excludes=[
-        'tkinter',
-        'matplotlib',
-        'numpy.testing',
-        'scipy',
-        'pandas',
-        # 排除大型 GPU 依赖，用户需自行安装
-        'torch',
-        'torchvision',
-        'torchaudio',
-        'nvidia',
-        'nvidia-cublas',
-        'nvidia-cuda-cupti',
-        'nvidia-cuda-nvrtc',
-        'nvidia-cuda-runtime',
-        'nvidia-cudnn',
-        'nvidia-cufft',
-        'nvidia-curand',
-        'nvidia-cusolver',
-        'nvidia-cusparse',
-        'nvidia-nccl',
-        'nvidia-nvtx',
-        'triton',
-        'cuda_python',
-        'cubinlinker',
-        'cuda-bindings',
-    ],
-    win_no_prefer_redirects=False,
-    win_private_assemblies=False,
-    cipher=block_cipher,
-    noarchive=False,
-)
-
-pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
-
-exe = EXE(
-    pyz,
-    a.scripts,
-    [],
-    exclude_binaries=True,
-    name='ssubb-worker',
-    debug=False,
-    bootloader_ignore_signals=False,
-    strip=False,
-    upx=True,
-    console=True,
-    icon=None,
-)
-
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
-    name='ssubb-worker',
-)
-"""
-
-    spec_path = output_dir / "ssubb-worker.spec"
-    spec_path.write_text(spec_content, encoding="utf-8")
-
-    # 运行 PyInstaller
     cmd = [
         sys.executable, "-m", "PyInstaller",
-        str(spec_path),
+        "--name=ssubb-worker",
         f"--distpath={output_dir}",
         f"--workpath={output_dir / 'build'}",
-        "--clean",
+        f"--specpath={output_dir}",
         "--noconfirm",
+        "--clean",
+        "--collect-all=shared",
+        "--collect-all=worker",
+        "--hidden-import=uvicorn",
+        "--hidden-import=uvicorn.logging",
+        "--hidden-import=uvicorn.loops",
+        "--hidden-import=uvicorn.loops.auto",
+        "--hidden-import=uvicorn.protocols",
+        "--hidden-import=uvicorn.protocols.http",
+        "--hidden-import=uvicorn.protocols.http.auto",
+        "--hidden-import=uvicorn.protocols.websockets",
+        "--hidden-import=uvicorn.protocols.websockets.auto",
+        "--hidden-import=uvicorn.lifespan",
+        "--hidden-import=uvicorn.lifespan.on",
+        "--hidden-import=fastapi",
+        "--hidden-import=pydantic",
+        "--hidden-import=httpx",
+        "--hidden-import=yaml",
+        "--hidden-import=openai",
+        # 排除大型 GPU 依赖，用户需自行安装
+        "--exclude-module=torch",
+        "--exclude-module=torchvision",
+        "--exclude-module=torchaudio",
+        "--exclude-module=nvidia",
+        "--exclude-module=nvidia-cublas",
+        "--exclude-module=nvidia-cuda-cupti",
+        "--exclude-module=nvidia-cuda-nvrtc",
+        "--exclude-module=nvidia-cuda-runtime",
+        "--exclude-module=nvidia-cudnn",
+        "--exclude-module=nvidia-cufft",
+        "--exclude-module=nvidia-curand",
+        "--exclude-module=nvidia-cusolver",
+        "--exclude-module=nvidia-cusparse",
+        "--exclude-module=nvidia-nccl",
+        "--exclude-module=nvidia-nvtx",
+        "--exclude-module=triton",
+        "--exclude-module=tkinter",
+        "--exclude-module=matplotlib",
+        "--exclude-module=scipy",
+        "--exclude-module=pandas",
     ]
 
     if args.onefile:
         cmd.append("--onefile")
+    else:
+        cmd.append("--onedir")
+
+    cmd.append(str(PROJECT_ROOT / "worker" / "main.py"))
 
     print(f"[build] Running PyInstaller...")
     result = subprocess.run(cmd, cwd=str(PROJECT_ROOT))
@@ -199,14 +127,20 @@ coll = COLLECT(
         print("[build] FAILED")
         sys.exit(1)
 
-    # 产物目录
-    dist_dir = output_dir / "ssubb-worker"
-    if not dist_dir.exists():
-        dist_dir = output_dir
+    # 产物路径
+    exe_name = "ssubb-worker.exe" if system == "windows" else "ssubb-worker"
+    if args.onefile:
+        src = output_dir / exe_name
+    else:
+        src = output_dir / "ssubb-worker" / exe_name
+
+    if src.exists():
+        print(f"[build] Output: {src}")
+    else:
+        print(f"[build] Warning: expected output not found at {src}")
 
     # 创建 README
-    readme = dist_dir / "README.txt"
-    exe_name = "ssubb-worker.exe" if system == "windows" else "ssubb-worker"
+    readme = output_dir / "README.txt"
     readme.write_text(
         f"SSUBB Worker v{version} ({cuda})\n"
         f"{'=' * 40}\n\n"
@@ -216,30 +150,18 @@ coll = COLLECT(
         f"  3. Whisper 模型会在首次任务时自动下载\n\n"
         f"前置要求:\n"
         f"  - NVIDIA GPU + CUDA 驱动\n"
+        f"  - PyTorch: pip install torch (GPU 版)\n"
         f"  - Coordinator 地址 (在 config.yaml 中配置)\n\n"
-        f"配置文件: config.yaml (首次运行自动生成)\n"
-        f"模型目录: models/ (自动创建)\n\n"
-        f"更多文档: https://github.com/anthropics/ssubb\n",
+        f"更多文档: https://github.com/Magnoliar/SSUBB\n",
         encoding="utf-8",
     )
 
-    # 创建空目录
     for d in ["data", "models"]:
-        (dist_dir / d).mkdir(parents=True, exist_ok=True)
+        (output_dir / d).mkdir(parents=True, exist_ok=True)
 
-    print(f"\n[build] Done! Package contents:")
-    for item in sorted(dist_dir.iterdir()):
-        if item.is_dir():
-            count = len(list(item.iterdir()))
-            print(f"  {item.name}/ ({count} files)")
-        else:
-            print(f"  {item.name}")
-
-    # 打包为 zip
-    zip_name = f"ssubb-worker-{version}-{arch}-{cuda}"
-    print(f"\n[build] Creating {zip_name}.zip ...")
-    shutil.make_archive(str(output_dir / zip_name), "zip", str(dist_dir))
-    print(f"[build] Created: {output_dir / zip_name}.zip")
+    print(f"\n[build] Done!")
+    for item in sorted(output_dir.iterdir()):
+        print(f"  {item.name}")
 
 
 def main():

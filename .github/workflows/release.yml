@@ -38,7 +38,7 @@ jobs:
         run: python -m pytest tests/ -v --tb=long
 
   # ──────────────────────────────────────────────────────
-  # Worker 构建 (CUDA 12, PyInstaller)
+  # Worker 构建 (CUDA 12)
   # ──────────────────────────────────────────────────────
   build-worker-cuda12:
     strategy:
@@ -47,8 +47,10 @@ jobs:
         include:
           - os: windows-latest
             artifact: ssubb-worker-win64-cuda12
+            ext: .exe
           - os: ubuntu-latest
             artifact: ssubb-worker-linux-x64-cuda12
+            ext: ""
     runs-on: ${{ matrix.os }}
     continue-on-error: true
     steps:
@@ -65,17 +67,17 @@ jobs:
           pip install pyinstaller
 
       - name: Build with PyInstaller
-        run: python scripts/build_worker.py --output-dir dist --cuda cuda12
+        run: python scripts/build_worker.py --onefile --output-dir dist --cuda cuda12
 
-      - name: Upload artifact
+      - name: Upload exe artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: dist/*.zip
+          path: dist/ssubb-worker${{ matrix.ext }}
 
   # ──────────────────────────────────────────────────────
-  # Worker 构建 (CUDA 11, PyInstaller)
+  # Worker 构建 (CUDA 11)
   # ──────────────────────────────────────────────────────
   build-worker-cuda11:
     strategy:
@@ -84,8 +86,10 @@ jobs:
         include:
           - os: windows-latest
             artifact: ssubb-worker-win64-cuda11
+            ext: .exe
           - os: ubuntu-latest
             artifact: ssubb-worker-linux-x64-cuda11
+            ext: ""
     runs-on: ${{ matrix.os }}
     continue-on-error: true
     steps:
@@ -102,17 +106,17 @@ jobs:
           pip install pyinstaller
 
       - name: Build with PyInstaller
-        run: python scripts/build_worker.py --output-dir dist --cuda cuda11
+        run: python scripts/build_worker.py --onefile --output-dir dist --cuda cuda11
 
-      - name: Upload artifact
+      - name: Upload exe artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: dist/*.zip
+          path: dist/ssubb-worker${{ matrix.ext }}
 
   # ──────────────────────────────────────────────────────
-  # Launcher 构建 (PyInstaller + PySide6)
+  # Launcher 构建 (PySide6)
   # ──────────────────────────────────────────────────────
   build-launcher:
     strategy:
@@ -121,8 +125,10 @@ jobs:
         include:
           - os: windows-latest
             artifact: ssubb-launcher-win64
+            ext: .exe
           - os: ubuntu-latest
             artifact: ssubb-launcher-linux-x64
+            ext: ""
     runs-on: ${{ matrix.os }}
     continue-on-error: true
     steps:
@@ -138,17 +144,17 @@ jobs:
           pip install pyinstaller PySide6
 
       - name: Build Launcher
-        run: python scripts/build_launcher.py --output-dir dist
+        run: python scripts/build_launcher.py --onefile --output-dir dist
 
-      - name: Upload artifact
+      - name: Upload exe artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: dist/*.zip
+          path: dist/ssubb-launcher${{ matrix.ext }}
 
   # ──────────────────────────────────────────────────────
-  # GitHub Release（收集所有成功构建的产物）
+  # GitHub Release
   # ──────────────────────────────────────────────────────
   release:
     needs: [build-worker-cuda12, build-worker-cuda11, build-launcher]
@@ -164,12 +170,12 @@ jobs:
         continue-on-error: true
 
       - name: List artifacts
-        run: find artifacts -type f -name "*.zip" | sort || echo "No artifacts found"
+        run: find artifacts -type f | sort || echo "No artifacts found"
 
       - name: Generate checksums
         run: |
           cd artifacts
-          find . -name "*.zip" -exec sha256sum {} \; > checksums.sha256 || true
+          find . -type f \( -name "*.exe" -o -name "ssubb-*" \) -exec sha256sum {} \; > checksums.sha256 || true
           cat checksums.sha256 || echo "No checksums generated"
 
       - name: Create Release
@@ -177,7 +183,9 @@ jobs:
         with:
           generate_release_notes: true
           files: |
-            artifacts/**/*.zip
+            artifacts/**/*.exe
+            artifacts/**/ssubb-worker
+            artifacts/**/ssubb-launcher
             artifacts/checksums.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
