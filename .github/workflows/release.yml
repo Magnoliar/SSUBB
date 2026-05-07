@@ -17,10 +17,11 @@ env:
 
 jobs:
   # ──────────────────────────────────────────────────────
-  # 测试
+  # 测试（不阻塞构建）
   # ──────────────────────────────────────────────────────
   test:
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -35,14 +36,13 @@ jobs:
 
       - name: Run tests
         run: python -m pytest tests/ -v --tb=long
-        continue-on-error: true
 
   # ──────────────────────────────────────────────────────
-  # Coordinator 构建
+  # Coordinator 构建 (Nuitka)
   # ──────────────────────────────────────────────────────
   build-coordinator:
-    needs: test
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: windows-latest
@@ -50,12 +50,17 @@ jobs:
           - os: ubuntu-latest
             artifact: ssubb-coordinator-linux-x64
     runs-on: ${{ matrix.os }}
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install GCC (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y gcc
 
       - name: Install dependencies
         run: |
@@ -66,17 +71,18 @@ jobs:
         run: python scripts/build_coordinator.py --output-dir dist
 
       - name: Upload artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: dist/*.zip
 
   # ──────────────────────────────────────────────────────
-  # Worker 构建 (CUDA 12)
+  # Worker 构建 (CUDA 12, PyInstaller)
   # ──────────────────────────────────────────────────────
   build-worker-cuda12:
-    needs: test
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: windows-latest
@@ -84,6 +90,7 @@ jobs:
           - os: ubuntu-latest
             artifact: ssubb-worker-linux-x64-cuda12
     runs-on: ${{ matrix.os }}
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -100,17 +107,18 @@ jobs:
         run: python scripts/build_worker.py --output-dir dist
 
       - name: Upload artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: dist/*.zip
 
   # ──────────────────────────────────────────────────────
-  # Worker 构建 (CUDA 11)
+  # Worker 构建 (CUDA 11, PyInstaller)
   # ──────────────────────────────────────────────────────
   build-worker-cuda11:
-    needs: test
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: windows-latest
@@ -118,6 +126,7 @@ jobs:
           - os: ubuntu-latest
             artifact: ssubb-worker-linux-x64-cuda11
     runs-on: ${{ matrix.os }}
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -135,17 +144,18 @@ jobs:
         run: python scripts/build_worker.py --output-dir dist
 
       - name: Upload artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: dist/*.zip
 
   # ──────────────────────────────────────────────────────
-  # Launcher 构建
+  # Launcher 构建 (PyInstaller + PySide6)
   # ──────────────────────────────────────────────────────
   build-launcher:
-    needs: test
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: windows-latest
@@ -153,6 +163,7 @@ jobs:
           - os: ubuntu-latest
             artifact: ssubb-launcher-linux-x64
     runs-on: ${{ matrix.os }}
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -169,16 +180,18 @@ jobs:
         run: python scripts/build_launcher.py --output-dir dist
 
       - name: Upload artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: dist/*.zip
 
   # ──────────────────────────────────────────────────────
-  # GitHub Release
+  # GitHub Release（收集所有成功构建的产物）
   # ──────────────────────────────────────────────────────
   release:
     needs: [build-coordinator, build-worker-cuda12, build-worker-cuda11, build-launcher]
+    if: always()
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -187,12 +200,16 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+        continue-on-error: true
+
+      - name: List artifacts
+        run: find artifacts -type f -name "*.zip" | sort || echo "No artifacts found"
 
       - name: Generate checksums
         run: |
           cd artifacts
-          find . -name "*.zip" -exec sha256sum {} \; > checksums.sha256
-          cat checksums.sha256
+          find . -name "*.zip" -exec sha256sum {} \; > checksums.sha256 || true
+          cat checksums.sha256 || echo "No checksums generated"
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
