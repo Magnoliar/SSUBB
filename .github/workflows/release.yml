@@ -60,7 +60,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install dependencies (CPU torch for smaller bundle)
+      - name: Install dependencies (CPU torch bundled for out-of-box experience)
         run: |
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install -r worker/requirements.txt
@@ -69,12 +69,20 @@ jobs:
       - name: Build with PyInstaller
         run: python scripts/build_worker.py --onefile --output-dir dist --cuda cuda12
 
+      - name: Rename with CUDA version
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            mv dist/ssubb-worker.exe dist/ssubb-worker-cuda12.exe
+          else
+            mv dist/ssubb-worker dist/ssubb-worker-cuda12
+          fi
+
       - name: Upload exe artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: dist/ssubb-worker${{ matrix.ext }}
+          path: dist/ssubb-worker-cuda12*
 
   # ──────────────────────────────────────────────────────
   # Worker 构建 (CUDA 11)
@@ -108,12 +116,20 @@ jobs:
       - name: Build with PyInstaller
         run: python scripts/build_worker.py --onefile --output-dir dist --cuda cuda11
 
+      - name: Rename with CUDA version
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            mv dist/ssubb-worker.exe dist/ssubb-worker-cuda11.exe
+          else
+            mv dist/ssubb-worker dist/ssubb-worker-cuda11
+          fi
+
       - name: Upload exe artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: dist/ssubb-worker${{ matrix.ext }}
+          path: dist/ssubb-worker-cuda11*
 
   # ──────────────────────────────────────────────────────
   # Launcher 构建 (PySide6)
@@ -172,10 +188,8 @@ jobs:
       - name: Flatten artifacts for release
         run: |
           mkdir -p release
-          # 复制所有 exe 和可执行文件到 release 目录
-          find artifacts -type f -name "*.exe" -exec cp {} release/ \;
-          find artifacts -type f -name "ssubb-worker" -exec cp {} release/ \;
-          find artifacts -type f -name "ssubb-launcher" -exec cp {} release/ \;
+          # 复制所有产物到 release 目录
+          find artifacts -type f \( -name "*.exe" -o -name "ssubb-*" \) -exec cp {} release/ \;
           ls -la release/
 
       - name: Generate checksums
