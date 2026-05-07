@@ -38,42 +38,6 @@ jobs:
         run: python -m pytest tests/ -v --tb=long
 
   # ──────────────────────────────────────────────────────
-  # Coordinator 构建 (Nuitka)
-  # ──────────────────────────────────────────────────────
-  build-coordinator:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-            artifact: ssubb-coordinator-win64
-          - os: ubuntu-latest
-            artifact: ssubb-coordinator-linux-x64
-    runs-on: ${{ matrix.os }}
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install dependencies
-        run: |
-          pip install -r coordinator/requirements.txt
-          pip install pyinstaller
-
-      - name: Build with Nuitka
-        run: python scripts/build_coordinator.py --output-dir dist
-
-      - name: Upload artifact
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.artifact }}
-          path: dist/*.zip
-
-  # ──────────────────────────────────────────────────────
   # Worker 构建 (CUDA 12, PyInstaller)
   # ──────────────────────────────────────────────────────
   build-worker-cuda12:
@@ -133,8 +97,8 @@ jobs:
 
       - name: Install CUDA 11 dependencies
         run: |
-          pip install -r worker/requirements.txt
           pip install torch --index-url https://download.pytorch.org/whl/cu118
+          pip install -r worker/requirements.txt
           pip install pyinstaller
 
       - name: Build with PyInstaller
@@ -187,7 +151,7 @@ jobs:
   # GitHub Release（收集所有成功构建的产物）
   # ──────────────────────────────────────────────────────
   release:
-    needs: [build-coordinator, build-worker-cuda12, build-worker-cuda11, build-launcher]
+    needs: [build-worker-cuda12, build-worker-cuda11, build-launcher]
     if: always()
     runs-on: ubuntu-latest
     steps:
