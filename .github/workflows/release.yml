@@ -94,8 +94,9 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install dependencies
+      - name: Install dependencies (CPU torch for smaller bundle)
         run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install -r worker/requirements.txt
           pip install pyinstaller
 
