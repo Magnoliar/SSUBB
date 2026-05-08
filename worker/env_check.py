@@ -62,20 +62,31 @@ def check_ffprobe() -> EnvCheckResult:
 
 
 def check_cuda() -> EnvCheckResult:
-    """检查 CUDA / GPU 可用性"""
+    """检查 CUDA / GPU 可用性（通过 nvidia-smi，不依赖 PyTorch）"""
     try:
-        import torch
-        if torch.cuda.is_available():
-            gpu_name = torch.cuda.get_device_name(0)
-            vram_total = torch.cuda.get_device_properties(0).total_mem / (1024 ** 3)
-            return EnvCheckResult(
-                "CUDA GPU", True,
-                f"{gpu_name} ({vram_total:.1f} GB VRAM)"
-            )
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=10,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            # 取第一块 GPU
+            first_line = result.stdout.strip().split("\n")[0]
+            parts = first_line.split(",")
+            gpu_name = parts[0].strip()
+            vram_mb = parts[1].strip() if len(parts) > 1 else "?"
+            try:
+                vram_gb = float(vram_mb) / 1024
+                return EnvCheckResult(
+                    "CUDA GPU", True,
+                    f"{gpu_name} ({vram_gb:.1f} GB VRAM)"
+                )
+            except ValueError:
+                return EnvCheckResult("CUDA GPU", True, f"{gpu_name} (VRAM: {vram_mb} MB)")
         else:
-            return EnvCheckResult("CUDA GPU", False, "torch.cuda 不可用 (将使用 CPU 模式)")
-    except ImportError:
-        return EnvCheckResult("CUDA GPU", False, "PyTorch 未安装", required=False)
+            return EnvCheckResult("CUDA GPU", False, "nvidia-smi 未返回 GPU 信息 (将使用 CPU 模式)")
+    except FileNotFoundError:
+        return EnvCheckResult("CUDA GPU", False, "nvidia-smi 未找到 (未安装 NVIDIA 驱动)", required=False)
     except Exception as e:
         return EnvCheckResult("CUDA GPU", False, str(e))
 
@@ -143,6 +154,21 @@ def check_coordinator_url(url: str = "") -> EnvCheckResult:
     return EnvCheckResult("Coordinator URL", True, url)
 
 
+def check_whisper_binary(whisper_binary: str = "") -> EnvCheckResult:
+    """检查 faster-whisper-xxl 二进制是否可用"""
+    try:
+        from worker.whisper_runner import find_whisper_binary
+        binary = find_whisper_binary(whisper_binary)
+        if binary:
+            return EnvCheckResult("Whisper 二进制", True, str(binary))
+        return EnvCheckResult(
+            "Whisper 二进制", False,
+            "未找到 (首次转写时将自动下载)"
+        )
+    except Exception as e:
+        return EnvCheckResult("Whisper 二进制", False, str(e))
+
+
 def run_full_check(config=None) -> list[EnvCheckResult]:
     """执行完整环境检查
 
@@ -161,6 +187,7 @@ def run_full_check(config=None) -> list[EnvCheckResult]:
     ]
 
     if config:
+        results.append(check_whisper_binary(config.transcribe.whisper_binary))
         results.append(check_whisper_model(
             config.transcribe.model_dir,
             config.transcribe.model,
@@ -171,6 +198,7 @@ def run_full_check(config=None) -> list[EnvCheckResult]:
         ))
         results.append(check_coordinator_url(config.coordinator_url))
     else:
+        results.append(check_whisper_binary())
         results.append(check_whisper_model())
         results.append(check_llm_config())
         results.append(check_coordinator_url())

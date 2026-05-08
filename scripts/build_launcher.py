@@ -67,9 +67,6 @@ def build(args):
         "--exclude-module=pandas",
         "--exclude-module=uvicorn",
         "--exclude-module=fastapi",
-        "--exclude-module=torch",
-        "--exclude-module=faster_whisper",
-        "--exclude-module=stable_ts",
         "--exclude-module=openai",
     ]
 

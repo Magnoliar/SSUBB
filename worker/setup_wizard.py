@@ -50,21 +50,25 @@ def run_wizard():
     # ---- GPU / 转写 ----
     print("\n── 转写配置 ─────────────────────────────────")
 
+    # 通过 nvidia-smi 检测 GPU（不依赖 PyTorch）
+    device = "cpu"
+    compute_type = "int8"
     try:
-        import torch
-        if torch.cuda.is_available():
-            gpu_name = torch.cuda.get_device_name(0)
+        import subprocess as _sp
+        _r = _sp.run(
+            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+            capture_output=True, text=True, timeout=5,
+            creationflags=getattr(_sp, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
+        )
+        if _r.returncode == 0 and _r.stdout.strip():
+            gpu_name = _r.stdout.strip().split("\n")[0].strip()
             print(f"  ✅ 检测到 GPU: {gpu_name}")
             device = "cuda"
             compute_type = "float16"
         else:
-            print("  ⚠️ 未检测到 CUDA GPU，将使用 CPU 模式")
-            device = "cpu"
-            compute_type = "int8"
-    except ImportError:
-        print("  ⚠️ PyTorch 未安装，默认 CPU 模式")
-        device = "cpu"
-        compute_type = "int8"
+            print("  ⚠️ 未检测到 NVIDIA GPU，将使用 CPU 模式")
+    except (FileNotFoundError, Exception):
+        print("  ⚠️ nvidia-smi 未找到，默认 CPU 模式")
 
     device = _input("设备", device)
     compute_type = _input("计算精度 (float16/int8/float32)", compute_type)
@@ -99,14 +103,13 @@ worker:
   coordinator_url: "{coordinator_url}"
 
   transcribe:
+    whisper_binary: ""
     model: "{model}"
     device: "{device}"
     compute_type: "{compute_type}"
-    concurrent_transcriptions: 1
     vad_filter: true
     vad_method: "silero_v4_fw"
     vad_threshold: 0.5
-    custom_regroup: "cm_sl=84_sl=42++++++1"
     detect_language_length: 30
     model_dir: "{model_dir}"
 

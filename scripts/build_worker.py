@@ -90,23 +90,7 @@ def build(args):
         "--hidden-import=httpx",
         "--hidden-import=yaml",
         "--hidden-import=openai",
-        # 排除大型 GPU 依赖，用户需自行安装
-        "--exclude-module=torch",
-        "--exclude-module=torchvision",
-        "--exclude-module=torchaudio",
-        "--exclude-module=nvidia",
-        "--exclude-module=nvidia-cublas",
-        "--exclude-module=nvidia-cuda-cupti",
-        "--exclude-module=nvidia-cuda-nvrtc",
-        "--exclude-module=nvidia-cuda-runtime",
-        "--exclude-module=nvidia-cudnn",
-        "--exclude-module=nvidia-cufft",
-        "--exclude-module=nvidia-curand",
-        "--exclude-module=nvidia-cusolver",
-        "--exclude-module=nvidia-cusparse",
-        "--exclude-module=nvidia-nccl",
-        "--exclude-module=nvidia-nvtx",
-        "--exclude-module=triton",
+        # 排除不需要的大型依赖
         "--exclude-module=tkinter",
         "--exclude-module=matplotlib",
         "--exclude-module=scipy",
@@ -147,10 +131,11 @@ def build(args):
         f"快速启动:\n"
         f"  1. 双击 {exe_name} 启动 Worker\n"
         f"  2. 首次运行会自动生成 config.yaml 并引导配置\n"
-        f"  3. Whisper 模型会在首次任务时自动下载\n\n"
+        f"  3. 首次启动自动下载 faster-whisper-xxl 转写引擎\n"
+        f"  4. Whisper 模型会在首次任务时自动下载\n\n"
         f"前置要求:\n"
         f"  - NVIDIA GPU + CUDA 驱动\n"
-        f"  - PyTorch: pip install torch (GPU 版)\n"
+        f"  - 无需安装 PyTorch (faster-whisper-xxl 内置 CUDA)\n"
         f"  - Coordinator 地址 (在 config.yaml 中配置)\n\n"
         f"更多文档: https://github.com/Magnoliar/SSUBB\n",
         encoding="utf-8",

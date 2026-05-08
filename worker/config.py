@@ -11,14 +11,13 @@ from shared.models import LLMProviderConfig
 
 
 class TranscribeConfig(BaseModel):
+    whisper_binary: str = ""  # faster-whisper-xxl 二进制路径（空=自动检测）
     model: str = "large-v3-turbo"
     device: str = "cuda"
     compute_type: str = "float16"
-    concurrent_transcriptions: int = 1
     vad_filter: bool = True
     vad_method: str = "silero_v4_fw"
     vad_threshold: float = 0.5
-    custom_regroup: str = "cm_sl=84_sl=42++++++1"
     detect_language_length: int = 30
     model_dir: str = "./models"
 

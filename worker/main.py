@@ -3,26 +3,6 @@
 公司 GPU 端的 HTTP 服务，接收 Coordinator 分发的任务，执行转写/翻译流水线。
 """
 
-# PyTorch 可用性检查（exe 打包不含 torch，需用户自行安装）
-try:
-    import torch  # noqa: F401
-except ImportError:
-    print("=" * 60)
-    print("  错误: PyTorch 未安装")
-    print("=" * 60)
-    print()
-    print("  SSUBB Worker 需要 PyTorch 才能运行。")
-    print()
-    print("  请安装 GPU 版本（推荐）:")
-    print("    pip install torch --index-url https://download.pytorch.org/whl/cu124")
-    print()
-    print("  或 CPU 版本（无 GPU 时）:")
-    print("    pip install torch --index-url https://download.pytorch.org/whl/cpu")
-    print()
-    print("  更多信息: https://pytorch.org/get-started/locally/")
-    print("=" * 60)
-    sys.exit(1)
-
 import asyncio
 import hashlib
 import json
@@ -179,6 +159,14 @@ async def lifespan(app: FastAPI):
     logger.info("执行环境检查...")
     check_results = run_full_check(config)
     print_check_report(check_results)
+
+    # 检查 faster-whisper-xxl 二进制（不存在则自动下载）
+    from .whisper_runner import ensure_whisper_binary
+    binary = ensure_whisper_binary(config.transcribe.whisper_binary)
+    if binary:
+        logger.info(f"Whisper 二进制: {binary}")
+    else:
+        logger.warning("faster-whisper-xxl 不可用，转写功能将无法使用")
     failed = [r for r in check_results if not r.passed and r.required]
     if failed:
         logger.warning(f"环境检查有 {len(failed)} 项必要检查未通过，部分功能可能不可用")

@@ -31,7 +31,7 @@ NAS (存储)                    GPU (算力)
 | 角色 | 设备 | 说明 |
 |------|------|------|
 | **Coordinator** | NAS 或家用电脑 | 调度中心，不需要 GPU，推荐 Docker 部署 |
-| **Worker** | 有 GPU 的电脑 | NVIDIA 显卡 4GB+，负责转写翻译 |
+| **Worker** | 有 GPU 的电脑 | NVIDIA 显卡 4GB+，首次启动自动下载 faster-whisper-xxl |
 | **LLM API** | DeepSeek 等 | 翻译用，一部电影约 ¥0.1 |
 | **网络** | 同一局域网 | 或 Tailscale 内网穿透 |
 
@@ -62,22 +62,23 @@ docker compose up -d
 
 ### 第二步：GPU 端 — 启动 Worker
 
-在有 GPU 的电脑上，**二选一**：
+在有 GPU 的电脑上：
 
-#### 方式 A：下载编译好的 exe（推荐）
+> Worker 首次启动会自动下载 **faster-whisper-xxl**（内置 CUDA 运行时，约 200MB），无需手动安装 PyTorch。Whisper 模型也会在首次转写时自动下载（约 3GB）。
 
-从 [GitHub Releases](https://github.com/Magnoliar/SSUBB/releases) 下载对应版本：
-- Windows：`ssubb-worker-1.0.0-win64-cuda12.exe`
-- Linux：`ssubb-worker-1.0.0-linux-x64-cuda12`
+启动 Worker：
+
+**二选一**：
+
+**方式 A：下载编译好的 exe（推荐）**
+
+从 [GitHub Releases](https://github.com/Magnoliar/SSUBB/releases) 下载：
+- Windows：`ssubb-worker-win64-cuda12.exe`
+- Linux：`ssubb-worker-linux-x64-cuda12`
 
 双击运行，首次启动会自动引导配置。
 
-> **注意**：exe 不含 PyTorch，需先安装 GPU 版：
-> ```bash
-> pip install torch --index-url https://download.pytorch.org/whl/cu124
-> ```
-
-#### 方式 B：从源码运行
+**方式 B：从源码运行**
 
 ```bash
 git clone https://github.com/Magnoliar/SSUBB.git && cd SSUBB
@@ -89,7 +90,7 @@ worker\run_worker.bat
 bash worker/run_worker.sh
 ```
 
-脚本自动安装依赖、检测 GPU/FFmpeg、引导配置、下载 Whisper 模型。
+脚本自动安装依赖、检测 GPU/FFmpeg、引导配置。
 
 ---
 
@@ -194,7 +195,7 @@ Worker 首次启动会弹出配置向导，需要填写：
 | `ssubb-launcher-*-win64.exe` | Windows | Worker 桌面启动器（可选） |
 | `ssubb-launcher-*-linux-x64` | Linux | Worker 桌面启动器（可选） |
 
-**Worker** 是核心程序，负责转写翻译。命令行运行，接收任务、调用 Whisper + LLM。
+**Worker** 是核心程序，负责转写翻译。命令行运行，接收任务、调用 faster-whisper-xxl + LLM。首次启动自动下载转写引擎。
 
 **Launcher** 是可选的桌面 GUI，提供：
 - 环境检测（GPU / CUDA / FFmpeg / 模型）
@@ -203,7 +204,7 @@ Worker 首次启动会弹出配置向导，需要填写：
 - 配置编辑（不用手写 YAML）
 - 系统托盘常驻
 
-> **前置要求**：需先安装 [PyTorch GPU 版](https://pytorch.org/get-started/locally/)，exe 本身不含 CUDA 运行时。未安装时 Worker 会提示安装命令。
+> **无需手动安装 PyTorch**：Worker 使用 faster-whisper-xxl 独立二进制（内置 CUDA 运行时），首次启动自动下载。
 
 ---
 
@@ -211,7 +212,7 @@ Worker 首次启动会弹出配置向导，需要填写：
 
 - **后端**：Python 3.10+ / FastAPI / SQLite / asyncio
 - **前端**：Vue 3 + Tailwind CSS（单文件 SPA，无构建工具）
-- **转写**：Faster-Whisper（CTranslate2 加速）
+- **转写**：faster-whisper-xxl 独立二进制（内置 CUDA，无需 PyTorch）
 - **翻译**：OpenAI 兼容 API（DeepSeek / GPT / 智谱等）
 - **部署**：Docker Compose / 裸机脚本 / 预编译 exe
 
@@ -266,7 +267,7 @@ moviepilot-plugin/    MoviePilot 自动触发插件
 
 **Q: 字幕质量？** → large-v3-turbo + DeepSeek 超过大部分网上下载字幕。开启 `need_reflect: true` 可进一步提升。
 
-**Q: Worker exe 闪退？** → 大概率是没装 PyTorch。运行 `pip install torch --index-url https://download.pytorch.org/whl/cu124`
+**Q: Worker exe 闪退？** → 首次启动会自动下载 faster-whisper-xxl（约 200MB），请确保网络通畅。如果自动下载失败，可从 [这里](https://github.com/Purfview/whisper-standalone-win/releases) 手动下载并放到 `./bin/` 目录。
 
 **Q: Coordinator 怎么更新？** → `docker compose pull && docker compose up -d`（Docker）或 `git pull`（裸机）
 

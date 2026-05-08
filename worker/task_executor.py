@@ -3,7 +3,6 @@
 编排: 转写 → 优化 → 翻译 → 对轴 → 回调。
 """
 
-import gc
 import logging
 import time
 from pathlib import Path
@@ -21,10 +20,6 @@ logger = logging.getLogger("ssubb.executor")
 
 class TaskExecutor:
     """任务流水线执行器"""
-
-    # 模块级 Whisper 模型缓存 (避免每个任务重新加载)
-    _cached_model = None
-    _cached_model_key: str = ""
 
     def __init__(self, config: WorkerConfig):
         self.config = config
@@ -226,79 +221,85 @@ class TaskExecutor:
             self.current_progress = 0
 
     # =========================================================================
-    # 转写
+    # 转写 (faster-whisper-xxl 二进制)
     # =========================================================================
-
-    def _get_whisper_model(self):
-        """获取或创建缓存的 Whisper 模型 (单例)"""
-        import stable_whisper
-
-        model_path = self.config.transcribe.model
-        device = self.config.transcribe.device
-        compute_type = self.config.transcribe.compute_type
-        model_dir = self.config.transcribe.model_dir
-
-        # 缓存 key: 模型名 + 设备 + 精度
-        model_key = f"{model_path}|{device}|{compute_type}"
-
-        if TaskExecutor._cached_model is not None and TaskExecutor._cached_model_key == model_key:
-            logger.debug("复用缓存的 Whisper 模型")
-            return TaskExecutor._cached_model
-
-        logger.info(f"加载 Whisper 模型: {model_path} (device={device}, compute={compute_type})")
-        model = stable_whisper.load_faster_whisper(
-            model_path,
-            device=device,
-            compute_type=compute_type,
-            download_root=model_dir,
-        )
-        TaskExecutor._cached_model = model
-        TaskExecutor._cached_model_key = model_key
-        logger.info("Whisper 模型已缓存，后续任务将复用")
-        return model
 
     async def _transcribe(
         self, audio_path: str, config: TaskConfig
     ) -> Optional[tuple[str, str, int]]:
-        """调用 faster-whisper 转写
+        """调用 faster-whisper-xxl 二进制转写
 
         Returns:
             (srt_content, detected_language, segment_count) 或 None
         """
         try:
-            model = self._get_whisper_model()
+            from .whisper_runner import (
+                ensure_whisper_binary, run_whisper, filter_hallucinations,
+            )
 
-            # 构建转写参数
-            transcribe_args = {
-                "audio": audio_path,
-                "verbose": None,
-            }
+            # 查找或自动下载二进制
+            binary = ensure_whisper_binary(self.config.transcribe.whisper_binary)
+            if not binary:
+                return None
 
             # 语言设置
+            language = ""
             if config.source_lang and config.source_lang != "auto":
-                transcribe_args["language"] = config.source_lang
+                language = config.source_lang
 
-            # VAD
-            if self.config.transcribe.vad_filter:
-                transcribe_args["vad_filter"] = True
+            # 进度回调
+            async def _progress(pct: int, msg: str):
+                await self._report_progress(
+                    self.current_task_id, TaskStatus.TRANSCRIBING, pct
+                )
 
-            # regroup（必须在 transcribe 时传入，后调用无效）
-            regroup = self.config.transcribe.custom_regroup
-            if regroup and regroup.lower() != "default":
-                transcribe_args["regroup"] = regroup
+            # 用 run_in_executor 包装同步进度回调
+            def sync_progress(pct: int, msg: str):
+                import asyncio
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        asyncio.ensure_future(_progress(pct, msg))
+                except RuntimeError:
+                    pass
 
-            # 转写
-            result = model.transcribe(**transcribe_args)
+            # 输出目录（临时）
+            output_dir = str(Path(self.config.temp_dir) / f"{self.current_task_id}_srt")
 
-            # 获取检测到的语言
-            detected_lang = getattr(result, "language", config.source_lang or "unknown")
+            # 执行转写
+            srt_content, segment_count = await run_whisper(
+                binary=binary,
+                audio_path=audio_path,
+                output_dir=output_dir,
+                model=self.config.transcribe.model,
+                model_dir=self.config.transcribe.model_dir,
+                device=self.config.transcribe.device,
+                language=language,
+                vad_filter=self.config.transcribe.vad_filter,
+                vad_threshold=self.config.transcribe.vad_threshold,
+                vad_method=self.config.transcribe.vad_method,
+                compute_type=self.config.transcribe.compute_type,
+                progress_callback=sync_progress,
+            )
 
-            # 导出为 SRT（句子级，不要单词级时间戳）
-            srt_content = result.to_srt_vtt(filepath=None, word_level=False)
+            # 幻觉过滤
+            from .srt_parser import SRTParser
+            segments = SRTParser.parse(srt_content)
+            original_count = len(segments)
+            segments = filter_hallucinations(segments)
+            if len(segments) < original_count:
+                logger.info(f"幻觉过滤: {original_count} → {len(segments)} 段")
+                srt_content = SRTParser.build(segments)
+                segment_count = len(segments)
 
-            # 统计段数
-            segment_count = len(result.segments) if hasattr(result, "segments") else 0
+            # 语言检测（从 Whisper 日志或推断）
+            detected_lang = config.source_lang or "unknown"
+
             logger.info(f"转写完成: {segment_count} 段, 语言={detected_lang}")
+
+            # 清理临时 SRT 目录
+            import shutil
+            shutil.rmtree(output_dir, ignore_errors=True)
 
             return srt_content, detected_lang, segment_count
 
@@ -402,15 +403,10 @@ class TaskExecutor:
     # =========================================================================
 
     def _cleanup_vram(self):
-        """清理 GPU VRAM"""
-        try:
-            import torch
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-            gc.collect()
-            logger.debug("VRAM 已清理")
-        except ImportError:
-            gc.collect()
+        """清理资源（faster-whisper-xxl 二进制自行管理 VRAM）"""
+        import gc
+        gc.collect()
+        logger.debug("资源已清理")
 
     # =========================================================================
     # 进度回报
