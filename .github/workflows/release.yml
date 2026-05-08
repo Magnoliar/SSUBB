@@ -69,6 +69,7 @@ jobs:
         run: python scripts/build_worker.py --onefile --output-dir dist --cuda cuda12
 
       - name: Rename with CUDA version
+        shell: bash
         run: |
           if [ "${{ runner.os }}" = "Windows" ]; then
             mv dist/ssubb-worker.exe dist/ssubb-worker-cuda12.exe
@@ -115,6 +116,7 @@ jobs:
         run: python scripts/build_worker.py --onefile --output-dir dist --cuda cuda11
 
       - name: Rename with CUDA version
+        shell: bash
         run: |
           if [ "${{ runner.os }}" = "Windows" ]; then
             mv dist/ssubb-worker.exe dist/ssubb-worker-cuda11.exe
