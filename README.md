@@ -31,13 +31,13 @@ NAS (存储)                    GPU (算力)
 | 角色 | 设备 | 说明 |
 |------|------|------|
 | **Coordinator** | NAS 或家用电脑 | 调度中心，不需要 GPU，推荐 Docker 部署 |
-| **Worker** | 有 GPU 的电脑 | NVIDIA 显卡 4GB+，首次启动自动下载 faster-whisper-xxl |
+| **Worker** | 有 GPU 的电脑 | NVIDIA 显卡 4GB+，首次启动自动下载转写引擎 |
 | **LLM API** | DeepSeek 等 | 翻译用，一部电影约 ¥0.1 |
 | **网络** | 同一局域网 | 或 Tailscale 内网穿透 |
 
 ---
 
-### 第一步：NAS 端 — 启动 Coordinator（Docker）
+### 第一步：NAS 端 — 启动 Coordinator
 
 在你的 NAS 或家用电脑上执行：
 
@@ -62,23 +62,16 @@ docker compose up -d
 
 ### 第二步：GPU 端 — 启动 Worker
 
-在有 GPU 的电脑上：
+在有 GPU 的电脑上，从 [GitHub Releases](https://github.com/Magnoliar/SSUBB/releases) 下载对应平台的 Worker 可执行文件，双击运行即可。
 
-> Worker 首次启动会自动下载 **faster-whisper-xxl**（内置 CUDA 运行时，约 200MB），无需手动安装 PyTorch。Whisper 模型也会在首次转写时自动下载（约 3GB）。
+首次启动会自动：
+1. 下载 **faster-whisper-xxl** 转写引擎（约 200MB，内置 CUDA 运行时）
+2. 弹出配置向导，引导填写 Coordinator 地址和 LLM API Key
+3. Whisper 模型会在首次转写任务时自动下载（约 3GB）
 
-启动 Worker：
+> **无需手动安装 PyTorch 或 CUDA**：faster-whisper-xxl 是独立二进制，自带 CUDA 运行时。
 
-**二选一**：
-
-**方式 A：下载编译好的 exe（推荐）**
-
-从 [GitHub Releases](https://github.com/Magnoliar/SSUBB/releases) 下载：
-- Windows：`ssubb-worker-win64.exe`
-- Linux：`ssubb-worker-linux-x64`
-
-双击运行，首次启动会自动引导配置。
-
-**方式 B：从源码运行**
+也可以从源码运行：
 
 ```bash
 git clone https://github.com/Magnoliar/SSUBB.git && cd SSUBB
@@ -89,8 +82,6 @@ worker\run_worker.bat
 # Linux
 bash worker/run_worker.sh
 ```
-
-脚本自动安装依赖、检测 GPU/FFmpeg、引导配置。
 
 ---
 
@@ -113,73 +104,39 @@ Worker 首次启动会弹出配置向导，需要填写：
 
 ## 功能一览
 
-### 核心能力
-| 功能 | 版本 | 说明 |
-|------|------|------|
-| 多节点并发 | V0.6+ | 多个 GPU Worker 按权重分配任务 |
-| 优先级队列 | V0.8+ | 1-5 级优先级，高优先级优先处理 |
-| 故障自动迁移 | V0.8+ | Worker 离线后任务自动转移 |
-| MoviePilot 集成 | V0.2+ | 入库自动触发字幕生成 |
-| 自动扫描 | V0.2+ | 定时扫描影视库，补齐缺失字幕 |
-| 音轨智能选择 | V0.12+ | FFprobe 分析音轨，优先英语音轨 |
+### 转写 & 翻译
+- **faster-whisper-xxl** 独立二进制转写，内置 CUDA，无需 PyTorch
+- **多语言自动检测**：99 种语言，Whisper 自动识别
+- **LLM 多源容灾**：DeepSeek / OpenAI / 智谱等多提供商按优先级自动切换
+- **反思翻译**：翻译后可选二次审校，提升质量
+- **术语提取**：豆瓣/维基搜索专有名词官方译名，确保翻译一致
+- **文化注释**：自动生成双关语、典故翻译备注
+- **质量评分**：0-100 分自动评估，低分自动重试
 
-### 字幕质量
-| 功能 | 版本 | 说明 |
-|------|------|------|
-| 反思翻译 | V0.10+ | 翻译后二次审校提升质量 |
-| 质量评分 | V0.8+ | 0-100 分自动评估，低分自动重试 |
-| 术语提取 | V0.11+ | 豆瓣/维基搜索专有名词官方译名 |
-| 文化注释 | V0.12+ | 自动生成双关语、典故翻译备注 |
-| 智能排版 | V0.4+ | 分片翻译、时轴矫正、ASS 特效 |
-| 断句优化 | V0.10+ | 长句防截断，按语言约束行长 |
+### 调度 & 可靠性
+- **多节点并发**：多个 GPU Worker 按权重分配任务
+- **优先级队列**：1-5 级优先级，高优先级优先处理
+- **故障自动迁移**：Worker 离线后任务自动转移到其他节点
+- **局域网自动发现**：UDP 广播，Worker 自动注册，免填 IP
+- **MoviePilot 集成**：入库自动触发字幕生成
 
 ### 控制台 (WebUI)
-| 功能 | 版本 | 说明 |
-|------|------|------|
-| 侧边栏三 tab | V1.0 | 看板 / 任务 / 配置，URL hash 同步 |
-| 影视资源列表 | V1.0 | 扫描媒体库，显示字幕状态，一键生成 |
-| 分段进度条 | V1.0 | 阶段色块 + 百分比 + 已耗时 + 预估剩余 |
-| 配置统管 | V1.0 | Coordinator 统一管理 LLM/转写/翻译配置 |
-| LLM 提供商管理 | V1.0 | 卡片式编辑器，测试连通性，多源容灾 |
-| 转写模型选择 | V1.0 | 显示本地下载状态、大小、显存、速度、质量 |
-| 字幕预览编辑 | V1.0+ | 在线预览 SRT，手动编辑，AI 优化 |
-| 批量操作 | V0.9+ | 勾选后批量重试/取消/删除 |
-| 数据洞察 | V0.9+ | 30 天趋势、成功率、Worker 利用率 |
+- **侧边栏三 tab**：看板 / 任务 / 配置，URL hash 同步
+- **影视资源列表**：扫描媒体库，显示字幕状态，一键生成
+- **分段进度条**：阶段色块 + 百分比 + 已耗时 + 预估剩余
+- **字幕预览编辑**：在线预览 SRT，手动编辑，AI 优化
+- **配置统管**：Coordinator 统一管理 LLM/转写/翻译配置，自动推送到 Worker
+- **数据洞察**：30 天趋势、成功率、Worker 利用率
 
 ### 安全
-| 功能 | 版本 | 说明 |
-|------|------|------|
-| Token 自动生成 | V1.0 | 首次启动自动生成 API Token + Worker Token |
-| 速率限制 | V1.0 | IP 级限流（POST 60/min, PUT 30/min） |
-| 路径校验 | V1.0 | media_path 限制在媒体库范围内 |
-| CORS 收紧 | V1.0 | 默认仅允许 localhost |
-| API Token 鉴权 | V0.11+ | Bearer Token 认证，WebUI 登录 |
-| Worker Token | V0.11+ | Worker 回调认证 |
+- 首次启动自动生成 API Token + Worker Token
+- IP 级速率限制（POST 60/min, PUT 30/min）
+- media_path 路径校验防止越权访问
+- CORS 默认收紧为 localhost
 
-### 通知 & 集成
-| 功能 | 版本 | 说明 |
-|------|------|------|
-| 多渠道通知 | V0.11+ | Bark / PushPlus / Gotify / 通用 Webhook |
-| Emby/Jellyfin | V0.1+ | 自动通知刷新媒体库 |
-| 通用 Webhook | V0.8+ | `POST /api/webhook` 触发任务 |
-| 局域网自动发现 | V0.7+ | UDP 广播自动注册 Worker |
-
----
-
-## 配置速查
-
-大多数配置可通过 WebUI 设置页面完成，无需手动编辑 YAML。
-
-| 配置项 | 位置 | 说明 |
-|--------|------|------|
-| `coordinator.workers` | Coordinator WebUI | GPU 节点列表 |
-| `coordinator.llm_providers` | Coordinator WebUI | LLM 提供商（支持多个，自动容灾） |
-| `coordinator.transcribe` | Coordinator WebUI | 转写模型/设备/精度 |
-| `coordinator.security.api_token` | 自动生成 | API 鉴权 Token |
-| `worker.coordinator_url` | Worker config | Coordinator 地址 |
-| `worker.coordinator_token` | Worker config | Worker Token（与 Coordinator 匹配） |
-
-完整配置说明见 [docs/configuration.md](docs/configuration.md)。
+### 通知
+- 多渠道 Webhook：Bark / PushPlus / Gotify / 通用
+- Emby / Jellyfin 自动通知刷新媒体库
 
 ---
 
@@ -189,21 +146,14 @@ Worker 首次启动会弹出配置向导，需要填写：
 
 | 文件 | 平台 | 说明 |
 |------|------|------|
-| `ssubb-worker-*-win64.exe` | Windows | Worker 主程序 |
+| `ssubb-worker-*-win64.exe` | Windows | Worker 主程序（转写 + 翻译） |
 | `ssubb-worker-*-linux-x64` | Linux | Worker 主程序 |
 | `ssubb-launcher-*-win64.exe` | Windows | Worker 桌面启动器（可选） |
 | `ssubb-launcher-*-linux-x64` | Linux | Worker 桌面启动器（可选） |
 
-**Worker** 是核心程序，负责转写翻译。命令行运行，接收任务、调用 faster-whisper-xxl + LLM。首次启动自动下载转写引擎。
+**Worker** 是核心程序，负责转写翻译。命令行运行，接收任务、调用 faster-whisper-xxl + LLM。
 
-**Launcher** 是可选的桌面 GUI，提供：
-- 环境检测（GPU / CUDA / FFmpeg / 模型）
-- 一键启动/停止/重启 Worker
-- 实时日志查看
-- 配置编辑（不用手写 YAML）
-- 系统托盘常驻
-
-> **无需手动安装 PyTorch**：Worker 使用 faster-whisper-xxl 独立二进制（内置 CUDA 运行时），首次启动自动下载。
+**Launcher** 是可选的桌面 GUI，提供环境检测、一键启停、实时日志、配置编辑、系统托盘。
 
 ---
 
@@ -215,37 +165,19 @@ Worker 首次启动会弹出配置向导，需要填写：
 - **翻译**：OpenAI 兼容 API（DeepSeek / GPT / 智谱等）
 - **部署**：Docker Compose / 裸机脚本 / 预编译 exe
 
-```
-coordinator/          NAS 端（任务调度 + WebUI + 字幕写入）
-  ├── main.py         FastAPI 入口，39 个 API 端点
-  ├── config.py       Pydantic 配置模型（21 字段）
-  ├── task_manager.py 任务生命周期管理
-  ├── scanner.py      影视库扫描
-  └── static/index.html  190KB 单文件 SPA
-
-worker/               GPU 端（转写 + 翻译）
-  ├── main.py         Worker API 服务
-  ├── task_executor.py 转写 + 翻译执行器
-  └── translator.py   LLM 翻译（多源容灾）
-
-shared/               共用数据模型与常量
-launcher/             PySide6 桌面启动器（11 个模块）
-moviepilot-plugin/    MoviePilot 自动触发插件
-```
-
 ---
 
-## 版本进度
+## 版本历史
 
-| 版本 | 状态 | 核心内容 |
-|------|------|----------|
-| V0.1~V0.5 | ✅ 完成 | 核心链路、容错、自动化、WebUI、Docker |
-| V0.6~V0.7 | ✅ 完成 | 多节点并发、自动发现、WebUI 体验升级 |
-| V0.8~V0.9 | ✅ 完成 | 智能调度、Webhook、批量操作、数据洞察 |
-| V0.10~V0.12 | ✅ 完成 | LLM 容灾、字幕编辑、术语提取、注释系统 |
-| V1.0 | ✅ 发布 | WebUI 重构 + 配置统管 + 安全加固 + exe 打包 + 桌面启动器 |
-| V1.1 | ✅ 完成 | 消除 PyTorch 依赖，改用 faster-whisper-xxl 独立二进制，自动下载安装 |
-| **V1.2** | **✅ 发布** | 全面审计修复 + GUI 修复 + 文档更新 + CI 简化 |
+| 版本 | 核心内容 |
+|------|----------|
+| V0.1~V0.5 | 核心链路、容错、自动化、WebUI、Docker |
+| V0.6~V0.7 | 多节点并发、自动发现、WebUI 体验升级 |
+| V0.8~V0.9 | 智能调度、Webhook、批量操作、数据洞察 |
+| V0.10~V0.12 | LLM 容灾、字幕编辑、术语提取、注释系统 |
+| V1.0 | WebUI 重构 + 配置统管 + 安全加固 + exe 打包 + 桌面启动器 |
+| V1.1 | 消除 PyTorch 依赖，改用 faster-whisper-xxl 独立二进制 |
+| V1.2 | 全面审计修复 + GUI 修复 + CI 简化 |
 
 ---
 
@@ -268,7 +200,7 @@ moviepilot-plugin/    MoviePilot 自动触发插件
 
 **Q: 字幕质量？** → large-v3-turbo + DeepSeek 超过大部分网上下载字幕。开启 `need_reflect: true` 可进一步提升。
 
-**Q: Worker exe 闪退？** → 首次启动会自动下载 faster-whisper-xxl（约 200MB），请确保网络通畅。如果自动下载失败，可从 [这里](https://github.com/Purfview/whisper-standalone-win/releases) 手动下载并放到 `./bin/` 目录。
+**Q: Worker exe 闪退？** → 首次启动会自动下载 faster-whisper-xxl（约 200MB），请确保网络通畅。如果自动下载失败，可从 [这里](https://github.com/Purfview/whisper-standalone-win/releases) 手动下载并放到 exe 同目录的 `bin/` 文件夹。
 
 **Q: Coordinator 怎么更新？** → `docker compose pull && docker compose up -d`（Docker）或 `git pull`（裸机）
 
@@ -282,7 +214,7 @@ moviepilot-plugin/    MoviePilot 自动触发插件
 
 ## 致谢
 
-- [Faster-Whisper](https://github.com/SYSTRAN/faster-whisper)：语音转写基础
+- [Faster-Whisper-XXL](https://github.com/Purfview/whisper-standalone-win)：独立转写二进制
 - [MoviePilot](https://github.com/jxxghp/MoviePilot)：自动化媒体库管理
 - [subgen](https://github.com/McCloudS/subgen)：分布式字幕工作流灵感
 - [VideoCaptioner](https://github.com/WEIFENG2333/VideoCaptioner)：分片翻译防截断思路
