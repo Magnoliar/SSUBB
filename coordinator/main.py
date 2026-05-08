@@ -310,7 +310,7 @@ app = FastAPI(
 from fastapi.middleware.cors import CORSMiddleware
 _cors_origins = config.security.cors_origins
 if not _cors_origins:
-    _cors_origins = [f"http://localhost:{config.port}", f"http://127.0.0.1:{config.port}"]
+    _cors_origins = ["*"]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
@@ -329,6 +329,7 @@ _rate_limits = {
     "DELETE": (20, 60),  # DELETE: 20次/分钟
 }
 _rate_store: dict[str, list[float]] = _defaultdict(list)
+_rate_last_cleanup: float = 0.0
 
 
 @app.middleware("http")
@@ -348,7 +349,15 @@ async def rate_limit_middleware(request: Request, call_next):
     now = _time.time()
     key = f"{client_ip}:{method}"
 
-    # 清理过期记录
+    # 定期清理所有过期记录（每 5 分钟一次，防止内存泄漏）
+    global _rate_last_cleanup
+    if now - _rate_last_cleanup > 300:
+        _rate_last_cleanup = now
+        expired_keys = [k for k, v in _rate_store.items() if not v or now - v[-1] > window]
+        for k in expired_keys:
+            del _rate_store[k]
+
+    # 清理当前 key 的过期记录
     _rate_store[key] = [t for t in _rate_store[key] if now - t < window]
 
     if len(_rate_store[key]) >= max_requests:
@@ -393,7 +402,9 @@ def _validate_media_path(media_path: str):
             )
 
     # 通用黑名单路径
-    blocked = {"/etc", "/proc", "/sys", "/dev", "C:\\Windows", "C:\\System32"}
+    blocked = {"/etc", "/proc", "/sys", "/dev", "/root", "/boot"}
+    if os.name == "nt":
+        blocked.update({"C:\\Windows", "C:\\System32", "C:\\ProgramData"})
     target_str = str(target)
     for b in blocked:
         if target_str.startswith(b) or target_str.lower().startswith(b.lower()):
@@ -1016,8 +1027,8 @@ async def list_media(
     from pathlib import Path
     from shared.constants import VIDEO_EXTENSIONS, SUBTITLE_EXTENSIONS
 
-    config = load_config()
-    scan_paths = config.automation.scan_paths if config.automation else []
+    cfg = load_config()
+    scan_paths = cfg.automation.scan_paths if cfg.automation else []
 
     if not scan_paths:
         return {"items": [], "total": 0, "scan_paths": []}

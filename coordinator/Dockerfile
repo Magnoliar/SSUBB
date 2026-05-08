@@ -12,9 +12,8 @@ RUN pip install --no-cache-dir -r coordinator/requirements.txt
 # 复制代码
 COPY shared/ /app/shared/
 COPY coordinator/ /app/coordinator/
-COPY config.yaml /app/config.yaml
 
-# 数据目录
+# 数据目录（config.yaml 通过 volume 挂载 ./data/config.yaml）
 RUN mkdir -p /app/data
 
 EXPOSE 8787

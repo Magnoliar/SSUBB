@@ -28,6 +28,12 @@ services:
     # 使用 host 网络可以获得最佳的自动发现体验（可选）
     # network_mode: host
     network_mode: bridge
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8787/api/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     logging:
       driver: "json-file"
       options:
