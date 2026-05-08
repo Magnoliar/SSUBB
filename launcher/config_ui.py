@@ -187,6 +187,27 @@ class ConfigDialog(QDialog):
         browse_btn.clicked.connect(self._browse_model_dir)
         model_dir_row.addWidget(browse_btn)
         tr_form.addRow("模型目录:", model_dir_row)
+
+        # faster-whisper-xxl 二进制路径
+        binary_row = QHBoxLayout()
+        self._whisper_binary = QLineEdit()
+        self._whisper_binary.setPlaceholderText("自动查找（留空则自动下载）")
+        binary_row.addWidget(self._whisper_binary)
+        binary_browse = QPushButton("浏览")
+        binary_browse.setStyleSheet(f"""
+            QPushButton {{
+                background: {Colors.ELEVATED};
+                color: {Colors.TEXT_SECONDARY};
+                border: 1px solid {Colors.BORDER_DIM};
+                border-radius: 6px;
+                padding: 6px 12px;
+            }}
+            QPushButton:hover {{ color: {Colors.AMBER}; border-color: {Colors.AMBER}44; }}
+        """)
+        binary_browse.setFixedWidth(60)
+        binary_browse.clicked.connect(self._browse_whisper_binary)
+        binary_row.addWidget(binary_browse)
+        tr_form.addRow("Whisper 引擎:", binary_row)
         self._form.addWidget(transcribe)
 
         # ── LLM ──
@@ -301,6 +322,15 @@ class ConfigDialog(QDialog):
         if d:
             self._model_dir.setText(d)
 
+    def _browse_whisper_binary(self):
+        f, _ = QFileDialog.getOpenFileName(
+            self, "选择 faster-whisper-xxl 可执行文件", "",
+            "可执行文件 (*.exe);;所有文件 (*)" if __import__("os").name == "nt"
+            else "所有文件 (*)"
+        )
+        if f:
+            self._whisper_binary.setText(f)
+
     def _load_config(self):
         try:
             from worker.config import load_worker_config, save_worker_config, WorkerConfig
@@ -333,6 +363,8 @@ class ConfigDialog(QDialog):
         if idx >= 0:
             self._compute_type.setCurrentIndex(idx)
         self._model_dir.setText(tc.model_dir)
+        if hasattr(tc, "whisper_binary") and tc.whisper_binary:
+            self._whisper_binary.setText(tc.whisper_binary)
 
         lc = cfg.llm
         self._api_base.setText(lc.api_base)
@@ -371,6 +403,7 @@ class ConfigDialog(QDialog):
             cfg.transcribe.device = self._device.currentText()
             cfg.transcribe.compute_type = self._compute_type.currentText()
             cfg.transcribe.model_dir = self._model_dir.text() or "./models"
+            cfg.transcribe.whisper_binary = self._whisper_binary.text().strip()
 
             cfg.llm.api_base = self._api_base.text()
             if self._api_key.text() and self._api_key.text() != "***":
