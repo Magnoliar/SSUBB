@@ -90,6 +90,7 @@ def build(args):
         "--hidden-import=httpx",
         "--hidden-import=yaml",
         "--hidden-import=openai",
+        "--hidden-import=json_repair",
         # 排除不需要的大型依赖
         "--exclude-module=tkinter",
         "--exclude-module=matplotlib",

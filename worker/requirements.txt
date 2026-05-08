@@ -13,3 +13,4 @@ openai>=1.50.0
 
 # 工具
 python-multipart>=0.0.9
+json-repair>=0.7.0
