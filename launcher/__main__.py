@@ -38,7 +38,11 @@ def main():
     config_path = args.config
 
     # 首次运行检测：没有 config.yaml 时显示 OOBE 向导
-    config_file = Path(config_path) if config_path else Path("config.yaml")
+    if config_path:
+        config_file = Path(config_path)
+    else:
+        base = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path.cwd()
+        config_file = base / "config.yaml"
     if not config_file.exists():
         from launcher.oobe import OOBEWizard
         wizard = OOBEWizard()
@@ -57,20 +61,36 @@ def _run_cli(config_path=None):
 
     print("=== SSUBB Worker CLI ===\n")
 
-    config = Path(config_path) if config_path else Path("config.yaml")
+    if config_path:
+        config = Path(config_path)
+    else:
+        base = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path.cwd()
+        config = base / "config.yaml"
+
     if not config.exists():
         print("No config.yaml found. Running setup wizard...\n")
+        if getattr(sys, "frozen", False):
+            print("ERROR: Setup wizard not available in frozen mode.")
+            print("Please create config.yaml manually or use the GUI launcher.")
+            sys.exit(1)
         subprocess.run([sys.executable, "-m", "worker.setup_wizard"])
 
     print("\nStarting Worker...")
     from worker.config import load_worker_config
     cfg = load_worker_config(str(config) if config.exists() else None)
-    subprocess.run([
-        sys.executable, "-m", "uvicorn",
-        "worker.main:app",
-        "--host", cfg.host,
-        "--port", str(cfg.port),
-    ])
+
+    if getattr(sys, "frozen", False):
+        # 冻结模式：直接导入并运行 worker
+        import uvicorn
+        from worker.main import app
+        uvicorn.run(app, host=cfg.host, port=cfg.port, reload=False)
+    else:
+        subprocess.run([
+            sys.executable, "-m", "uvicorn",
+            "worker.main:app",
+            "--host", cfg.host,
+            "--port", str(cfg.port),
+        ])
 
 
 if __name__ == "__main__":

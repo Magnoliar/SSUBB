@@ -81,8 +81,9 @@ class ServiceManager(QObject):
         QTimer.singleShot(3000, self._check_running)
 
     def _make_env(self):
-        env = QProcess.systemEnvironment()
-        env.append(f"SSUBB_CONFIG={self._config_path}")
+        from PySide6.QtCore import QProcessEnvironment
+        env = QProcessEnvironment.systemEnvironment()
+        env.insert("SSUBB_CONFIG", self._config_path)
         return env
 
     def _check_running(self):

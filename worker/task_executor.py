@@ -334,7 +334,7 @@ class TaskExecutor:
         for seg in segments:
             if seg.text in seen:
                 # 延长时间轴到最晚的结束时间
-                seen[seg.text].end = max(seen[seg.text].end, seg.end)
+                seen[seg.text].end_time = max(seen[seg.text].end_time, seg.end_time)
             else:
                 seen[seg.text] = seg
                 merged.append(seg)

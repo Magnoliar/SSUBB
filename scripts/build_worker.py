@@ -72,6 +72,7 @@ def build(args):
         "--exclude-module=matplotlib",
         "--exclude-module=scipy",
         "--exclude-module=pandas",
+        "--exclude-module=PySide6",
     ]
 
     if args.onefile:

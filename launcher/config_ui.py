@@ -304,9 +304,12 @@ class ConfigDialog(QDialog):
     def _load_config(self):
         try:
             from worker.config import load_worker_config, save_worker_config, WorkerConfig
+        except Exception:
+            return
+
+        try:
             cfg = load_worker_config(self._config_path)
         except Exception:
-            # 配置文件不存在或损坏，使用默认配置
             cfg = WorkerConfig()
             try:
                 save_worker_config(cfg.model_dump(), self._config_path)

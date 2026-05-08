@@ -44,7 +44,7 @@ class UpdateChecker(QObject):
     update_available = Signal(str, str, str)  # version, url, body
     no_update = Signal()
 
-    _repo = "anthropics/ssubb"
+    _repo = "Magnoliar/SSUBB"
 
     def __init__(self, parent=None):
         super().__init__(parent)

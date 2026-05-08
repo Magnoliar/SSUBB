@@ -41,8 +41,15 @@ from worker.model_manager import ModelManager
 
 from logging.handlers import RotatingFileHandler
 
-LOG_DIR = Path("./data")
-LOG_DIR.mkdir(parents=True, exist_ok=True)
+def _get_log_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        d = Path(sys.executable).parent / "data"
+    else:
+        d = Path("./data")
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+LOG_DIR = _get_log_dir()
 LOG_FILE = LOG_DIR / "worker.log"
 
 root_logger = logging.getLogger()
@@ -286,8 +293,6 @@ async def get_upload_status(task_id: str):
     return {"received_chunks": sorted(chunks_received)}
 
 
-from fastapi import Request
-
 @app.post("/api/task/upload_chunk")
 async def upload_chunk(request: Request):
     headers = request.headers
@@ -517,7 +522,7 @@ async def reoptimize_segments(request: Request):
         return {"repaired_segments": []}
 
     try:
-        system_prompt = _build_system_prompt(OptimizeConfig())
+        system_prompt = _build_system_prompt(config.optimize)
         repaired = await optimizer._optimize_chunk(target_segments, system_prompt)
         result = [{"index": s.index, "timecode": entries[segment_indices[i]]["timecode"], "text": s.text}
                   for i, s in enumerate(repaired)]
@@ -573,7 +578,7 @@ async def receive_config(config_data: dict):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
-        "worker.main:app",
+        app,
         host=config.host,
         port=config.port,
         reload=False,

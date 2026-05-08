@@ -15,6 +15,7 @@ import platform
 import re
 import shutil
 import subprocess
+import sys
 import zipfile
 from pathlib import Path
 from typing import Callable, List, Optional
@@ -27,8 +28,13 @@ logger = logging.getLogger("ssubb.whisper_runner")
 # 下载配置（参考 VideoCaptioner）
 # ============================================================================
 
-# 二进制存放目录
-BIN_DIR = Path("./bin")
+# 二进制存放目录（PyInstaller 打包后为 exe 所在目录）
+def _get_base_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).parent
+    return Path.cwd()
+
+BIN_DIR = _get_base_dir() / "bin"
 
 # 下载源（GitHub Releases）
 # 备用源: https://modelscope.cn/models/bkfengg/whisper-cpp
@@ -88,8 +94,8 @@ def find_whisper_binary(whisper_binary: str = "") -> Optional[Path]:
         if found:
             return Path(found)
 
-    # 3. ./bin/ 目录
-    bin_dir = Path("./bin")
+    # 3. ./bin/ 目录（相对 exe 或 CWD）
+    bin_dir = _get_base_dir() / "bin"
     if bin_dir.exists():
         for name in ["faster-whisper-xxl.exe", "faster-whisper-xxl",
                       "faster-whisper.exe", "faster-whisper"]:
@@ -484,7 +490,7 @@ async def run_whisper(
         )
 
         # 等待进程结束
-        await asyncio.wait_for(process.wait(), timeout=30)
+        await asyncio.wait_for(process.wait(), timeout=timeout)
 
     except asyncio.TimeoutError:
         process.kill()

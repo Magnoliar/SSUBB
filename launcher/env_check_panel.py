@@ -31,8 +31,18 @@ class _CheckWorker(QThread):
             except Exception:
                 results = run_full_check()
         except Exception as e:
-            from worker.env_check import EnvCheckResult
-            results = [EnvCheckResult("Import", False, str(e))]
+            try:
+                from worker.env_check import EnvCheckResult
+                results = [EnvCheckResult("Import", False, str(e))]
+            except Exception:
+                # worker 模块完全不可用，构造简单结果
+                class _FallbackResult:
+                    def __init__(self, name, passed, detail, required=True):
+                        self.name = name
+                        self.passed = passed
+                        self.detail = detail
+                        self.required = required
+                results = [_FallbackResult("Import", False, str(e))]
         self.finished.emit(results)
 
 

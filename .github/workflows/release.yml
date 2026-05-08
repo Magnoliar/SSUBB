@@ -32,6 +32,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r coordinator/requirements.txt
+          pip install -r worker/requirements.txt
           pip install pytest
 
       - name: Run tests
@@ -100,7 +101,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r coordinator/requirements.txt
+          pip install -r worker/requirements.txt
           pip install pyinstaller PySide6
 
       - name: Build Launcher
