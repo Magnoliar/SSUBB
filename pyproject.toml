@@ -4,7 +4,7 @@ build-backend = "setuptools.backends._legacy:_Backend"
 
 [project]
 name = "ssubb"
-version = "1.1.0"
+version = "1.2.0"
 description = "SSUBB - 分布式字幕转写翻译系统"
 requires-python = ">=3.10"
 dependencies = [

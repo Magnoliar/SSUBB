@@ -244,7 +244,8 @@ moviepilot-plugin/    MoviePilot 自动触发插件
 | V0.8~V0.9 | ✅ 完成 | 智能调度、Webhook、批量操作、数据洞察 |
 | V0.10~V0.12 | ✅ 完成 | LLM 容灾、字幕编辑、术语提取、注释系统 |
 | V1.0 | ✅ 发布 | WebUI 重构 + 配置统管 + 安全加固 + exe 打包 + 桌面启动器 |
-| **V1.1** | **✅ 发布** | 消除 PyTorch 依赖，改用 faster-whisper-xxl 独立二进制，自动下载安装 |
+| V1.1 | ✅ 完成 | 消除 PyTorch 依赖，改用 faster-whisper-xxl 独立二进制，自动下载安装 |
+| **V1.2** | **✅ 发布** | 全面审计修复 + GUI 修复 + 文档更新 + CI 简化 |
 
 ---
 
