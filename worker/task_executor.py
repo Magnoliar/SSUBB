@@ -13,7 +13,7 @@ import httpx
 from shared.constants import TaskStatus
 from shared.models import TaskConfig, WorkerProgressUpdate, WorkerTaskResult
 
-from .config import WorkerConfig
+from worker.config import WorkerConfig
 
 logger = logging.getLogger("ssubb.executor")
 
@@ -31,7 +31,7 @@ class TaskExecutor:
     def _get_llm(self):
         """获取或创建共享的 LLMClient 实例"""
         if self._llm_client is None:
-            from .llm_client import LLMClient
+            from worker.llm_client import LLMClient
             self._llm_client = LLMClient(self.config.llm_providers)
         return self._llm_client
 
@@ -108,7 +108,7 @@ class TaskExecutor:
             if task_config.terminology_enabled and not glossary:
                 logger.info(f"[{task_id}] 自动提取术语...")
                 try:
-                    from .terminology_extractor import TerminologyExtractor
+                    from worker.terminology_extractor import TerminologyExtractor
                     extractor = TerminologyExtractor(self._get_llm())
                     glossary = await extractor.extract(
                         srt_content, task_config.target_lang, task_config.media_title
@@ -160,8 +160,8 @@ class TaskExecutor:
                 await self._report_progress(task_id, TaskStatus.ANNOTATING, 85)
                 logger.info(f"[{task_id}] 生成字幕注释 (mode={annotation_mode}, density={cultural_density})...")
                 try:
-                    from .annotator import SubtitleAnnotator
-                    from .srt_parser import SRTParser as _SRTParser
+                    from worker.annotator import SubtitleAnnotator
+                    from worker.srt_parser import SRTParser as _SRTParser
 
                     annotator = SubtitleAnnotator(self._get_llm())
                     orig_segments = _SRTParser.parse(srt_content)
@@ -233,7 +233,7 @@ class TaskExecutor:
             (srt_content, detected_language, segment_count) 或 None
         """
         try:
-            from .whisper_runner import (
+            from worker.whisper_runner import (
                 ensure_whisper_binary, run_whisper, filter_hallucinations,
             )
 
@@ -283,7 +283,7 @@ class TaskExecutor:
             )
 
             # 幻觉过滤
-            from .srt_parser import SRTParser
+            from worker.srt_parser import SRTParser
             segments = SRTParser.parse(srt_content)
             original_count = len(segments)
             segments = filter_hallucinations(segments)
@@ -314,7 +314,7 @@ class TaskExecutor:
     @staticmethod
     def _clean_subtitle(srt_content: str) -> str:
         """字幕清洗：去重 + 去结尾标点 + 去段内换行"""
-        from .srt_parser import SRTParser
+        from worker.srt_parser import SRTParser
 
         segments = SRTParser.parse(srt_content)
         if not segments:
@@ -357,7 +357,7 @@ class TaskExecutor:
         if not config.optimize_enabled or not self.config.llm_providers:
             return srt_content
 
-        from .optimizer import SubtitleOptimizer
+        from worker.optimizer import SubtitleOptimizer
 
         llm = self._get_llm()
         optimizer = SubtitleOptimizer(llm)
@@ -392,7 +392,7 @@ class TaskExecutor:
             logger.warning("未启用 LLM 翻译服务或缺少 LLM 提供商，跳过翻译")
             return srt_content, empty_stats
 
-        from .translator import SubtitleTranslator
+        from worker.translator import SubtitleTranslator
 
         llm = self._get_llm()
         translator = SubtitleTranslator(llm)

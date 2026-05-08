@@ -19,7 +19,7 @@ import zipfile
 from pathlib import Path
 from typing import Callable, List, Optional
 
-from .srt_parser import SRTParser, SubtitleSegment
+from worker.srt_parser import SRTParser, SubtitleSegment
 
 logger = logging.getLogger("ssubb.whisper_runner")
 

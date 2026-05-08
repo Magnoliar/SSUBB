@@ -7,8 +7,8 @@ import json
 import logging
 from typing import List, Optional
 
-from .llm_client import LLMClient
-from .srt_parser import SubtitleSegment
+from worker.llm_client import LLMClient
+from worker.srt_parser import SubtitleSegment
 
 logger = logging.getLogger("ssubb.annotator")
 

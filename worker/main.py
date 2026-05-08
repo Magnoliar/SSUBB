@@ -28,12 +28,12 @@ from shared.models import (
     TaskConfig,
 )
 
-from .config import load_worker_config, save_worker_config
-from .health import build_heartbeat, get_llm_health
-from .llm_client import LLMClient
-from .task_executor import TaskExecutor
-from .env_check import run_full_check, print_check_report
-from .model_manager import ModelManager
+from worker.config import load_worker_config, save_worker_config
+from worker.health import build_heartbeat, get_llm_health
+from worker.llm_client import LLMClient
+from worker.task_executor import TaskExecutor
+from worker.env_check import run_full_check, print_check_report
+from worker.model_manager import ModelManager
 
 # =============================================================================
 # 日志配置
@@ -161,7 +161,7 @@ async def lifespan(app: FastAPI):
     print_check_report(check_results)
 
     # 检查 faster-whisper-xxl 二进制（不存在则自动下载）
-    from .whisper_runner import ensure_whisper_binary
+    from worker.whisper_runner import ensure_whisper_binary
     binary = ensure_whisper_binary(config.transcribe.whisper_binary)
     if binary:
         logger.info(f"Whisper 二进制: {binary}")
@@ -179,11 +179,11 @@ async def lifespan(app: FastAPI):
     # 自动发现：如果未配置 coordinator_url，尝试局域网发现
     discovery_client = None
     if not config.coordinator_url:
-        from .discovery_client import UDPDiscoveryClient
+        from worker.discovery_client import UDPDiscoveryClient
 
         async def _on_coordinator_found(url: str):
             """发现 Coordinator 时自动写入配置"""
-            from .config import save_worker_config
+            from worker.config import save_worker_config
             config.coordinator_url = url
             cfg = config.model_dump()
             save_worker_config(cfg)
@@ -492,9 +492,9 @@ async def reoptimize_segments(request: Request):
     if not entries or not segment_indices:
         raise HTTPException(status_code=400, detail="entries 和 segment_indices 不能为空")
 
-    from .optimizer import SubtitleOptimizer, _build_system_prompt
-    from .srt_parser import SubtitleSegment
-    from .config import OptimizeConfig
+    from worker.optimizer import SubtitleOptimizer, _build_system_prompt
+    from worker.srt_parser import SubtitleSegment
+    from worker.config import OptimizeConfig
 
     # 使用共享的 _llm_client 实例（避免每次创建新客户端）
     llm = _llm_client or LLMClient(config.llm_providers)
@@ -548,7 +548,7 @@ async def receive_config(config_data: dict):
         existing["optimize"] = {**existing.get("optimize", {}), **config_data["optimize"]}
 
     # 先验证，再持久化（防止无效配置写入磁盘）
-    from .config import WorkerConfig
+    from worker.config import WorkerConfig
     try:
         config = WorkerConfig(**existing)
     except Exception as e:

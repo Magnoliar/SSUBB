@@ -11,8 +11,8 @@ from typing import List, Optional
 import json_repair
 
 from shared.models import TaskConfig
-from .llm_client import LLMClient
-from .srt_parser import SRTParser, SubtitleSegment
+from worker.llm_client import LLMClient
+from worker.srt_parser import SRTParser, SubtitleSegment
 
 logger = logging.getLogger("ssubb.translator")
 
@@ -227,7 +227,7 @@ Terminology Glossary (MUST follow these translations consistently):
         target_lang: str,
     ) -> list:
         """反思翻译：将原文和译文送回 LLM 做二次审校"""
-        from .srt_parser import SubtitleSegment
+        from worker.srt_parser import SubtitleSegment
 
         REFLECT_SYSTEM_PROMPT = """You are a professional translation reviewer.
 Compare the original subtitles with the translated subtitles and improve the translation.

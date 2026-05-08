@@ -9,9 +9,9 @@ import re
 from typing import List
 
 from shared.models import TaskConfig
-from .config import OptimizeConfig
-from .llm_client import LLMClient
-from .srt_parser import SRTParser, SubtitleSegment
+from worker.config import OptimizeConfig
+from worker.llm_client import LLMClient
+from worker.srt_parser import SRTParser, SubtitleSegment
 
 logger = logging.getLogger("ssubb.optimizer")
 

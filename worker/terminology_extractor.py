@@ -13,7 +13,7 @@ from typing import Optional
 
 import httpx
 
-from .llm_client import LLMClient
+from worker.llm_client import LLMClient
 
 logger = logging.getLogger("ssubb.terminology")
 

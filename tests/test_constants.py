@@ -22,7 +22,7 @@ class TestVersion:
         assert all(p.isdigit() for p in parts)
 
     def test_version_accessible(self):
-        assert VERSION == "1.0.0"
+        assert VERSION == "1.1.0"
 
 
 class TestTaskStatus:
