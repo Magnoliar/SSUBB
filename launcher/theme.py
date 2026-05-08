@@ -4,8 +4,8 @@
 所有颜色、字体、动画、QSS 样式集中管理。
 """
 
-from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Property
-from PySide6.QtGui import QColor, QFont
+from PySide6.QtCore import QEasingCurve, QPropertyAnimation
+from PySide6.QtGui import QColor
 
 
 # ══════════════════════════════════════════════════════════════

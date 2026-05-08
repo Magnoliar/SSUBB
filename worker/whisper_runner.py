@@ -127,10 +127,8 @@ def download_whisper_binary() -> Optional[Path]:
     system = platform.system().lower()
     if system == "windows":
         platform_key = "win64"
-    elif system == "linux":
-        platform_key = "win64"  # Linux 可用 Windows 版本通过 Wine，或用 pip install faster-whisper
     else:
-        logger.error(f"不支持的平台: {system}")
+        logger.error(f"不支持的平台: {system}，请手动安装 faster-whisper-xxl")
         return None
 
     # 选择下载源（优先 GitHub，失败则用 ModelScope）
@@ -323,10 +321,6 @@ def _build_command(
 
     # 关闭提示音
     cmd.append("--beep_off")
-
-    # RTX 50 系列检测（需要 float16）
-    if _is_rtx_50_series():
-        cmd.extend(["--compute_type", "float16"])
 
     return cmd
 

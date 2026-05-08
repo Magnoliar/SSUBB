@@ -6,8 +6,8 @@
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve
-from PySide6.QtGui import QColor, QFont, QIcon, QPixmap, QPainter, QBrush, QPen
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QFont, QIcon, QPixmap, QPainter, QBrush, QPen
 from PySide6.QtWidgets import (
     QApplication, QFrame, QGraphicsDropShadowEffect,
     QHBoxLayout, QLabel, QMainWindow, QMessageBox,
@@ -295,11 +295,7 @@ class MainWindow(QMainWindow):
             from PySide6.QtGui import QDesktopServices
             from PySide6.QtCore import QUrl
             QDesktopServices.openUrl(QUrl(url))
-        elif reply == MB.StandardButton.No:
-            # 手动下载
-            from PySide6.QtGui import QDesktopServices
-            from PySide6.QtCore import QUrl
-            QDesktopServices.openUrl(QUrl(url))
+        # No / Ignore: 关闭对话框，不做任何操作
 
     def closeEvent(self, event):
         if self._tray_manager and self._tray_manager.is_visible():
@@ -358,6 +354,8 @@ def main():
         if tray.is_available():
             window.set_tray_manager(tray)
             tray.show_action.connect(window.show)
+            tray.start_worker.connect(window._service.start)
+            tray.stop_worker.connect(window._service.stop)
             tray.quit_action.connect(app.quit)
             window._service.status_changed.connect(tray.update_status)
             tray.show()

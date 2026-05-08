@@ -107,11 +107,21 @@
 - **配置统管** ✅：Coordinator 统一管理 LLM 提供商、转写、翻译等配置，自动推送到在线 Worker。LLM 提供商支持卡片式编辑器（拖拽排序、测试连通性）。转写模型选择显示本地下载状态、大小、显存需求、速度、质量评级。媒体库路径可视化编辑。
 - **安全加固** ✅：首次启动自动生成 API Token + Worker Token 并持久化到 config.yaml；CORS 默认收紧为 localhost；IP 级速率限制（POST 60/min）；media_path 路径校验防止越权访问；Worker 认证中间件 bug 修复；安全设置 tab 新增状态总览（红绿灯）+ CORS 编辑器。
 - **后端 API 扩展** ✅：新增 `/api/media/list`（媒体资源列表含字幕状态）、`/api/whisper/models`（模型本地状态）、`/api/llm/test`（LLM 连通性测试）。CoordinatorConfig 模型新增 `llm_providers`/`translate`/`transcribe` 字段，配置 YAML 与模型完全同步。
-- **跨平台打包**：Coordinator (Nuitka) + Worker (PyInstaller) 构建脚本，GitHub Actions CI/CD 自动构建 + Release。支持 Windows/Linux，CUDA 11/12 变体。
+- **跨平台打包**：Coordinator (Nuitka) + Worker (PyInstaller) 构建脚本，GitHub Actions CI/CD 自动构建 + Release。支持 Windows/Linux。
 - **Worker 桌面启动器 (PySide6)**：电影级暗色主题 GUI，集成环境检测、服务管理（启动/停止/重启）、实时日志、配置编辑、系统托盘、自动更新检查。
 - **首次运行引导 (OOBE)**：无 config.yaml 时自动弹出分步向导 — 连接 Coordinator → 选择 Whisper 模型 → 配置 LLM API → 完成。
 - **自动更新**：启动时检查 GitHub Releases，语义化版本比较，下载备份替换回滚流程。
 - **标准 Python 包**：`pyproject.toml` 统一管理依赖和构建配置。
+
+### V1.1：消除 PyTorch 依赖 ✅
+- **faster-whisper-xxl 迁移**：从 Python `stable_whisper`（依赖 PyTorch + CUDA）迁移到 `faster-whisper-xxl` 独立二进制（内置 CUDA runtime），彻底消除 PyTorch 依赖。
+- **自动下载安装**：Worker 首次启动自动从 GitHub/ModelScope 下载 faster-whisper-xxl（约 200MB），无需手动安装。
+- **PyInstaller 打包优化**：Worker exe 体积大幅缩小（不再包含 PyTorch 2GB+），单文件分发。
+- **CUDA 变体消除**：不再区分 CUDA 11/12 构建变体，faster-whisper-xxl 自带兼容的 CUDA runtime。
+- **RTX 50 系列兼容**：自动检测 RTX 50 系显卡并使用 float16 精度。
+- **PyInstaller 兼容修复**：所有 Worker 模块相对导入改为绝对导入，修复 frozen 模式下路径解析。
+- **GUI 修复**：系统托盘 start/stop 真实控制 Worker 进程、更新对话框按钮行为修复、QProcessEnvironment 类型修复、应用图标生成。
+- **CI 简化**：Release 工作流从 4 个构建任务简化为 2 个（Windows + Linux）。
 
 ---
 

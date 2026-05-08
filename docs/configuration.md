@@ -365,11 +365,10 @@ coordinator:
 | `model` | string | `large-v3-turbo` | Whisper 模型 |
 | `device` | string | `cuda` | 计算设备 |
 | `compute_type` | string | `float16` | 精度类型 |
-| `concurrent_transcriptions` | int | `1` | 并发转写数 |
+| `whisper_binary` | string | `""` | faster-whisper-xxl 二进制路径（空=自动查找/下载） |
 | `vad_filter` | bool | `true` | VAD 静音过滤 |
 | `vad_method` | string | `silero_v4_fw` | VAD 方法 |
 | `vad_threshold` | float | `0.5` | VAD 检测阈值 |
-| `custom_regroup` | string | `cm_sl=84_sl=42++++++1` | 自定义 regroup 策略 |
 | `detect_language_length` | int | `30` | 语言检测采样长度（段落） |
 | `model_dir` | string | `./models` | 模型缓存目录 |
 

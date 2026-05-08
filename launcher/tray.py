@@ -36,6 +36,8 @@ class TrayManager(QObject):
     """系统托盘管理。"""
 
     show_action = Signal()
+    start_worker = Signal()
+    stop_worker = Signal()
     quit_action = Signal()
 
     def __init__(self, parent=None):
@@ -125,4 +127,7 @@ class TrayManager(QObject):
             self.show_action.emit()
 
     def _on_toggle(self):
-        self.show_action.emit()
+        if self._status in ("running", "starting"):
+            self.stop_worker.emit()
+        else:
+            self.start_worker.emit()

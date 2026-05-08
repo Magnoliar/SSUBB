@@ -105,21 +105,22 @@ class ServiceManager(QObject):
             self._process.kill()
 
     def restart(self):
-        self.stop()
-        # 等进程退出后再启动
-        if self._process:
-            self._process.finished.connect(self._delayed_start)
-        else:
+        if not self._process or self._status == "stopped":
             self.start()
+            return
+        self._restart_pending = True
+        self._process.finished.connect(self._delayed_start)
+        self.stop()
 
-    def _delayed_start(self):
-        # 断开连接避免重复
+    def _delayed_start(self, exit_code=0, exit_status=0):
         if self._process:
             try:
                 self._process.finished.disconnect(self._delayed_start)
             except RuntimeError:
                 pass
-        QTimer.singleShot(500, self.start)
+        if getattr(self, "_restart_pending", False):
+            self._restart_pending = False
+            QTimer.singleShot(500, self.start)
 
     def _on_stdout(self):
         if not self._process:

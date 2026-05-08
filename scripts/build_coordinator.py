@@ -56,7 +56,7 @@ def build(args):
         # 包含 coordinator 包
         "--collect-all=coordinator",
         # 包含静态文件
-        f"--add-data={static_dir}{';' if system == 'windows' else ':''}coordinator/static",
+        f"--add-data={static_dir}{';' if system == 'windows' else ':'}coordinator/static",
     ]
 
     if args.onefile:
