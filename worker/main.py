@@ -309,6 +309,11 @@ async def upload_chunk(request: Request):
     total_chunks = int(headers.get("X-Total-Chunks", 1))
     file_hash = headers.get("X-File-Hash", "")
     file_name = headers.get("X-File-Name", "audio.flac")
+    try:
+        from urllib.parse import unquote
+        file_name = unquote(file_name)
+    except Exception:
+        pass
     task_config_str = headers.get("X-Config", "")
 
     if not task_id:

@@ -10,6 +10,7 @@ import logging
 import math
 from pathlib import Path
 from typing import Optional
+from urllib.parse import quote
 
 import httpx
 
@@ -115,7 +116,7 @@ class WorkerClient:
                             "X-Chunk-Index": str(chunk_index),
                             "X-Total-Chunks": str(total_chunks),
                             "X-File-Hash": file_hash,
-                            "X-File-Name": file_path.name,
+                            "X-File-Name": quote(file_path.name),
                             **self._auth_headers(),
                         }
                         if chunk_index == total_chunks - 1:
