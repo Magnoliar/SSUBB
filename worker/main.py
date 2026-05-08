@@ -35,6 +35,14 @@ from worker.task_executor import TaskExecutor
 from worker.env_check import run_full_check, print_check_report
 from worker.model_manager import ModelManager
 
+# Windows 终端 UTF-8 输出（防止 GBK 编码 emoji 崩溃）
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+
 # =============================================================================
 # 日志配置
 # =============================================================================

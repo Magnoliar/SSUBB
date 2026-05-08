@@ -84,6 +84,7 @@ class ServiceManager(QObject):
         from PySide6.QtCore import QProcessEnvironment
         env = QProcessEnvironment.systemEnvironment()
         env.insert("SSUBB_CONFIG", self._config_path)
+        env.insert("PYTHONIOENCODING", "utf-8")
         return env
 
     def _check_running(self):
