@@ -83,57 +83,18 @@ class ModelManager:
         return str(path) if path else None
 
     def download_model(self, model_name: str) -> bool:
-        """下载模型 (通过 huggingface_hub 或 faster-whisper 自动下载)
-
-        Returns:
-            是否成功
-        """
+        """提示用户模型由 faster-whisper-xxl 二进制自动管理"""
         if model_name not in KNOWN_MODELS:
             logger.error(f"未知模型: {model_name}")
             logger.info(f"已知模型: {', '.join(KNOWN_MODELS.keys())}")
             return False
 
         info = KNOWN_MODELS[model_name]
-        logger.info(f"准备下载模型: {model_name} (~{info['size_mb']}MB)")
-        logger.info(f"  来源: {info['repo']}")
-        logger.info(f"  目标: {self.model_dir}")
-
-        try:
-            # 方法 1: 使用 huggingface_hub (推荐)
-            try:
-                from huggingface_hub import snapshot_download
-                local_path = snapshot_download(
-                    info["repo"],
-                    local_dir=str(self.model_dir / f"faster-whisper-{model_name}"),
-                    local_dir_use_symlinks=False,
-                )
-                logger.info(f"模型下载完成: {local_path}")
-                return True
-            except ImportError:
-                pass
-
-            # 方法 2: 使用 faster-whisper 内置下载
-            try:
-                from faster_whisper.utils import download_model
-                local_path = download_model(
-                    model_name,
-                    output_dir=str(self.model_dir),
-                )
-                logger.info(f"模型下载完成: {local_path}")
-                return True
-            except ImportError:
-                pass
-
-            # 方法 3: ctranslate2 自动下载 (会在首次转写时触发)
-            logger.warning(
-                f"无法主动下载模型 (缺少 huggingface_hub 或 faster-whisper)。"
-                f"模型将在首次转写时自动下载到 {self.model_dir}"
-            )
-            return False
-
-        except Exception as e:
-            logger.exception(f"模型下载失败: {e}")
-            return False
+        logger.info(
+            f"模型 {model_name} 由 faster-whisper-xxl 在首次转写时自动下载 (~{info['size_mb']}MB)。"
+            f"无需手动下载。"
+        )
+        return False
 
     def delete_model(self, model_name: str) -> bool:
         """删除本地模型"""

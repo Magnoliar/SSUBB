@@ -1,9 +1,10 @@
 """SSUBB Worker 构建脚本 (PyInstaller)
 
 使用 PyInstaller 将 Worker 打包为独立可执行文件。
+faster-whisper-xxl 内置 CUDA runtime，无需区分 CUDA 版本。
 
 用法:
-    python scripts/build_worker.py [--onefile] [--output-dir dist] [--cuda cuda12]
+    python scripts/build_worker.py [--onefile] [--output-dir dist]
 
 前置条件:
     pip install pyinstaller
@@ -11,7 +12,6 @@
 
 import argparse
 import platform
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -29,39 +29,14 @@ def get_version() -> str:
     return "0.0.0"
 
 
-def detect_cuda_version() -> str:
-    """检测系统 CUDA 版本"""
-    try:
-        result = subprocess.run(
-            ["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader"],
-            capture_output=True, text=True, timeout=5,
-        )
-        if result.returncode == 0:
-            result2 = subprocess.run(
-                ["nvidia-smi"],
-                capture_output=True, text=True, timeout=5,
-            )
-            output = result2.stdout
-            if "CUDA Version: 12" in output:
-                return "cuda12"
-            elif "CUDA Version: 11" in output:
-                return "cuda11"
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        pass
-    return "cpu"
-
-
 def build(args):
     version = get_version()
     system = platform.system().lower()
-    cuda = args.cuda or detect_cuda_version()
-    arch = "win64" if system == "windows" else "linux-x64"
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"[build] SSUBB Worker v{version}")
-    print(f"[build] Platform: {system} ({arch})")
-    print(f"[build] CUDA: {cuda}")
+    print(f"[build] Platform: {system}")
     print(f"[build] Output: {output_dir}")
 
     cmd = [
@@ -91,6 +66,7 @@ def build(args):
         "--hidden-import=yaml",
         "--hidden-import=openai",
         "--hidden-import=json_repair",
+        "--hidden-import=python_multipart",
         # 排除不需要的大型依赖
         "--exclude-module=tkinter",
         "--exclude-module=matplotlib",
@@ -127,7 +103,7 @@ def build(args):
     # 创建 README
     readme = output_dir / "README.txt"
     readme.write_text(
-        f"SSUBB Worker v{version} ({cuda})\n"
+        f"SSUBB Worker v{version}\n"
         f"{'=' * 40}\n\n"
         f"快速启动:\n"
         f"  1. 双击 {exe_name} 启动 Worker\n"
@@ -154,8 +130,6 @@ def main():
     parser = argparse.ArgumentParser(description="Build SSUBB Worker with PyInstaller")
     parser.add_argument("--onefile", action="store_true", help="Build as single file")
     parser.add_argument("--output-dir", default="dist/worker", help="Output directory")
-    parser.add_argument("--cuda", choices=["cuda11", "cuda12", "cpu"], default=None,
-                        help="CUDA version (auto-detect if not specified)")
     args = parser.parse_args()
     build(args)
 

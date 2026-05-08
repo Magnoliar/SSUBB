@@ -38,18 +38,18 @@ jobs:
         run: python -m pytest tests/ -v --tb=long
 
   # ──────────────────────────────────────────────────────
-  # Worker 构建 (CUDA 12)
+  # Worker 构建 (faster-whisper-xxl 内置 CUDA，无需变体)
   # ──────────────────────────────────────────────────────
-  build-worker-cuda12:
+  build-worker:
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: windows-latest
-            artifact: ssubb-worker-win64-cuda12
+            artifact: ssubb-worker-win64
             ext: .exe
           - os: ubuntu-latest
-            artifact: ssubb-worker-linux-x64-cuda12
+            artifact: ssubb-worker-linux-x64
             ext: ""
     runs-on: ${{ matrix.os }}
     continue-on-error: true
@@ -66,70 +66,14 @@ jobs:
           pip install pyinstaller
 
       - name: Build with PyInstaller
-        run: python scripts/build_worker.py --onefile --output-dir dist --cuda cuda12
-
-      - name: Rename with CUDA version
-        shell: bash
-        run: |
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            mv dist/ssubb-worker.exe dist/ssubb-worker-cuda12.exe
-          else
-            mv dist/ssubb-worker dist/ssubb-worker-cuda12
-          fi
+        run: python scripts/build_worker.py --onefile --output-dir dist
 
       - name: Upload exe artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: dist/ssubb-worker-cuda12*
-
-  # ──────────────────────────────────────────────────────
-  # Worker 构建 (CUDA 11)
-  # ──────────────────────────────────────────────────────
-  build-worker-cuda11:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-            artifact: ssubb-worker-win64-cuda11
-            ext: .exe
-          - os: ubuntu-latest
-            artifact: ssubb-worker-linux-x64-cuda11
-            ext: ""
-    runs-on: ${{ matrix.os }}
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install dependencies
-        run: |
-          pip install -r worker/requirements.txt
-          pip install pyinstaller
-
-      - name: Build with PyInstaller
-        run: python scripts/build_worker.py --onefile --output-dir dist --cuda cuda11
-
-      - name: Rename with CUDA version
-        shell: bash
-        run: |
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            mv dist/ssubb-worker.exe dist/ssubb-worker-cuda11.exe
-          else
-            mv dist/ssubb-worker dist/ssubb-worker-cuda11
-          fi
-
-      - name: Upload exe artifact
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.artifact }}
-          path: dist/ssubb-worker-cuda11*
+          path: dist/ssubb-worker${{ matrix.ext }}
 
   # ──────────────────────────────────────────────────────
   # Launcher 构建 (PySide6)
@@ -173,7 +117,7 @@ jobs:
   # GitHub Release
   # ──────────────────────────────────────────────────────
   release:
-    needs: [build-worker-cuda12, build-worker-cuda11, build-launcher]
+    needs: [build-worker, build-launcher]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -188,7 +132,6 @@ jobs:
       - name: Flatten artifacts for release
         run: |
           mkdir -p release
-          # 复制所有产物到 release 目录
           find artifacts -type f \( -name "*.exe" -o -name "ssubb-*" \) -exec cp {} release/ \;
           ls -la release/
 

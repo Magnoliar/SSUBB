@@ -73,8 +73,8 @@ docker compose up -d
 **方式 A：下载编译好的 exe（推荐）**
 
 从 [GitHub Releases](https://github.com/Magnoliar/SSUBB/releases) 下载：
-- Windows：`ssubb-worker-win64-cuda12.exe`
-- Linux：`ssubb-worker-linux-x64-cuda12`
+- Windows：`ssubb-worker-win64.exe`
+- Linux：`ssubb-worker-linux-x64`
 
 双击运行，首次启动会自动引导配置。
 
@@ -189,9 +189,8 @@ Worker 首次启动会弹出配置向导，需要填写：
 
 | 文件 | 平台 | 说明 |
 |------|------|------|
-| `ssubb-worker-*-win64-cuda12.exe` | Windows + CUDA 12 | Worker 主程序（推荐） |
-| `ssubb-worker-*-win64-cuda11.exe` | Windows + CUDA 11 | Worker 主程序（旧显卡） |
-| `ssubb-worker-*-linux-x64-cuda12` | Linux + CUDA 12 | Worker 主程序 |
+| `ssubb-worker-*-win64.exe` | Windows | Worker 主程序 |
+| `ssubb-worker-*-linux-x64` | Linux | Worker 主程序 |
 | `ssubb-launcher-*-win64.exe` | Windows | Worker 桌面启动器（可选） |
 | `ssubb-launcher-*-linux-x64` | Linux | Worker 桌面启动器（可选） |
 

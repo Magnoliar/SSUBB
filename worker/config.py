@@ -1,6 +1,7 @@
 """SSUBB Worker 配置管理"""
 
 import os
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -8,6 +9,13 @@ import yaml
 from pydantic import BaseModel, Field
 
 from shared.models import LLMProviderConfig
+
+
+def _get_base_dir() -> Path:
+    """获取配置文件基准目录（PyInstaller 打包后为 exe 所在目录）"""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).parent
+    return Path(__file__).parent.parent
 
 
 class TranscribeConfig(BaseModel):
@@ -84,7 +92,7 @@ def load_worker_config(config_path: Optional[str] = None) -> WorkerConfig:
     if config_path is None:
         config_path = os.environ.get(
             "SSUBB_CONFIG",
-            str(Path(__file__).parent.parent / "config.yaml")
+            str(_get_base_dir() / "config.yaml")
         )
 
     config_data = {}
@@ -124,7 +132,7 @@ def save_worker_config(config_data: dict, config_path: Optional[str] = None):
     if config_path is None:
         config_path = os.environ.get(
             "SSUBB_CONFIG",
-            str(Path(__file__).parent.parent / "config.yaml")
+            str(_get_base_dir() / "config.yaml")
         )
 
     # 读取现有配置以保留非 worker 字段
