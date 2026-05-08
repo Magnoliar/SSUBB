@@ -1009,7 +1009,7 @@ async def toggle_automation(enabled: bool = True):
     auto_scheduler.enabled = enabled
     return APIResponse(
         success=True,
-        message=f"自动化已{'\u542f\u7528' if enabled else '\u5173\u95ed'}",
+        message=f"自动化已{'启用' if enabled else '关闭'}",
     )
 
 
