@@ -3,6 +3,8 @@
 分组卡片式表单，复用 worker.config 的 load/save。
 """
 
+import os
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout,
@@ -325,7 +327,7 @@ class ConfigDialog(QDialog):
     def _browse_whisper_binary(self):
         f, _ = QFileDialog.getOpenFileName(
             self, "选择 faster-whisper-xxl 可执行文件", "",
-            "可执行文件 (*.exe);;所有文件 (*)" if __import__("os").name == "nt"
+            "可执行文件 (*.exe);;所有文件 (*)" if os.name == "nt"
             else "所有文件 (*)"
         )
         if f:
