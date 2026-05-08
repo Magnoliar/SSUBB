@@ -3,6 +3,7 @@
 分组卡片式表单，复用 worker.config 的 load/save。
 """
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout,
     QGroupBox, QHBoxLayout, QLabel, QLineEdit, QMessageBox,
@@ -302,10 +303,15 @@ class ConfigDialog(QDialog):
 
     def _load_config(self):
         try:
-            from worker.config import load_worker_config
+            from worker.config import load_worker_config, save_worker_config, WorkerConfig
             cfg = load_worker_config(self._config_path)
         except Exception:
-            return
+            # 配置文件不存在或损坏，使用默认配置
+            cfg = WorkerConfig()
+            try:
+                save_worker_config(cfg.model_dump(), self._config_path)
+            except Exception:
+                pass
 
         self._port.setValue(cfg.port)
         if hasattr(cfg, "worker_id") and cfg.worker_id:

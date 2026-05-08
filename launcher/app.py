@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve
-from PySide6.QtGui import QColor, QFont, QIcon
+from PySide6.QtGui import QColor, QFont, QIcon, QPixmap, QPainter, QBrush, QPen
 from PySide6.QtWidgets import (
     QApplication, QFrame, QGraphicsDropShadowEffect,
     QHBoxLayout, QLabel, QMainWindow, QMessageBox,
@@ -168,6 +168,12 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("SSUBB Worker Launcher")
         self.setMinimumSize(800, 650)
         self.resize(900, 700)
+        self.setWindowFlags(
+            Qt.WindowType.Window |
+            Qt.WindowType.WindowMinimizeButtonHint |
+            Qt.WindowType.WindowMaximizeButtonHint |
+            Qt.WindowType.WindowCloseButtonHint
+        )
         self.setStyleSheet(theme.MAIN_WINDOW + theme.SCROLLBAR)
 
         self._service = ServiceManager(config_path=config_path, parent=self)
@@ -317,11 +323,31 @@ class MainWindow(QMainWindow):
         self._tray_manager = tray_manager
 
 
+def _create_app_icon() -> QIcon:
+    """生成应用图标（琥珀色 S 字母）"""
+    pixmap = QPixmap(64, 64)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    # 背景圆
+    painter.setBrush(QBrush(QColor(Colors.AMBER)))
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.drawEllipse(2, 2, 60, 60)
+    # S 字母
+    painter.setPen(QPen(QColor(Colors.VOID)))
+    font = QFont("Arial", 32, QFont.Weight.Bold)
+    painter.setFont(font)
+    painter.drawText(pixmap.rect(), Qt.AlignmentFlag.AlignCenter, "S")
+    painter.end()
+    return QIcon(pixmap)
+
+
 def main():
     """启动器主入口。"""
     app = QApplication(sys.argv)
     app.setApplicationName("SSUBB Worker")
     app.setStyle("Fusion")  # 跨平台一致的渲染引擎
+    app.setWindowIcon(_create_app_icon())
 
     window = MainWindow()
 
