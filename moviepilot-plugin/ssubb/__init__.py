@@ -1,3 +1,4 @@
+import json
 from typing import Any, Dict, List, Tuple
 from pathlib import Path
 
@@ -33,9 +34,9 @@ class SSUBBPlugin(_PluginBase):
     # 插件描述
     plugin_desc = "异地分布式 AI 字幕转写翻译 — 自动为入库外语影视生成中文字幕"
     # 插件图标
-    plugin_icon = "subtitle.png"
+    plugin_icon = "mdi-subtitles"
     # 插件版本
-    plugin_version = "0.5.0"
+    plugin_version = "1.2.1"
     # 插件作者
     plugin_author = "SSUBB"
     # 作者主页
@@ -335,16 +336,19 @@ class SSUBBPlugin(_PluginBase):
 
     def _on_coordinator_callback(self, payload: dict) -> dict:
         """收到 Coordinator 的完成回调，发送消息"""
-        from app.schemas import NotificationType
         task_id = payload.get("task_id", "")
         media_title = payload.get("media_title", "未知媒体")
         status = payload.get("status", "")
         message = payload.get("message", "")
         time_cost = payload.get("time_cost", 0)
-        
+
         logger.info(f"收到 SSUBB 任务回调 [{task_id}] {media_title}: {status}")
-            
-        mtype = NotificationType.Software
+
+        try:
+            from app.schemas import NotificationType
+            mtype = NotificationType.Software
+        except (ImportError, AttributeError):
+            mtype = None
         
         # 使用 MoviePilot 原生通知系统发送消息
         try:
@@ -378,7 +382,7 @@ class SSUBBPlugin(_PluginBase):
                     "active": stats_res.get("tasks_active", 0), 
                     "completed": stats_res.get("tasks_completed", 0)
                 }
-        except:
+        except Exception:
             pass
 
         return [
@@ -481,9 +485,10 @@ class SSUBBPlugin(_PluginBase):
         for file_path in file_list:
             file_path_str = str(file_path)
             
-            # 路径转换
+            # 路径转换（仅替换前缀，避免路径中相同片段被误替换）
             if self._local_path and self._remote_path and file_path_str.startswith(self._local_path):
-                file_path_str = file_path_str.replace(self._local_path, self._remote_path).replace('\\', '/')
+                file_path_str = self._remote_path + file_path_str[len(self._local_path):]
+                file_path_str = file_path_str.replace('\\', '/')
 
             logger.info(f"媒体入库: {media_title} → 通知 SSUBB 创建字幕任务: {file_path_str}")
 
@@ -512,7 +517,8 @@ class SSUBBPlugin(_PluginBase):
         if hasattr(settings, "WEB_HOST") and settings.WEB_HOST:
             site_host = settings.WEB_HOST
             
-        callback_url = f"{site_host.rstrip('/')}/api/v1/plugins/{self.__class__.__name__}/callback"
+        plugin_id = self.__class__.__name__.lower().replace("plugin", "")
+        callback_url = f"{site_host.rstrip('/')}/api/v1/plugins/{plugin_id}/callback"
         
         payload = {
             "media_path": media_path,
@@ -536,7 +542,8 @@ class SSUBBPlugin(_PluginBase):
             headers = {}
             if self._api_token:
                 headers["Authorization"] = f"Bearer {self._api_token}"
-            res = RequestUtils().post(req_url, json=payload, headers=headers)
+            headers["Content-Type"] = "application/json"
+            res = RequestUtils(timeout=30).post(req_url, data=json.dumps(payload), headers=headers)
             if res and res.status_code == 200:
                 result = res.json()
                 task_id = result.get("id", "unknown")
