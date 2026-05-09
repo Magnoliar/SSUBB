@@ -8,7 +8,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -32,7 +32,7 @@ class ScanItem:
 @dataclass
 class ScanReport:
     """扫描汇总报告"""
-    scan_time: datetime = field(default_factory=datetime.utcnow)
+    scan_time: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     scanned_dirs: list[str] = field(default_factory=list)
     total_videos: int = 0
     missing_subtitle: int = 0
@@ -83,7 +83,7 @@ class MediaScanner:
 
         cutoff_time = None
         if recent_days > 0:
-            cutoff_time = datetime.utcnow() - timedelta(days=recent_days)
+            cutoff_time = datetime.now(timezone.utc) - timedelta(days=recent_days)
 
         # 1. 收集所有视频文件
         all_videos: list[ScanItem] = []
@@ -98,6 +98,18 @@ class MediaScanner:
         logger.info(f"扫描发现 {len(all_videos)} 个视频文件")
 
         # 2. 检查字幕存在性 + 任务去重
+        from shared.constants import TaskStatus
+        recent_completed = self.store.get_tasks(status=TaskStatus.COMPLETED, limit=200)
+        completed_paths: set[tuple[str, str]] = set()
+        now_utc = datetime.now(timezone.utc)
+        for t in recent_completed:
+            if (
+                t.target_lang == target_lang
+                and t.completed_at
+                and (now_utc - t.completed_at).total_seconds() < 86400
+            ):
+                completed_paths.add((t.media_path, t.target_lang))
+
         missing: list[ScanItem] = []
         for item in all_videos:
             # 检查是否已有合格字幕
@@ -114,17 +126,8 @@ class MediaScanner:
                 continue
 
             # 检查近 24 小时内是否刚完成过
-            from shared.constants import TaskStatus
-            recent_completed = self.store.get_tasks(status=TaskStatus.COMPLETED, limit=200)
-            is_recently_done = any(
-                t.media_path == item.path
-                and t.target_lang == target_lang
-                and t.completed_at
-                and (datetime.utcnow() - t.completed_at).total_seconds() < 86400
-                for t in recent_completed
-            )
-            if is_recently_done:
-                item.has_subtitle = True  # 视作已有
+            if (item.path, target_lang) in completed_paths:
+                item.has_subtitle = True
                 continue
 
             missing.append(item)
@@ -193,7 +196,9 @@ class MediaScanner:
         """递归收集视频文件"""
         try:
             for entry in os.scandir(directory):
-                if entry.is_dir() and recursive:
+                if entry.is_symlink():
+                    continue
+                if entry.is_dir(follow_symlinks=False) and recursive:
                     # 跳过隐藏目录和常见非媒体目录
                     if entry.name.startswith(".") or entry.name.startswith("@"):
                         continue
@@ -206,12 +211,12 @@ class MediaScanner:
                     if suffix not in VIDEO_EXTENSIONS:
                         continue
 
-                    stat = entry.stat()
+                    stat = entry.stat(follow_symlinks=False)
                     # 跳过极小文件 (< 50MB，可能是预告片/样本)
                     if stat.st_size < 50 * 1024 * 1024:
                         continue
 
-                    modified = datetime.utcfromtimestamp(stat.st_mtime)
+                    modified = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
 
                     # 时间过滤
                     if cutoff_time and modified < cutoff_time:

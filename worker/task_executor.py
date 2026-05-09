@@ -267,7 +267,7 @@ class TaskExecutor:
             output_dir = str(Path(self.config.temp_dir) / f"{self.current_task_id}_srt")
 
             # 执行转写
-            srt_content, segment_count = await run_whisper(
+            srt_content, segment_count, whisper_lang = await run_whisper(
                 binary=binary,
                 audio_path=audio_path,
                 output_dir=output_dir,
@@ -292,8 +292,8 @@ class TaskExecutor:
                 srt_content = SRTParser.build(segments)
                 segment_count = len(segments)
 
-            # 语言检测（从 Whisper 日志或推断）
-            detected_lang = config.source_lang or "unknown"
+            # 语言检测：优先使用 Whisper 检测结果，其次配置值
+            detected_lang = whisper_lang or config.source_lang or "unknown"
 
             logger.info(f"转写完成: {segment_count} 段, 语言={detected_lang}")
 
@@ -326,7 +326,8 @@ class TaskExecutor:
             text = seg.text.replace("\n", " ").strip()
             while text and text[-1] in punct:
                 text = text[:-1].strip()
-            seg.text = text
+            # 保留纯标点文本，避免清空
+            seg.text = text if text else seg.text.replace("\n", " ").strip()
 
         # 2. 去重（合并相同文本的段，保留最早的时间戳）
         seen = {}

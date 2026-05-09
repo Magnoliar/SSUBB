@@ -99,6 +99,7 @@ task_queue: asyncio.Queue = asyncio.Queue()
 _worker_task: Optional[asyncio.Task] = None
 _active_tasks: dict[str, asyncio.Task] = {}  # task_id -> asyncio.Task (用于取消)
 _http_client: Optional[httpx.AsyncClient] = None
+_upload_locks: dict[str, asyncio.Lock] = {}  # per-task upload merge lock
 
 
 async def _process_queue():
@@ -124,6 +125,13 @@ async def _process_queue():
 
         except asyncio.CancelledError:
             logger.info(f"[{task_id}] 任务被取消")
+            if config.coordinator_url:
+                cancel_result = WorkerTaskResult(
+                    task_id=task_id,
+                    status="cancelled",
+                    error="任务被用户取消",
+                )
+                await _callback_result(cancel_result)
         except Exception as e:
             logger.exception(f"队列处理异常: {e}")
             # 通知 Coordinator 任务失败，避免 Coordinator 永久等待
@@ -319,6 +327,9 @@ async def upload_chunk(request: Request):
     if not task_id:
         raise HTTPException(status_code=400, detail="Missing X-Task-ID")
 
+    if chunk_index < 0 or chunk_index >= total_chunks:
+        raise HTTPException(status_code=400, detail=f"Invalid chunk_index {chunk_index} (total={total_chunks})")
+
     # 文件名净化: 防止路径遍历
     file_name = os.path.basename(file_name)
     if not file_name or '..' in file_name or len(file_name) > 255:
@@ -341,55 +352,76 @@ async def upload_chunk(request: Request):
         
     # 如果是最后一块到达，检查是否所有分块都已集齐
     chunks_present = len(list(chunk_dir.glob("chunk_*")))
-    
-    if chunks_present == total_chunks:
-        # 合并文件
-        final_audio_path = temp_dir / f"{task_id}_{file_name}"
-        logger.info(f"[{task_id}] 分块全部集齐，开始合并组装...")
 
-        sha256_hash = hashlib.sha256()
-        
-        try:
-            with open(final_audio_path, "wb") as outfile:
-                for i in range(total_chunks):
-                    idx_path = chunk_dir / f"chunk_{i}"
-                    with open(idx_path, "rb") as infile:
-                        data = infile.read()
-                        outfile.write(data)
-                        sha256_hash.update(data)
-                        
-            # SHA-256 校验防丢包或乱码
-            calculated_hash = sha256_hash.hexdigest()
-            if file_hash and calculated_hash != file_hash:
-                logger.error(f"[{task_id}] ❌ SHA-256 校验失败 (预期: {file_hash}, 实际: {calculated_hash})")
-                final_audio_path.unlink()
-                raise HTTPException(status_code=400, detail="Hash Mismatch")
-                
-            logger.info(f"[{task_id}] ✅ SHA-256 校验通过，文件完好无损 ({final_audio_path.stat().st_size/1024/1024:.1f}MB)")
-            
-            # 清理 chunks 目录
-            shutil.rmtree(chunk_dir, ignore_errors=True)
-            
-            # 压入任务队列
-            task_config = TaskConfig(**json.loads(task_config_str)) if task_config_str else TaskConfig()
-            
-            await task_queue.put({
-                "task_id": task_id,
-                "audio_path": str(final_audio_path),
-                "config": task_config,
-            })
-            
-            return APIResponse(
-                success=True,
-                message="合并并校验完成，进入队列",
-                data={"queue_position": task_queue.qsize()}
-            )
-            
-        except HTTPException as he:
-            raise he
-        except Exception as e:
-            logger.error(f"合并文件失败: {e}")
-            raise HTTPException(status_code=500, detail="合并失败")
+    if chunks_present == total_chunks:
+        # per-task lock 防止并发合并
+        if task_id not in _upload_locks:
+            _upload_locks[task_id] = asyncio.Lock()
+        lock = _upload_locks[task_id]
+
+        if lock.locked():
+            return APIResponse(success=True, message=f"Chunk {chunk_index} received (merge in progress)")
+
+        async with lock:
+            # 二次检查：可能已被另一个请求合并
+            if not chunk_dir.exists():
+                _upload_locks.pop(task_id, None)
+                return APIResponse(success=True, message="Already merged")
+
+            chunks_present = len(list(chunk_dir.glob("chunk_*")))
+            if chunks_present < total_chunks:
+                return APIResponse(success=True, message=f"Chunk {chunk_index} received ({chunks_present}/{total_chunks})")
+
+            # 合并文件
+            final_audio_path = temp_dir / f"{task_id}_{file_name}"
+            logger.info(f"[{task_id}] 分块全部集齐，开始合并组装...")
+
+            sha256_hash = hashlib.sha256()
+
+            try:
+                with open(final_audio_path, "wb") as outfile:
+                    for i in range(total_chunks):
+                        idx_path = chunk_dir / f"chunk_{i}"
+                        with open(idx_path, "rb") as infile:
+                            data = infile.read()
+                            outfile.write(data)
+                            sha256_hash.update(data)
+
+                # SHA-256 校验防丢包或乱码
+                calculated_hash = sha256_hash.hexdigest()
+                if file_hash and calculated_hash != file_hash:
+                    logger.error(f"[{task_id}] ❌ SHA-256 校验失败 (预期: {file_hash}, 实际: {calculated_hash})")
+                    final_audio_path.unlink()
+                    raise HTTPException(status_code=400, detail="Hash Mismatch")
+
+                logger.info(f"[{task_id}] ✅ SHA-256 校验通过，文件完好无损 ({final_audio_path.stat().st_size/1024/1024:.1f}MB)")
+
+                # 清理 chunks 目录
+                shutil.rmtree(chunk_dir, ignore_errors=True)
+
+                # 压入任务队列
+                task_config = TaskConfig(**json.loads(task_config_str)) if task_config_str else TaskConfig()
+
+                await task_queue.put({
+                    "task_id": task_id,
+                    "audio_path": str(final_audio_path),
+                    "config": task_config,
+                })
+
+                _upload_locks.pop(task_id, None)
+                return APIResponse(
+                    success=True,
+                    message="合并并校验完成，进入队列",
+                    data={"queue_position": task_queue.qsize()}
+                )
+
+            except HTTPException as he:
+                _upload_locks.pop(task_id, None)
+                raise he
+            except Exception as e:
+                _upload_locks.pop(task_id, None)
+                logger.error(f"合并文件失败: {e}")
+                raise HTTPException(status_code=500, detail="合并失败")
             
     return APIResponse(success=True, message=f"Chunk {chunk_index} received")
 
@@ -545,6 +577,18 @@ async def reoptimize_segments(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/config")
+async def get_worker_config():
+    """返回 Worker 当前配置（敏感字段脱敏）"""
+    cfg = config.model_dump()
+    if cfg.get("security", {}).get("worker_token"):
+        cfg["security"]["worker_token"] = "***"
+    for p in cfg.get("llm_providers", []):
+        if p.get("api_key"):
+            p["api_key"] = "***"
+    return cfg
+
+
 @app.put("/api/config")
 async def receive_config(config_data: dict):
     """接收 Coordinator 推送的配置更新
@@ -580,6 +624,10 @@ async def receive_config(config_data: dict):
             await _llm_client.close()
         _llm_client = LLMClient(config.llm_providers)
         logger.info("配置已更新，LLM 客户端已热重载")
+
+    # 同步更新 executor 的配置引用
+    if executor:
+        executor.config = config
 
     return APIResponse(success=True, message="配置已更新")
 

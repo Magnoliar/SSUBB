@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QFont, QIcon, QPixmap, QPainter, QBrush, QPen
+from PySide6.QtGui import QColor, QFont, QIcon, QPixmap, QPainter, QBrush, QPen
 from PySide6.QtWidgets import (
     QApplication, QFrame, QGraphicsDropShadowEffect,
     QHBoxLayout, QLabel, QMainWindow, QMessageBox,
@@ -178,6 +178,8 @@ class MainWindow(QMainWindow):
 
         self._service = ServiceManager(config_path=config_path, parent=self)
         self._tray_manager = None
+        self._first_start = True
+        self._force_quit = False
 
         self._setup_ui()
         self._connect_signals()
@@ -260,6 +262,13 @@ class MainWindow(QMainWindow):
         self._status_card.update_status(status)
         if self._tray_manager:
             self._tray_manager.update_status(status)
+            # 首次启动成功后自动最小化到托盘
+            if status == "running" and self.isVisible() and getattr(self, "_first_start", True):
+                self._first_start = False
+                self.hide()
+                self._tray_manager.show_message(
+                    "SSUBB Worker", "Worker 已启动，正在后台运行。\n双击托盘图标可重新打开窗口。"
+                )
 
     def _open_config(self):
         from launcher.config_ui import ConfigDialog
@@ -284,9 +293,8 @@ class MainWindow(QMainWindow):
         reply = MB.information(
             self, "发现新版本",
             f"新版本 v{version} 可用。\n\n{body[:300]}\n\n"
-            f"点击「下载更新」将自动下载并替换当前版本。\n"
-            f"点击「手动下载」将在浏览器中打开下载页面。",
-            MB.StandardButton.Yes | MB.StandardButton.No | MB.StandardButton.Ignore,
+            f"点击「下载」将在浏览器中打开下载页面。",
+            MB.StandardButton.Yes | MB.StandardButton.No,
             MB.StandardButton.Yes,
         )
 
@@ -298,25 +306,93 @@ class MainWindow(QMainWindow):
         # No / Ignore: 关闭对话框，不做任何操作
 
     def closeEvent(self, event):
-        if self._tray_manager and self._tray_manager.is_visible():
-            self.hide()
+        # 强制退出（来自托盘"退出"或 _try_close 超时）
+        if getattr(self, "_force_quit", False):
+            event.accept()
+            return
+
+        # 已在关闭流程中，防止重入
+        if getattr(self, "_pending_close", False):
             event.ignore()
-        elif self._service.status == "running":
+            return
+
+        if self._tray_manager and self._tray_manager.is_visible():
+            # 托盘可用时，提供三种选择
+            if self._service.status in ("running", "starting"):
+                box = QMessageBox(self)
+                box.setWindowTitle("确认退出")
+                box.setText("Worker 正在运行，选择操作：")
+                box.setIcon(QMessageBox.Icon.Question)
+                btn_minimize = box.addButton("最小化到托盘", QMessageBox.ButtonRole.RejectRole)
+                btn_stop_close = box.addButton("停止并退出", QMessageBox.ButtonRole.YesRole)
+                btn_cancel = box.addButton("取消", QMessageBox.ButtonRole.NoRole)
+                box.exec()
+                clicked = box.clickedButton()
+                if clicked == btn_stop_close:
+                    event.ignore()
+                    self._start_close()
+                elif clicked == btn_minimize:
+                    self.hide()
+                    event.ignore()
+                else:
+                    event.ignore()
+            else:
+                # Worker 未运行，托盘可用：询问最小化还是退出
+                box = QMessageBox(self)
+                box.setWindowTitle("关闭窗口")
+                box.setText("选择操作：")
+                box.setIcon(QMessageBox.Icon.Question)
+                btn_minimize = box.addButton("最小化到托盘", QMessageBox.ButtonRole.RejectRole)
+                btn_quit = box.addButton("退出", QMessageBox.ButtonRole.YesRole)
+                btn_cancel = box.addButton("取消", QMessageBox.ButtonRole.NoRole)
+                box.exec()
+                clicked = box.clickedButton()
+                if clicked == btn_quit:
+                    event.accept()
+                elif clicked == btn_minimize:
+                    self.hide()
+                    event.ignore()
+                else:
+                    event.ignore()
+        elif self._service.status in ("running", "starting"):
             reply = QMessageBox.question(
                 self, "确认退出",
                 "Worker 正在运行，确定要退出吗？\n这将停止 Worker 服务。",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             )
             if reply == QMessageBox.StandardButton.Yes:
-                self._service.stop()
-                event.accept()
+                event.ignore()
+                self._start_close()
             else:
                 event.ignore()
         else:
             event.accept()
 
+    def _start_close(self):
+        """启动关闭流程：停止 Worker，轮询等待后退出。"""
+        self._pending_close = True
+        self._close_attempts = 0
+        self._service.stop()
+        if not hasattr(self, "_close_timer"):
+            self._close_timer = QTimer(self)
+            self._close_timer.timeout.connect(self._try_close)
+        self._close_timer.start(200)
+
+    def _try_close(self):
+        """Worker 停止后强制退出。超时 6 秒也强制退出。"""
+        self._close_attempts += 1
+        if self._service.status in ("stopped", "error") or self._close_attempts > 30:
+            self._close_timer.stop()
+            self._force_quit = True
+            QApplication.instance().quit()
+
     def set_tray_manager(self, tray_manager):
         self._tray_manager = tray_manager
+
+    def _force_quit_and_exit(self):
+        """托盘退出：跳过确认直接退出"""
+        self._force_quit = True
+        QApplication.instance().quit()
 
 
 def _create_app_icon() -> QIcon:
@@ -356,7 +432,7 @@ def main():
             tray.show_action.connect(window.show)
             tray.start_worker.connect(window._service.start)
             tray.stop_worker.connect(window._service.stop)
-            tray.quit_action.connect(app.quit)
+            tray.quit_action.connect(window._force_quit_and_exit)
             window._service.status_changed.connect(tray.update_status)
             tray.show()
     except Exception:

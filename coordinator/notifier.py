@@ -5,6 +5,7 @@
 
 import logging
 from datetime import datetime
+from string import Template
 from typing import Optional
 
 import httpx
@@ -14,21 +15,21 @@ from .config import NotificationChannel
 logger = logging.getLogger("ssubb.notifier")
 
 
-# 各渠道默认 Body 模板
+# 各渠道默认 Body 模板 (使用 $key 格式，配合 string.Template)
 _CHANNEL_TEMPLATES = {
     "bark": {
         "title": "SSUBB 通知",
-        "body": "{message}",
+        "body": "$message",
         "group": "SSUBB",
     },
     "pushplus": {
         "template": "txt",
         "title": "SSUBB 通知",
-        "content": "{message}",
+        "content": "$message",
     },
     "gotify": {
         "title": "SSUBB",
-        "message": "{message}",
+        "message": "$message",
         "priority": 5,
     },
 }
@@ -111,7 +112,8 @@ class Notifier:
         # 用户自定义模板
         if channel.template:
             try:
-                text = channel.template.format(message=message, event=event, **data)
+                safe_vars = {"message": message, "event": event, **data}
+                text = Template(channel.template).safe_substitute(safe_vars)
                 return {"text": text}
             except Exception:
                 return {"text": message}
@@ -120,9 +122,10 @@ class Notifier:
         tpl = _CHANNEL_TEMPLATES.get(channel.channel_type)
         if tpl:
             body = {}
+            safe_vars = {"message": message, "event": event}
             for k, v in tpl.items():
                 if isinstance(v, str):
-                    body[k] = v.format(message=message, event=event)
+                    body[k] = Template(v).safe_substitute(safe_vars)
                 else:
                     body[k] = v
             return body

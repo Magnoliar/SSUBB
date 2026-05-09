@@ -40,15 +40,15 @@
             overflow-x: hidden;
         }
 
-        /* Film grain overlay */
+        /* Film grain overlay — 低不透明度，z-index 低于 UI 避免遮挡 */
         body::before {
             content: '';
             position: fixed;
             inset: 0;
             background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
             pointer-events: none;
-            z-index: 9999;
-            opacity: 0.5;
+            z-index: 0;
+            opacity: 0.3;
         }
 
         /* Atmospheric vignette */
@@ -110,9 +110,8 @@
         }
 
         @keyframes pulse-green {
-            0% { transform: rotate(45deg) scale(0.9); box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.6); }
-            70% { transform: rotate(45deg) scale(1); box-shadow: 0 0 0 5px rgba(74, 222, 128, 0); }
-            100% { transform: rotate(45deg) scale(0.9); box-shadow: 0 0 0 0 rgba(74, 222, 128, 0); }
+            0%, 100% { transform: rotate(45deg) scale(0.85); opacity: 0.8; }
+            50% { transform: rotate(45deg) scale(1.1); opacity: 1; }
         }
 
         /* Progress bar — cinematic sweep */
@@ -129,6 +128,7 @@
             background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.25) 50%, rgba(255,255,255,0) 100%);
             transform: translateX(-100%);
             animation: shimmer 1.8s infinite;
+            will-change: transform;
         }
         @keyframes shimmer {
             100% { transform: translateX(100%); }
@@ -211,8 +211,8 @@
         .timeline-node.failed::before { background: var(--accent-red); border-color: var(--accent-red); }
 
         @keyframes pulse-amber {
-            0%, 100% { box-shadow: 0 0 0 0 var(--accent-amber-glow); }
-            50% { box-shadow: 0 0 0 4px rgba(245, 166, 35, 0); }
+            0%, 100% { opacity: 0.7; }
+            50% { opacity: 1; }
         }
 
         /* Scrollbar */
@@ -423,7 +423,7 @@
         <!-- Status Cards -->
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
             <!-- Worker Cluster Card (merged with Coordinator info) -->
-            <div class="glass-panel p-5 cursor-pointer hover:border-[var(--accent-blue)]/30 transition-all group" @click="goToSettings('workers')">
+            <div class="glass-panel p-5 cursor-pointer hover:border-[var(--accent-blue)]/30 transition-all group" @click="goToSettings('workers')" title="已连接的 GPU Worker 数量及其运行状态">
                 <div class="flex items-center justify-between mb-3">
                     <span class="text-xs text-[var(--text-muted)] uppercase tracking-wider">Worker 集群</span>
                     <i class="fa-solid fa-server text-[var(--accent-blue)] group-hover:translate-x-0.5 transition-transform"></i>
@@ -441,7 +441,7 @@
                 </div>
             </div>
             <!-- Task Overview Card -->
-            <div class="glass-panel p-5 cursor-pointer hover:border-[var(--accent-amber)]/30 transition-all group" @click="currentTab = 'tasks'">
+            <div class="glass-panel p-5 cursor-pointer hover:border-[var(--accent-amber)]/30 transition-all group" @click="currentTab = 'tasks'" title="任务队列状态：完成、进行中、排队、失败">
                 <div class="flex items-center justify-between mb-3">
                     <span class="text-xs text-[var(--text-muted)] uppercase tracking-wider">任务概览</span>
                     <i class="fa-solid fa-list-check text-[var(--accent-amber)] group-hover:translate-x-0.5 transition-transform"></i>
@@ -544,9 +544,18 @@
             <div class="px-5 py-3 border-b border-[var(--border-dim)] flex items-center justify-between">
                 <div class="flex items-center gap-3">
                     <h3 class="text-sm font-medium"><i class="fa-solid fa-film mr-2 text-[var(--accent-amber)]"></i>影视资源</h3>
-                    <span class="text-xs text-[var(--text-muted)]">{{ mediaTotal }} 项</span>
+                    <span class="text-xs text-[var(--text-muted)]">{{ mediaTotal }} 项{{ mediaSearchQuery ? ' (搜索: ' + mediaSearchQuery + ')' : '' }}</span>
                 </div>
                 <div class="flex items-center gap-2">
+                    <div class="relative">
+                        <input v-model="mediaSearchQuery" @input="onMediaSearchInput"
+                            placeholder="搜索文件名..."
+                            class="w-40 pl-2 pr-6 py-1 text-[11px] bg-[var(--bg-surface)] border border-[var(--border-dim)] rounded-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-amber)] outline-none transition-colors" />
+                        <button v-if="mediaSearchQuery" @click="mediaSearchQuery = ''; mediaPage = 1; fetchMediaList()"
+                            class="absolute right-1.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+                            <i class="fa-solid fa-xmark text-[10px]"></i>
+                        </button>
+                    </div>
                     <button v-for="f in [{key:'all',label:'全部'},{key:'missing',label:'缺字幕'},{key:'has_sub',label:'已有字幕'}]"
                         :key="f.key" @click="mediaFilter = f.key; mediaPage = 1; fetchMediaList()"
                         class="px-2.5 py-1 text-[10px] rounded-sm border transition-all"
@@ -581,7 +590,13 @@
             <div v-else class="divide-y divide-[var(--border-dim)] max-h-[360px] overflow-y-auto">
                 <div v-for="item in mediaList" :key="item.path"
                     class="px-5 py-2.5 flex items-center gap-3 hover:bg-[var(--bg-elevated)]/50 transition-colors group">
-                    <i class="fa-solid fa-file-video text-[var(--accent-amber)] text-sm opacity-60"></i>
+                    <div class="w-[45px] h-[64px] rounded bg-[var(--bg-surface)] flex items-center justify-center flex-shrink-0 overflow-hidden">
+                        <img v-if="item.poster_url" :src="item.poster_url"
+                            class="w-full h-full object-cover"
+                            loading="lazy"
+                            @error="item.poster_url = null" />
+                        <i v-else class="fa-solid fa-file-video text-[var(--accent-amber)] text-sm opacity-60"></i>
+                    </div>
                     <div class="flex-1 min-w-0">
                         <div class="text-xs text-[var(--text-primary)] truncate">{{ item.name }}</div>
                         <div class="text-[10px] text-[var(--text-muted)] mt-0.5">
@@ -605,7 +620,7 @@
                     </span>
                     <button v-if="!item.has_chinese_sub"
                         @click="submitMediaTask(item)"
-                        class="opacity-0 group-hover:opacity-100 text-[10px] px-2 py-1 rounded bg-[var(--accent-amber)]/10 text-[var(--accent-amber)] hover:bg-[var(--accent-amber)]/20 transition-all flex-shrink-0">
+                        class="opacity-60 group-hover:opacity-100 text-[10px] px-2 py-1 rounded bg-[var(--accent-amber)]/10 text-[var(--accent-amber)] hover:bg-[var(--accent-amber)]/20 transition-all flex-shrink-0">
                         <i class="fa-solid fa-wand-magic-sparkles mr-1"></i>生成字幕
                     </button>
                 </div>
@@ -651,6 +666,7 @@
                         <option value="completed">已完成</option>
                         <option value="failed">已失败</option>
                         <option value="skipped">已跳过</option>
+                        <option value="cancelled">已取消</option>
                     </select>
                     <button @click="fetchData" class="text-[var(--text-secondary)] hover:text-white transition-colors" title="刷新">
                         <i class="fa-solid fa-rotate-right" :class="{'fa-spin': loading}"></i>
@@ -784,7 +800,7 @@
                                                 <div class="text-[var(--text-muted)] mb-1">总耗时</div>
                                                 <div class="text-[var(--text-primary)]">{{ task.result_summary.total_duration.toFixed(1) }}s</div>
                                             </div>
-                                            <div class="bg-[var(--bg-elevated)] rounded-sm p-3" v-if="task.result_summary?.quality_score !== undefined">
+                                            <div class="bg-[var(--bg-elevated)] rounded-sm p-3" v-if="task.result_summary?.quality_score !== undefined" title="综合评估翻译质量的 0-100 分&#10;维度：时长匹配、语言正确、格式规范、内容完整、文化适配&#10;A(90+) B(80+) C(60+) D(40+) F(&lt;40)">
                                                 <div class="text-[var(--text-muted)] mb-1">质量评分</div>
                                                 <div class="flex items-center gap-2">
                                                     <span :class="{
@@ -843,6 +859,13 @@
                                                         ? (p <= 2 ? 'bg-[var(--accent-red)] text-white' : p === 3 ? 'bg-[var(--accent-amber)] text-white' : 'bg-[var(--bg-elevated)] text-white')
                                                         : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]']">
                                                 {{ p }}
+                                            </button>
+                                        </div>
+
+                                        <!-- 停止按钮 (活跃任务) -->
+                                        <div v-if="isActive(task.status)">
+                                            <button @click.stop="cancelTask(task.id)" class="text-[var(--accent-red)] hover:text-white text-xs font-medium py-2 px-4 rounded-sm flex items-center bg-[var(--accent-red)]/15 hover:bg-[var(--accent-red)]/40 border border-[var(--accent-red)]/30 transition-all">
+                                                <i class="fa-solid fa-stop mr-1.5"></i>停止任务
                                             </button>
                                         </div>
 
@@ -1157,7 +1180,7 @@
     <!-- Live Logs Terminal (高级模式) -->
     <div v-if="viewMode === 'advanced'" class="glass-panel mt-8 flex flex-col mb-8 overflow-hidden">
         <div class="px-6 py-3 border-b border-[var(--border-dim)] bg-[var(--bg-elevated)] flex justify-between items-center cursor-pointer" @click="toggleLogs">
-            <h2 class="font-semibold text-sm font-mono">
+            <h2 class="font-semibold text-sm font-mono" title="实时显示系统日志。包含任务调度、Worker 通信、错误信息等">
                 <i class="fa-solid fa-terminal mr-2 text-[var(--accent-green)]"></i>系统实时日志 / TTY0
                 <span class="ml-2 text-[10px] px-1.5 py-0.5 rounded" :class="logWsConnected ? 'bg-[var(--accent-green)]/10 text-[var(--accent-green)]' : 'bg-[var(--accent-amber)]/10 text-[var(--accent-amber)]'">
                     {{ logWsConnected ? 'WebSocket' : 'REST' }}
@@ -1165,7 +1188,7 @@
             </h2>
             <div class="flex items-center space-x-3">
                 <span class="flex h-2 w-2 relative">
-                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--accent-green)] opacity-75"></span>
+                    <span class="absolute inline-flex h-full w-full rounded-full bg-[var(--accent-green)] opacity-60" style="animation: pulse-green 2s infinite"></span>
                     <span class="relative inline-flex rounded-full h-2 w-2 bg-[var(--accent-green)]"></span>
                 </span>
                 <button class="text-[var(--text-secondary)] hover:text-white transition-transform duration-300" :class="{'rotate-180': !showLogs}">
@@ -1187,11 +1210,18 @@
 
     <!-- ═══ Settings Tab ═══ -->
     <div v-show="currentTab === 'settings'" class="tab-content-enter-active">
-        <!-- Loading state -->
-        <div v-if="Object.keys(configForm).length === 0" class="flex items-center justify-center py-20">
+        <!-- Loading / Error state -->
+        <div v-if="Object.keys(configForm).length === 0 && !_configError" class="flex items-center justify-center py-20">
             <div class="text-center">
                 <i class="fa-solid fa-circle-notch fa-spin text-3xl text-[var(--accent-cyan)] mb-3"></i>
                 <p class="text-sm text-[var(--text-secondary)]">加载配置中...</p>
+            </div>
+        </div>
+        <div v-else-if="_configError" class="flex items-center justify-center py-20">
+            <div class="text-center">
+                <i class="fa-solid fa-circle-exclamation text-3xl text-[var(--accent-red)] mb-3"></i>
+                <p class="text-sm text-[var(--text-secondary)] mb-4">配置加载失败</p>
+                <button @click="openSettings()" class="btn-primary text-xs px-4 py-2 rounded-sm">重试</button>
             </div>
         </div>
         <div v-else class="flex gap-6 max-w-6xl">
@@ -1208,6 +1238,15 @@
             <div class="flex-1 glass-panel p-6 space-y-4">
                 <!-- Worker Tab -->
                 <div v-if="settingsTab === 'workers'">
+                    <!-- Worker 管理说明 -->
+                    <div class="bg-[var(--accent-cyan)]/5 border border-[var(--accent-cyan)]/15 rounded-sm p-4 mb-4 space-y-2">
+                        <h4 class="text-sm font-medium text-[var(--accent-cyan)]"><i class="fa-solid fa-circle-info mr-1"></i>Worker 管理</h4>
+                        <div class="text-xs text-[var(--text-secondary)] space-y-1">
+                            <p><span class="text-[var(--accent-amber)]">自动发现：</span>SSUBB 支持自动发现局域网内的 Worker 节点。Worker 启动后会广播自身地址，Coordinator 自动注册。</p>
+                            <p><span class="text-[var(--accent-amber)]">手动添加：</span>也可以手动输入 Worker 的 Tailscale IP 或域名进行连接。格式：http://&lt;ip&gt;:&lt;port&gt;</p>
+                            <p><span class="text-[var(--accent-amber)]">权重说明：</span>权重越高，分配到的任务越多。多 Worker 时可根据 GPU 性能调整权重。</p>
+                        </div>
+                    </div>
                     <div v-for="(w, idx) in configForm.workers || []" :key="idx" class="bg-[var(--bg-elevated)] rounded-sm p-4 mb-3 border border-[var(--border-dim)]">
                         <div class="flex justify-between items-center mb-3">
                             <span class="text-sm font-medium text-[var(--text-primary)]">Worker {{ idx + 1 }}</span>
@@ -1231,6 +1270,16 @@
 
                 <!-- LLM Tab -->
                 <div v-if="settingsTab === 'llm'" class="space-y-4">
+                    <!-- LLM 功能说明 -->
+                    <div class="bg-[var(--accent-cyan)]/5 border border-[var(--accent-cyan)]/15 rounded-sm p-4 space-y-2">
+                        <h4 class="text-sm font-medium text-[var(--accent-cyan)]"><i class="fa-solid fa-circle-info mr-1"></i>LLM 配置说明</h4>
+                        <div class="text-xs text-[var(--text-secondary)] space-y-1">
+                            <p><span class="text-[var(--accent-amber)]">用途：</span>大语言模型用于翻译质量优化、注释生成等辅助功能。主翻译仍由 NMT 模型完成。</p>
+                            <p><span class="text-[var(--accent-amber)]">提供商：</span>选择 LLM 服务提供商。OpenAI 兼容 API 支持大多数国内外服务。</p>
+                            <p><span class="text-[var(--accent-amber)]">推荐模型：</span>gpt-4o-mini（性价比高）、claude-3-haiku（速度快）、deepseek-chat（国内服务）。</p>
+                            <p><span class="text-[var(--accent-amber)]">Base URL：</span>API 端点地址。国内用户可使用兼容的代理地址。</p>
+                        </div>
+                    </div>
                     <p class="text-xs text-[var(--text-muted)]">配置 LLM 提供商列表，按优先级排序。Coordinator 会将配置推送到所有在线 Worker。</p>
                     <div v-for="(p, idx) in configForm.llm_providers || []" :key="idx" class="bg-[var(--bg-elevated)] rounded-sm p-4 border border-[var(--border-dim)] relative group">
                         <div class="flex justify-between items-center mb-3">
@@ -1399,6 +1448,26 @@
 
                 <!-- Annotation Tab -->
                 <div v-if="settingsTab === 'annotation'" class="space-y-4">
+                    <!-- 注释功能说明 -->
+                    <div class="bg-[var(--accent-cyan)]/5 border border-[var(--accent-cyan)]/15 rounded-sm p-4 space-y-2">
+                        <h4 class="text-sm font-medium text-[var(--accent-cyan)]"><i class="fa-solid fa-circle-info mr-1"></i>注释功能说明</h4>
+                        <div class="text-xs text-[var(--text-secondary)] space-y-2">
+                            <p>当翻译质量分数达到阈值时，系统会自动分析字幕内容，生成两类注释：</p>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div class="p-2 rounded bg-[var(--bg-void)]">
+                                    <p class="text-[var(--accent-amber)] font-medium mb-1">文化注释</p>
+                                    <p>解释目标观众可能不熟悉的文化背景、典故、俚语等。</p>
+                                    <p class="text-[var(--text-muted)] mt-1">例："Knock it out of the park" → 棒球术语，意为大获成功</p>
+                                </div>
+                                <div class="p-2 rounded bg-[var(--bg-void)]">
+                                    <p class="text-[var(--accent-amber)] font-medium mb-1">术语注释</p>
+                                    <p>翻译并解释专业术语、人名、地名等专有名词。</p>
+                                    <p class="text-[var(--text-muted)] mt-1">例："Schwarzschild radius" → 史瓦西半径，黑洞的事件视界半径</p>
+                                </div>
+                            </div>
+                            <p>注释将以 ASS 格式嵌入字幕文件，或作为单独的注释文件输出。</p>
+                        </div>
+                    </div>
                     <div>
                         <label class="text-xs text-[var(--text-secondary)] block mb-1">注释模式</label>
                         <select v-model="configForm.annotation.mode" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]">
@@ -1406,7 +1475,7 @@
                             <option value="auto">自动 (根据内容复杂度)</option>
                             <option value="on">始终开启</option>
                         </select>
-                        <p class="text-[10px] text-[var(--text-muted)] mt-1">自动模式: 翻译时检测文化密度，高/中等复杂度时自动生成注释</p>
+                        <p class="text-[10px] text-[var(--text-muted)] mt-1">自动模式: 翻译质量达标时自动生成文化/术语注释</p>
                     </div>
                     <div v-if="configForm.annotation.mode === 'auto'">
                         <label class="text-xs text-[var(--text-secondary)] block mb-1">质量阈值</label>
@@ -1417,6 +1486,15 @@
 
                 <!-- Automation Tab -->
                 <div v-if="settingsTab === 'automation'" class="space-y-4">
+                    <!-- 自动化功能说明 -->
+                    <div class="bg-[var(--accent-cyan)]/5 border border-[var(--accent-cyan)]/15 rounded-sm p-4 space-y-2">
+                        <h4 class="text-sm font-medium text-[var(--accent-cyan)]"><i class="fa-solid fa-circle-info mr-1"></i>自动化扫描说明</h4>
+                        <div class="text-xs text-[var(--text-secondary)] space-y-1">
+                            <p><span class="text-[var(--accent-amber)]">自动扫描：</span>开启后将定期扫描媒体路径，自动为新视频创建翻译任务。</p>
+                            <p><span class="text-[var(--accent-amber)]">时间窗口：</span>在指定的时间范围内执行扫描，避免高峰期占用带宽。</p>
+                            <p><span class="text-[var(--accent-amber)]">跳过已有字幕：</span>如果视频已有同名字幕文件，将自动跳过不创建任务。</p>
+                        </div>
+                    </div>
                     <label class="flex items-center space-x-3 cursor-pointer">
                         <input type="checkbox" v-model="configForm.automation.enabled" class="form-checkbox h-4 w-4 text-[var(--accent-amber)] bg-[var(--bg-void)] border-[var(--border-dim)] rounded">
                         <span class="text-sm text-[var(--text-primary)]">启用自动化扫描</span>
@@ -1435,6 +1513,28 @@
 
                 <!-- Emby Tab -->
                 <div v-if="settingsTab === 'emby'" class="space-y-4">
+                    <!-- Emby 功能说明 -->
+                    <div class="bg-[var(--accent-cyan)]/5 border border-[var(--accent-cyan)]/15 rounded-sm p-4 space-y-3">
+                        <h4 class="text-sm font-medium text-[var(--accent-cyan)]"><i class="fa-solid fa-circle-info mr-1"></i>Emby 集成功能说明</h4>
+                        <div class="text-xs text-[var(--text-secondary)] space-y-2">
+                            <div>
+                                <span class="text-[var(--accent-amber)] font-medium">入站 Webhook：</span>
+                                配置 Emby 的 Webhook 插件，当有新影片入库或开始播放时，SSUBB 会自动创建翻译任务。
+                                <div class="mt-1 p-2 rounded bg-[var(--bg-void)] font-mono text-[10px] text-[var(--text-muted)]">
+                                    配置方法：Emby 管理后台 → Webhook → 添加 → URL 填写:<br>
+                                    http://&lt;SSUBB地址&gt;/emby?token=&lt;你的token&gt;
+                                </div>
+                            </div>
+                            <div>
+                                <span class="text-[var(--accent-amber)] font-medium">出站刷新：</span>
+                                翻译完成后自动通知 Emby 刷新元数据，新字幕将立即出现在 Emby 播放器中。需要填写 Emby 服务器地址和 API Key。
+                            </div>
+                            <div>
+                                <span class="text-[var(--accent-amber)] font-medium">API Key 获取：</span>
+                                Emby 管理后台 → API 密钥 → 添加新密钥 → 复制粘贴到下方
+                            </div>
+                        </div>
+                    </div>
                     <div>
                         <label class="text-xs text-[var(--text-secondary)] block mb-1">Emby 服务器地址</label>
                         <input v-model="configForm.emby.server" class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]" placeholder="http://192.168.1.100:8096">
@@ -1447,6 +1547,27 @@
 
                 <!-- Notifications Tab -->
                 <div v-if="settingsTab === 'notifications'" class="space-y-4">
+                    <!-- 通知功能说明 -->
+                    <div class="bg-[var(--accent-cyan)]/5 border border-[var(--accent-cyan)]/15 rounded-sm p-4 space-y-2">
+                        <h4 class="text-sm font-medium text-[var(--accent-cyan)]"><i class="fa-solid fa-circle-info mr-1"></i>通知功能说明</h4>
+                        <div class="text-xs text-[var(--text-secondary)] space-y-1">
+                            <p>当任务状态变化时，通过以下渠道发送通知：</p>
+                            <div class="grid grid-cols-2 gap-2 mt-2">
+                                <div class="p-2 rounded bg-[var(--bg-void)]">
+                                    <p class="text-[var(--accent-green)] font-medium mb-1">已支持</p>
+                                    <p>任务完成 — 翻译成功后通知</p>
+                                    <p>任务失败 — 翻译出错时通知</p>
+                                </div>
+                                <div class="p-2 rounded bg-[var(--bg-void)]">
+                                    <p class="text-[var(--accent-amber)] font-medium mb-1">即将支持</p>
+                                    <p class="text-[var(--text-muted)]">任务开始 — 开始处理时通知</p>
+                                    <p class="text-[var(--text-muted)]">队列积压 — 队列超过阈值时通知</p>
+                                    <p class="text-[var(--text-muted)]">Worker 离线 — 断开连接时通知</p>
+                                </div>
+                            </div>
+                            <p class="mt-2"><span class="text-[var(--accent-amber)]">支持渠道：</span>Bark（iOS 推送）、PushPlus（微信推送）、Gotify（自托管）、Webhook URL（自定义）</p>
+                        </div>
+                    </div>
                     <label class="flex items-center space-x-3 cursor-pointer">
                         <input type="checkbox" v-model="configForm.notifications.enabled" class="form-checkbox h-4 w-4 text-[var(--accent-amber)] bg-[var(--bg-void)] border-[var(--border-dim)] rounded">
                         <span class="text-sm text-[var(--text-primary)]">启用通知</span>
@@ -1586,10 +1707,39 @@
                         </div>
                         <div class="mt-3">
                             <label class="text-xs text-[var(--text-secondary)] block mb-1">Worker 回调令牌</label>
-                            <input v-model="configForm.security.worker_token" type="password"
-                                class="w-full bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--accent-amber)]"
-                                placeholder="Worker 回调验证">
+                            <div class="flex gap-2">
+                                <input :value="workerTokenVisible ? workerTokenPlain : configForm.security.worker_token"
+                                    :type="workerTokenVisible ? 'text' : 'password'" readonly
+                                    class="flex-1 bg-[var(--bg-void)] border border-[var(--border-dim)] rounded px-3 py-1.5 text-sm text-white focus:outline-none font-mono">
+                                <button @click="toggleWorkerTokenVisible"
+                                    class="px-2.5 py-1.5 text-xs rounded bg-[var(--bg-surface)] border border-[var(--border-dim)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+                                    :title="workerTokenVisible ? '隐藏' : '显示'">
+                                    <i :class="workerTokenVisible ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye'"></i>
+                                </button>
+                                <button @click="copyWorkerToken"
+                                    class="px-2.5 py-1.5 text-xs rounded bg-[var(--accent-cyan)]/10 border border-[var(--accent-cyan)]/20 text-[var(--accent-cyan)] hover:bg-[var(--accent-cyan)]/20 transition-colors"
+                                    title="复制">
+                                    <i class="fa-solid fa-copy"></i>
+                                </button>
+                                <button @click="regenerateWorkerToken"
+                                    class="px-2.5 py-1.5 text-xs rounded bg-[var(--accent-amber)]/10 border border-[var(--accent-amber)]/20 text-[var(--accent-amber)] hover:bg-[var(--accent-amber)]/20 transition-colors"
+                                    title="重新生成">
+                                    <i class="fa-solid fa-rotate"></i>
+                                </button>
+                            </div>
+                            <p class="text-[10px] text-[var(--text-muted)] mt-1.5"><i class="fa-solid fa-circle-info mr-1"></i>将此令牌填入 Worker 的 <code class="bg-[var(--bg-surface)] px-1 rounded">config.yaml</code> 的 <code class="bg-[var(--bg-surface)] px-1 rounded">security.worker_token</code> 字段，实现双向认证。</p>
                         </div>
+                    </div>
+
+                    <!-- 一键配对 -->
+                    <div class="bg-[var(--bg-elevated)] rounded-sm p-4 border border-[var(--accent-cyan)]/20">
+                        <h4 class="text-sm font-medium text-[var(--text-primary)] mb-3"><i class="fa-solid fa-link mr-1 text-[var(--accent-cyan)]"></i>快速配对</h4>
+                        <p class="text-xs text-[var(--text-muted)] mb-3">复制以下配置片段，粘贴到 Worker 的 <code class="bg-[var(--bg-surface)] px-1 rounded">config.yaml</code> 中即可完成连接。</p>
+                        <div class="bg-[var(--bg-void)] rounded p-3 font-mono text-[11px] text-[var(--text-secondary)] whitespace-pre overflow-x-auto mb-3" style="line-height:1.6">{{ workerConfigSnippet }}</div>
+                        <button @click="copyWorkerConfigSnippet"
+                            class="w-full py-2 rounded text-xs font-medium bg-[var(--accent-cyan)]/10 hover:bg-[var(--accent-cyan)]/20 text-[var(--accent-cyan)] border border-[var(--accent-cyan)]/20 transition-colors">
+                            <i class="fa-solid fa-copy mr-1.5"></i>复制 Worker 配置到剪贴板
+                        </button>
                     </div>
 
                     <!-- CORS 配置 -->
@@ -1621,6 +1771,22 @@
                             <button v-if="isAuthenticated" @click="logout" class="text-xs text-[var(--accent-red)] hover:text-[var(--accent-red)] px-3 py-1 border border-[var(--accent-red)]/20 rounded-sm hover:bg-[var(--accent-red)]/10 transition-colors">
                                 <i class="fa-solid fa-right-from-bracket mr-1"></i>清除 Token
                             </button>
+                        </div>
+                    </div>
+
+                    <!-- API 使用说明 -->
+                    <div class="bg-[var(--accent-cyan)]/5 border border-[var(--accent-cyan)]/15 rounded-sm p-4 space-y-2">
+                        <h4 class="text-sm font-medium text-[var(--accent-cyan)]"><i class="fa-solid fa-code mr-1"></i>API 使用说明</h4>
+                        <div class="text-xs text-[var(--text-secondary)] space-y-2">
+                            <p><span class="text-[var(--accent-amber)]">Webhook Token：</span>设置后，所有 API 请求需要在 Header 中携带此 Token：</p>
+                            <div class="p-2 rounded bg-[var(--bg-void)] font-mono text-[10px] text-[var(--text-muted)]">
+                                Authorization: Bearer &lt;token&gt;
+                            </div>
+                            <p><span class="text-[var(--accent-amber)]">POST /api/webhook：</span>外部系统可通过此接口触发任务创建：</p>
+                            <div class="p-2 rounded bg-[var(--bg-void)] font-mono text-[10px] text-[var(--text-muted)] whitespace-pre">curl -X POST http://&lt;地址&gt;/api/webhook \
+  -H "Authorization: Bearer &lt;token&gt;" \
+  -H "Content-Type: application/json" \
+  -d '{"media_path": "/path/to/video.mkv"}'</div>
                         </div>
                     </div>
                 </div>
@@ -1715,6 +1881,7 @@
             <!-- Modal Header -->
             <div class="p-4 border-b border-[var(--border-dim)] flex justify-between items-center bg-[var(--bg-panel)] rounded-t-sm">
                 <h3 class="font-bold text-lg"><i class="fa-solid fa-server mr-2 text-[var(--accent-cyan)]"></i>服务器文件系统</h3>
+                <span class="text-xs text-[var(--text-muted)]">点击文件名可创建翻译任务</span>
                 <button @click="showBrowser = false" class="text-[var(--text-secondary)] hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
             </div>
             
@@ -1785,7 +1952,7 @@
                 </div>
                 <h3 class="text-lg font-semibold text-white">{{ confirmState.title || '确认操作' }}</h3>
             </div>
-            <p class="text-[var(--text-primary)] text-sm mb-6 pl-13">{{ confirmState.message }}</p>
+            <p class="text-[var(--text-primary)] text-sm mb-6 pl-12" style="white-space:pre-line">{{ confirmState.message }}</p>
             <div class="flex justify-end gap-3">
                 <button @click="confirmResolve(false)" class="px-4 py-2 text-sm text-[var(--text-secondary)] hover:text-white transition-colors rounded-sm border border-[var(--border-dim)] hover:border-[var(--text-muted)]">取消</button>
                 <button @click="confirmResolve(true)" class="px-4 py-2 text-sm text-white bg-[var(--accent-red)] hover:bg-[var(--accent-red)] transition-colors rounded-sm font-medium">确认</button>
@@ -1852,10 +2019,10 @@
                     <span v-if="selectedSegmentCount > 0">已选 {{ selectedSegmentCount }} 段</span>
                 </div>
                 <div class="flex gap-2">
-                    <button v-if="selectedSegmentCount > 0 && !subtitleEditMode" @click="reoptimizeSelected" class="btn-primary text-white text-xs py-1.5 px-4 rounded-sm">
+                    <button v-if="selectedSegmentCount > 0 && !subtitleEditMode" @click="reoptimizeSelected" class="btn-primary text-white text-xs py-1.5 px-4 rounded-sm" title="对选中段落重新调用 LLM 优化翻译质量">
                         <i class="fa-solid fa-wand-magic-sparkles mr-1"></i>重新优化选中段落
                     </button>
-                    <button v-if="subtitleEditMode" @click="saveSubtitle" class="btn-primary text-white text-xs py-1.5 px-4 rounded-sm">
+                    <button v-if="subtitleEditMode" @click="saveSubtitle" class="btn-primary text-white text-xs py-1.5 px-4 rounded-sm" title="保存对字幕的修改。保存后可选择是否通知 Emby 刷新">
                         <i class="fa-solid fa-save mr-1"></i>保存修改
                     </button>
                     <button @click="showSubtitlePreview = false" class="text-[var(--text-secondary)] hover:text-white text-xs py-1.5 px-4 rounded-sm bg-[var(--bg-surface)]">关闭</button>
@@ -1874,7 +2041,7 @@
             <div class="flex-1 overflow-y-auto p-6">
                 <div v-if="annotationAssContent" class="space-y-3">
                     <div v-for="(line, i) in annotationAssContent.split('\n').filter(l => l.startsWith('Dialogue:'))" :key="i" class="bg-[var(--accent-amber)]/5 border border-[var(--accent-amber)]/15 rounded-sm p-3">
-                        <div class="text-sm text-[var(--accent-amber)]">{{ line.replace(/^Dialogue:\s*\d+,[^,]*,[^,]*,[^,]*,[^,]*,\d+,\d+,\d+,,/, '').replace(/\{[^}]*\}/g, '') }}</div>
+                        <div class="text-sm text-[var(--accent-amber)]">{{ line.replace(/^Dialogue:\s*\d+,([^,]*,){4}\d+,\d+,\d+,[^,]*,/, '').replace(/\{[^}]*\}/g, '') }}</div>
                     </div>
                 </div>
                 <div v-else class="text-center text-[var(--text-muted)] py-8">无注释数据</div>
@@ -1932,6 +2099,32 @@
                     </div>
                 </template>
                 <div v-else class="text-center text-[var(--text-muted)] py-4">Worker 离线，无详细信息</div>
+
+                <!-- Worker 运行配置 -->
+                <div v-if="workerConfig" class="border-t border-[var(--border-dim)] pt-4">
+                    <div class="text-xs font-medium text-[var(--text-secondary)] mb-3"><i class="fa-solid fa-sliders mr-1"></i>运行配置</div>
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div class="bg-[var(--bg-elevated)] rounded-sm p-2" v-if="workerConfig.transcribe">
+                            <div class="text-[var(--text-muted)] text-[10px]">Whisper 模型</div>
+                            <div class="text-[var(--text-primary)] mt-0.5">{{ workerConfig.transcribe.model || 'N/A' }}</div>
+                        </div>
+                        <div class="bg-[var(--bg-elevated)] rounded-sm p-2" v-if="workerConfig.transcribe">
+                            <div class="text-[var(--text-muted)] text-[10px]">设备</div>
+                            <div class="text-[var(--text-primary)] mt-0.5">{{ workerConfig.transcribe.device || 'auto' }} / {{ workerConfig.transcribe.compute_type || 'default' }}</div>
+                        </div>
+                        <div class="bg-[var(--bg-elevated)] rounded-sm p-2" v-if="workerConfig.translate">
+                            <div class="text-[var(--text-muted)] text-[10px]">翻译</div>
+                            <div class="text-[var(--text-primary)] mt-0.5">{{ workerConfig.translate.enabled ? workerConfig.translate.target_lang || 'zh' : '关闭' }}</div>
+                        </div>
+                        <div class="bg-[var(--bg-elevated)] rounded-sm p-2" v-if="workerConfig.llm_providers && workerConfig.llm_providers.length">
+                            <div class="text-[var(--text-muted)] text-[10px]">LLM 提供商</div>
+                            <div class="text-[var(--text-primary)] mt-0.5">{{ workerConfig.llm_providers.map(p => p.name || p.provider).join(', ') }}</div>
+                        </div>
+                    </div>
+                </div>
+                <div v-else-if="workerConfigLoading" class="border-t border-[var(--border-dim)] pt-4 text-center text-[var(--text-muted)] text-xs">
+                    <i class="fa-solid fa-circle-notch fa-spin mr-1"></i>加载配置中...
+                </div>
             </div>
         </div>
     </div>
@@ -2007,6 +2200,8 @@
             const mediaLoading = ref(false);
             const mediaScanPaths = ref([]);
             const mediaPage = ref(1);
+            const mediaSearchQuery = ref('');
+            let mediaSearchTimer = null;
 
             // Whisper models state
             const whisperModels = ref([]);
@@ -2026,7 +2221,8 @@
             const fetchMediaList = async () => {
                 mediaLoading.value = true;
                 try {
-                    const res = await fetch(`/api/media/list?filter_type=${mediaFilter.value}&page=${mediaPage.value}&page_size=50`);
+                    const q = encodeURIComponent(mediaSearchQuery.value || '');
+                    const res = await fetch(`/api/media/list?filter_type=${mediaFilter.value}&query=${q}&page=${mediaPage.value}&page_size=50`);
                     if (res.ok) {
                         const data = await res.json();
                         mediaList.value = data.items || [];
@@ -2035,24 +2231,33 @@
                     }
                 } catch (e) {
                     console.error('Failed to fetch media list:', e);
+                    showToast('媒体列表加载失败', 'error');
                 } finally {
                     mediaLoading.value = false;
                 }
             };
 
+            const onMediaSearchInput = () => {
+                clearTimeout(mediaSearchTimer);
+                mediaSearchTimer = setTimeout(() => {
+                    mediaPage.value = 1;
+                    fetchMediaList();
+                }, 300);
+            };
+
             const submitMediaTask = async (item) => {
                 try {
-                    const res = await fetch('/api/tasks', {
+                    const res = await fetch('/api/task', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ media_path: item.path }),
                     });
                     const data = await res.json();
-                    if (data.success) {
+                    if (res.ok) {
                         showToast(`已提交: ${item.stem}`, 'success');
                         fetchData();
                     } else {
-                        showToast(`提交失败: ${data.message || '未知错误'}`, 'error');
+                        showToast(`提交失败: ${data.detail || data.message || '未知错误'}`, 'error');
                     }
                 } catch (e) {
                     showToast(`提交失败: ${e.message}`, 'error');
@@ -2074,26 +2279,26 @@
             const selectAll = computed({
                 get: () => tasks.value.length > 0 && tasks.value.every(t => selectedTasks.value.has(t.id)),
                 set: (val) => {
-                    if (val) {
-                        tasks.value.forEach(t => selectedTasks.value.add(t.id));
-                    } else {
-                        selectedTasks.value.clear();
-                    }
+                    selectedTasks.value = val ? new Set(tasks.value.map(t => t.id)) : new Set();
                 }
             });
             const selectedCount = computed(() => selectedTasks.value.size);
             const toggleSelect = (taskId) => {
-                if (selectedTasks.value.has(taskId)) {
-                    selectedTasks.value.delete(taskId);
+                const next = new Set(selectedTasks.value);
+                if (next.has(taskId)) {
+                    next.delete(taskId);
                 } else {
-                    selectedTasks.value.add(taskId);
+                    next.add(taskId);
                 }
+                selectedTasks.value = next;
             };
-            const clearSelection = () => { selectedTasks.value.clear(); };
+            const clearSelection = () => { selectedTasks.value = new Set(); };
 
             const batchRetry = async () => {
                 const ids = [...selectedTasks.value];
                 if (ids.length === 0) return;
+                const ok = await showConfirm(`将对 ${ids.length} 个失败任务重新提交翻译，已有的字幕文件将被覆盖。`, '批量重试');
+                if (!ok) return;
                 try {
                     const res = await fetch('/api/tasks/batch/retry', {
                         method: 'POST',
@@ -2115,7 +2320,7 @@
             const batchCancel = async () => {
                 const ids = [...selectedTasks.value];
                 if (ids.length === 0) return;
-                const ok = await showConfirm(`确定要取消选中的 ${ids.length} 个任务吗？`, '批量取消');
+                const ok = await showConfirm(`将取消 ${ids.length} 个待处理/处理中的任务。`, '批量取消');
                 if (!ok) return;
                 try {
                     const res = await fetch('/api/tasks/batch/cancel', {
@@ -2138,7 +2343,7 @@
             const batchDelete = async () => {
                 const ids = [...selectedTasks.value];
                 if (ids.length === 0) return;
-                const ok = await showConfirm(`确定要删除选中的 ${ids.length} 个任务吗？此操作不可恢复。`, '批量删除');
+                const ok = await showConfirm(`将永久删除 ${ids.length} 个任务及其关联的字幕文件，此操作不可撤销。`, '批量删除');
                 if (!ok) return;
                 try {
                     const res = await fetch('/api/tasks/batch/delete', {
@@ -2180,6 +2385,7 @@
             // Settings State
             const showSettings = ref(false);
             const settingsTab = ref('workers');
+            const _configError = ref(false);
             const settingsTabs = [
                 { key: 'workers', label: 'Worker 节点', icon: 'fa-solid fa-server' },
                 { key: 'llm', label: 'LLM 提供商', icon: 'fa-solid fa-brain' },
@@ -2256,6 +2462,80 @@
                 } catch(e) { showToast('网络连接异常', 'error'); }
             };
 
+            // Worker Token 管理
+            const workerTokenVisible = ref(false);
+            const workerTokenPlain = ref('');
+            const toggleWorkerTokenVisible = async () => {
+                if (!workerTokenVisible.value && !workerTokenPlain.value) {
+                    // 首次显示，获取原文
+                    try {
+                        const res = await fetch('/api/config/token');
+                        if (res.ok) {
+                            const data = await res.json();
+                            workerTokenPlain.value = data.worker_token || '';
+                        }
+                    } catch (e) { showToast('获取令牌失败', 'error'); return; }
+                }
+                workerTokenVisible.value = !workerTokenVisible.value;
+            };
+            const copyWorkerToken = async () => {
+                let token = workerTokenPlain.value;
+                if (!token) {
+                    try {
+                        const res = await fetch('/api/config/token');
+                        if (res.ok) { const data = await res.json(); token = data.worker_token || ''; }
+                    } catch (e) { showToast('获取令牌失败', 'error'); return; }
+                }
+                if (token) {
+                    await navigator.clipboard.writeText(token);
+                    showToast('Worker 令牌已复制到剪贴板', 'success');
+                } else {
+                    showToast('令牌为空，请先生成', 'warning');
+                }
+            };
+            const regenerateWorkerToken = async () => {
+                const ok = await showConfirm('确定要重新生成 Worker 令牌吗？\n生成后需要同步更新所有 Worker 的配置。', '重新生成令牌');
+                if (!ok) return;
+                const { crypto } = window;
+                const bytes = new Uint8Array(24);
+                crypto.getRandomValues(bytes);
+                const newToken = btoa(String.fromCharCode(...bytes)).replace(/[+/=]/g, '').substring(0, 32);
+                configForm.value.security.worker_token = newToken;
+                workerTokenPlain.value = newToken;
+                workerTokenVisible.value = true;
+                showToast('新令牌已生成，请保存配置并同步到 Worker', 'success');
+            };
+
+            // Worker 配置片段生成
+            const workerConfigSnippet = computed(() => {
+                const token = workerTokenPlain.value || configForm.value.security?.worker_token || '';
+                const masked = token && token !== '***' ? token : '<自动生成中，保存配置后可见>';
+                return `# Worker 配置 — 粘贴到 Worker 的 config.yaml
+# Coordinator 地址（根据实际 IP 修改）
+coordinator_url: "http://<Coordinator-IP>:8787"
+
+security:
+  worker_token: "${masked}"`;
+            });
+            const copyWorkerConfigSnippet = async () => {
+                // 确保有 token 原文
+                if (!workerTokenPlain.value || workerTokenPlain.value === '***') {
+                    try {
+                        const res = await fetch('/api/config/token');
+                        if (res.ok) { const data = await res.json(); workerTokenPlain.value = data.worker_token || ''; }
+                    } catch (e) { showToast('获取令牌失败', 'error'); return; }
+                }
+                const token = workerTokenPlain.value || '';
+                const snippet = `# Worker 配置 — 粘贴到 Worker 的 config.yaml
+# Coordinator 地址（根据实际 IP 修改）
+coordinator_url: "http://<Coordinator-IP>:8787"
+
+security:
+  worker_token: "${token}"`;
+                await navigator.clipboard.writeText(snippet);
+                showToast('Worker 配置已复制，粘贴到 Worker 的 config.yaml 即可', 'success');
+            };
+
             // 注册 auth 失败回调
             window._onAuthFailed = () => {
                 if (!showLoginDialog.value) openLogin();
@@ -2324,11 +2604,11 @@
             const openSettings = async () => {
                 showSettings.value = true;
                 settingsTab.value = 'workers';
+                _configError.value = false;
                 try {
                     const res = await fetch('/api/config');
                     if (res.ok) {
                         const data = await res.json();
-                        // 确保嵌套字段存在
                         if (!data.security) data.security = { api_token: '', worker_token: '' };
                         if (!data.automation) data.automation = { enabled: false, scan_paths: [] };
                         if (!data.automation.scan_paths) data.automation.scan_paths = [];
@@ -2336,15 +2616,29 @@
                         if (!data.subtitle.ass_style) data.subtitle.ass_style = { font_name: 'Noto Sans', font_size: 12, primary_colour: '&H00FFFFFF', outline_colour: '&H000000FF', outline_width: 1.5, margin_v: 30 };
                         if (!data.notifications) data.notifications = { enabled: false, channels: [] };
                         if (!data.annotation) data.annotation = { mode: 'off', quality_threshold: 75 };
+                        if (!data.emby) data.emby = { server: '', api_key: '' };
                         if (!data.llm_providers) data.llm_providers = [];
                         if (!data.translate) data.translate = { target_lang: 'zh', thread_num: 3, batch_size: 10, need_reflect: false };
                         if (!data.transcribe) data.transcribe = { model: 'large-v3-turbo', device: 'auto', compute_type: 'auto', vad_filter: true };
                         configForm.value = data;
+                    } else {
+                        _configError.value = true;
                     }
-                } catch(e) { console.error('load config error', e); }
-                fetchStats();
-                fetchWhisperModels();
+                } catch(e) {
+                    console.error('load config error', e);
+                    _configError.value = true;
+                }
             };
+
+            // 按需加载：切换 settings 子标签时才加载对应数据
+            watch(settingsTab, (tab) => {
+                if (tab === 'stats') {
+                    fetchStats();
+                }
+                if (tab === 'transcribe') {
+                    fetchWhisperModels();
+                }
+            });
 
             const addWorker = () => {
                 if (!configForm.value.workers) configForm.value.workers = [];
@@ -2372,6 +2666,7 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ api_base: p.api_base, api_key: p.api_key, model: p.model || 'gpt-4o-mini' }),
                     });
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
                     const data = await res.json();
                     if (data.ok) {
                         showToast(`${p.name || 'Provider'} 连通成功 (${data.latency_ms}ms)`, 'success');
@@ -2505,7 +2800,12 @@
             const formatDate = (dateStr) => {
                 if (!dateStr) return '-';
                 const d = new Date(dateStr);
-                return `${d.getMonth()+1}-${d.getDate()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+                const now = new Date();
+                const time = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+                if (d.getFullYear() === now.getFullYear()) {
+                    return `${d.getMonth()+1}-${d.getDate()} ${time}`;
+                }
+                return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()} ${time}`;
             };
 
             const formatUptime = (seconds) => {
@@ -2578,11 +2878,10 @@
                 return map[status] || 'text-[var(--accent-cyan)] font-bold';
             };
 
-            const getBarColor = (status) => {
-                if(status === 'failed') return 'bg-[var(--accent-red)] !bg-none';
-                if(status === 'completed') return 'bg-[var(--accent-green)] !bg-none';
-                if(status === 'skipped') return 'bg-[var(--text-muted)] !bg-none';
-                return ''; // default blue gradient
+            const getBarColor = (utilization) => {
+                if (utilization >= 90) return 'var(--accent-red)';
+                if (utilization >= 70) return 'var(--accent-amber)';
+                return 'var(--accent-green)';
             };
 
             const toggleDetail = (taskId) => {
@@ -2593,7 +2892,9 @@
             const fetchStatus = async () => {
                 try {
                     const res = await fetch('/api/status');
-                    sysInfo.value = await res.json();
+                    if (res.ok) {
+                        sysInfo.value = await res.json();
+                    }
                 } catch (e) {
                     console.error("status error", e);
                 }
@@ -2602,26 +2903,26 @@
             const fetchTasks = async () => {
                 try {
                     loading.value = true;
+                    selectedTasks.value = new Set();  // 换页时清空选中
                     const params = new URLSearchParams();
                     if (filterStatus.value) params.set('status', filterStatus.value);
+                    if (searchQuery.value) params.set('query', searchQuery.value);
                     const offset = (currentPage.value - 1) * pageSize;
                     params.set('limit', String(pageSize));
                     params.set('offset', String(offset));
                     const res = await fetch(`/api/tasks?${params}`);
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
                     const data = await res.json();
-                    let fetched = data.tasks || [];
-                    // Client-side search filter
-                    if (searchQuery.value) {
-                        const q = searchQuery.value.toLowerCase();
-                        fetched = fetched.filter(t =>
-                            (t.media_title || '').toLowerCase().includes(q) ||
-                            t.media_path.toLowerCase().includes(q)
-                        );
-                    }
-                    tasks.value = fetched;
+                    tasks.value = data.tasks || [];
                     totalTasks.value = data.total || 0;
+                    // 分页超出范围时自动回退
+                    if (tasks.value.length === 0 && currentPage.value > 1 && totalTasks.value > 0) {
+                        currentPage.value = Math.ceil(totalTasks.value / pageSize);
+                        return fetchTasks();
+                    }
                 } catch (e) {
                     console.error("tasks error", e);
+                    showToast('任务列表加载失败', 'error');
                 } finally {
                     loading.value = false;
                 }
@@ -2660,6 +2961,35 @@
                 } catch (e) {
                     showToast('网络连接异常', 'error');
                 }
+            };
+
+            const cancelTask = async (taskId) => {
+                const task = tasks.value.find(t => t.id === taskId);
+                const name = task?.media_title || task?.media_path?.split(/[\\/]/).pop() || taskId;
+                const isActive = task && !['pending', 'completed', 'failed', 'skipped', 'cancelled'].includes(task.status);
+                const msg = isActive
+                    ? `确定要停止任务「${name}」吗？\n正在进行的转写/翻译将被中断。`
+                    : `确定要取消任务「${name}」吗？`;
+                const ok = await showConfirm(msg, '停止任务');
+                if (!ok) return;
+                try {
+                    const res = await fetch(`/api/task/${taskId}/cancel`, { method: 'POST' });
+                    if (res.ok) {
+                        showToast('任务已取消', 'success');
+                        setTimeout(fetchData, 500);
+                    } else {
+                        const err = await res.json().catch(() => ({}));
+                        showToast(err.detail || '取消失败', 'error');
+                    }
+                } catch (e) {
+                    showToast('网络连接异常', 'error');
+                }
+            };
+
+            const isActive = (status) => {
+                return ['pending','subtitle_checking','extracting','extracted','uploading',
+                        'worker_queued','transcribing','optimizing','translating',
+                        'aligning','annotating','writing_subtitle','refreshing_emby'].includes(status);
             };
 
             // Update task priority
@@ -2711,7 +3041,7 @@
             const connectLogWs = () => {
                 if (logWs && logWs.readyState <= 1) return; // 已连接或正在连接
                 const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-                logWs = new WebSocket(`${proto}//${location.host}/ws/logs`);
+                logWs = new WebSocket(`${proto}//${location.host}/ws/logs?token=${encodeURIComponent(window._authToken || '')}`);
                 logWs.onopen = () => { logWsRetry = 0; logWsConnected.value = true; };
                 logWs.onmessage = (e) => {
                     const isAtBottom = logContainer.value ?
@@ -2767,7 +3097,7 @@
             };
             
             const selectFile = (fullPath) => {
-                form.value.media_path = fullPath.replace(/\\/g, '/');
+                form.value.media_path = fullPath.replace(/\\/g, '/').trim();
                 showBrowser.value = false;
             };
 
@@ -2778,7 +3108,8 @@
                 try {
                     const params = new URLSearchParams({
                         media_path: form.value.media_path,
-                        target_lang: form.value.target_lang
+                        target_lang: form.value.target_lang,
+                        priority: String(form.value.priority || 0)
                     });
 
                     const url = form.value.force ? `/api/task/force?${params}` : '/api/task';
@@ -2866,20 +3197,32 @@
             };
 
             // === 页面可见性感知轮询 ===
-            let pollInterval, autoInterval;
+            let pollTimer = null, autoInterval = null;
             let intervalsActive = false;
+
+            const schedulePoll = () => {
+                if (!intervalsActive) return;
+                clearTimeout(pollTimer);
+                const hasActive = tasks.value.some(t => !['completed','failed','skipped','cancelled'].includes(t.status));
+                const interval = hasActive ? 5000 : 10000;
+                pollTimer = setTimeout(async () => {
+                    if (!intervalsActive) return;
+                    await fetchData();
+                    schedulePoll();
+                }, interval);
+            };
 
             const startPolling = () => {
                 if (intervalsActive) return;
                 intervalsActive = true;
-                pollInterval = setInterval(fetchData, 3000);
-                autoInterval = setInterval(fetchAutoStatus, 10000);
-                fetchHealth(); // 初始加载一次
+                schedulePoll();
+                autoInterval = setInterval(fetchAutoStatus, 30000);
+                fetchHealth();
             };
 
             const stopPolling = () => {
                 intervalsActive = false;
-                if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+                clearTimeout(pollTimer); pollTimer = null;
                 if (autoInterval) { clearInterval(autoInterval); autoInterval = null; }
             };
 
@@ -2991,9 +3334,21 @@
             };
 
             // Worker detail
-            const openWorkerDetail = (worker) => {
+            const workerConfig = ref(null);
+            const workerConfigLoading = ref(false);
+            const openWorkerDetail = async (worker) => {
                 workerDetail.value = worker;
+                workerConfig.value = null;
                 showWorkerDetail.value = true;
+                // 获取 Worker 运行配置
+                if (worker.online) {
+                    workerConfigLoading.value = true;
+                    try {
+                        const res = await fetch(`/api/workers/${encodeURIComponent(worker.url)}/config`);
+                        if (res.ok) workerConfig.value = await res.json();
+                    } catch (e) { /* ignore */ }
+                    workerConfigLoading.value = false;
+                }
             };
 
             // Navigate to settings sub-tab
@@ -3002,54 +3357,57 @@
                 settingsTab.value = subTab;
             };
 
+            // Named handlers for cleanup
+            const _onHashChange = () => {
+                const h = window.location.hash.slice(1);
+                if (['dashboard', 'tasks', 'settings'].includes(h)) {
+                    currentTab.value = h;
+                }
+            };
+            const _onKeydown = (e) => {
+                if (e.key === 'Escape') {
+                    if (showSubtitlePreview.value) { showSubtitlePreview.value = false; }
+                    else if (showAnnotationPreview.value) { showAnnotationPreview.value = false; }
+                    else if (showWorkerDetail.value) { showWorkerDetail.value = false; }
+                    else if (showBrowser.value) { showBrowser.value = false; }
+                    else if (showLoginDialog.value) { showLoginDialog.value = false; }
+                    else if (confirmState.value.show) { confirmResolve(false); }
+                }
+                if (e.ctrlKey && e.key === 'f' && currentTab.value === 'tasks') {
+                    e.preventDefault();
+                    document.getElementById('task-search')?.focus();
+                }
+                if (e.ctrlKey && e.key === 'Enter' && currentTab.value === 'tasks' && !showBrowser.value && !showSubtitlePreview.value && !showLoginDialog.value) {
+                    submitTask();
+                }
+            };
+
             onMounted(() => {
                 // URL hash sync
                 const hash = window.location.hash.slice(1);
                 if (['dashboard', 'tasks', 'settings'].includes(hash)) {
                     currentTab.value = hash;
                 }
-                window.addEventListener('hashchange', () => {
-                    const h = window.location.hash.slice(1);
-                    if (['dashboard', 'tasks', 'settings'].includes(h)) {
-                        currentTab.value = h;
-                    }
-                });
+                window.addEventListener('hashchange', _onHashChange);
 
                 fetchData();
-                fetchLogs(); // 初始加载一次（REST fallback）
+                fetchLogs();
                 fetchAutoStatus();
                 fetchMediaList();
-                // Pre-load config for dashboard cards (LLM count etc.)
-                fetch('/api/config').then(r => r.json()).then(data => {
-                    if (data.llm_providers) configForm.value.llm_providers = data.llm_providers;
-                }).catch(() => {});
                 startPolling();
-                connectLogWs(); // 建立 WebSocket 日志流
+                connectLogWs();
                 document.addEventListener('visibilitychange', onVisibilityChange);
-                document.addEventListener('keydown', (e) => {
-                    if (e.key === 'Escape') {
-                        if (showSubtitlePreview.value) { showSubtitlePreview.value = false; }
-                        else if (showAnnotationPreview.value) { showAnnotationPreview.value = false; }
-                        else if (showWorkerDetail.value) { showWorkerDetail.value = false; }
-                        else if (showBrowser.value) { showBrowser.value = false; }
-                        else if (confirmState.value.show) { confirmResolve(false); }
-                    }
-                    // Ctrl+F: focus search box
-                    if (e.ctrlKey && e.key === 'f' && currentTab.value === 'tasks') {
-                        e.preventDefault();
-                        document.getElementById('task-search')?.focus();
-                    }
-                    // Ctrl+Enter: submit task
-                    if (e.ctrlKey && e.key === 'Enter' && currentTab.value === 'tasks' && !showBrowser.value && !showSubtitlePreview.value) {
-                        submitTask();
-                    }
-                });
+                document.addEventListener('keydown', _onKeydown);
             });
 
             onUnmounted(() => {
                 stopPolling();
+                clearTimeout(searchDebounce);
+                clearTimeout(mediaSearchTimer);
                 if (logWs) { logWs.close(); logWs = null; }
                 document.removeEventListener('visibilitychange', onVisibilityChange);
+                document.removeEventListener('keydown', _onKeydown);
+                window.removeEventListener('hashchange', _onHashChange);
             });
 
             return {
@@ -3059,18 +3417,20 @@
                 showLogs, sysLogs, logContainer, toggleLogs, getLogColor,
                 autoStatus, scanning, triggerScan, toggleAutomation,
                 onlineCount, toggleWorker,
-                showSettings, settingsTab, settingsTabs, configForm, savingSettings,
+                settingsTab, settingsTabs, configForm, savingSettings, _configError,
                 openSettings, addWorker, removeWorker, testLlmProvider, saveSettings,
                 showLoginDialog, loginToken, loginError, loginLoading, isAuthenticated,
                 openLogin, submitLogin, logout, testNotification,
+                workerTokenVisible, workerTokenPlain, toggleWorkerTokenVisible, copyWorkerToken, regenerateWorkerToken,
+                workerConfigSnippet, copyWorkerConfigSnippet,
                 filterStatus, searchQuery, onSearchInput, expandedTask, currentPage, pageSize, totalTasks, pipelineStages,
                 showSubtitlePreview, subtitlePreviewTitle, subtitlePreviewTaskId, subtitleSegments, subtitleRawSrt,
                 subtitleEditMode, selectedSegmentCount, openSubtitlePreview, reoptimizeSelected, saveSubtitle,
-                showWorkerDetail, workerDetail, openWorkerDetail,
+                showWorkerDetail, workerDetail, workerConfig, workerConfigLoading, openWorkerDetail,
                 selectedTasks, selectAll, selectedCount, toggleSelect, clearSelection,
                 batchRetry, batchCancel, batchDelete,
                 getFileName, formatDate, formatUptime, getStatusLabel, getStatusColor, getBarColor, getErrorLabel, isRetryable,
-                getStageClass, getStageBarClass, getCurrentStageKey, getCurrentStageLabel, isTaskRunning, getElapsed, formatDuration, toggleDetail, retryTask, updatePriority,
+                getStageClass, getStageBarClass, getCurrentStageKey, getCurrentStageLabel, isTaskRunning, getElapsed, formatDuration, toggleDetail, retryTask, cancelTask, isActive, updatePriority,
                 fetchData, submitTask,
                 // Phase 1 additions
                 toasts, showToast, confirmState, confirmResolve, showConfirm,
@@ -3086,7 +3446,7 @@
                 // Dashboard navigation
                 goToSettings,
                 // Media list
-                mediaList, mediaTotal, mediaFilter, mediaLoading, mediaScanPaths, mediaPage,
+                mediaList, mediaTotal, mediaFilter, mediaLoading, mediaScanPaths, mediaPage, mediaSearchQuery, onMediaSearchInput,
                 fetchMediaList, submitMediaTask,
                 // Whisper models
                 whisperModels, fetchWhisperModels,

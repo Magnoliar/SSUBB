@@ -7,7 +7,7 @@
 import asyncio
 import logging
 from collections import deque
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from .config import CoordinatorConfig
@@ -76,7 +76,7 @@ class WorkerRegistry:
 
         while True:
             await asyncio.sleep(interval)
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
 
             # 并行检查所有 Worker
             async def _check_one(url: str, client: WorkerClient):

@@ -126,7 +126,17 @@ class UDPDiscoveryService:
             except Exception as e:
                 logger.debug(f"广播发送失败: {e}")
 
+            self._cleanup_stale_peers()
             await asyncio.sleep(self.BROADCAST_INTERVAL)
+
+    def _cleanup_stale_peers(self, max_age: float = 300.0):
+        """Remove peers not seen within max_age seconds."""
+        import time
+        now = time.time()
+        stale = [url for url, ts in self._known_peers.items() if now - ts > max_age]
+        for url in stale:
+            del self._known_peers[url]
+            logger.debug(f"清除过期节点: {url}")
 
 
 class _DiscoveryProtocol(asyncio.DatagramProtocol):

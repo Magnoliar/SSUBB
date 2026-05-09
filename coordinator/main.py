@@ -8,6 +8,7 @@ import json
 import logging
 import sys
 from collections import deque
+from urllib.parse import quote as _quote
 from contextlib import asynccontextmanager
 from typing import Optional
 
@@ -136,6 +137,8 @@ auto_scheduler = None  # AutoScheduler 实例
 discovery_service = None  # UDPDiscoveryService 实例
 SETUP_REQUIRED = not bool(config.worker.url) and not bool(config.workers)  # 如果没有 worker 配置，说明需要配置
 _config_lock = asyncio.Lock()  # 配置更新并发锁
+_media_cache = {"items": None, "ts": 0}  # 媒体列表缓存 (60秒TTL)
+_whisper_cache = {"data": None, "ts": 0}  # Whisper 模型列表缓存 (120秒TTL)
 
 
 # =============================================================================
@@ -486,12 +489,14 @@ async def get_tasks(
     status: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
+    query: Optional[str] = None,
 ):
     """查询任务列表"""
     if SETUP_REQUIRED:
         return TaskListResponse(total=0, tasks=[])
-    tasks = task_manager.get_tasks(status=status, limit=limit, offset=offset)
-    total = task_manager.get_task_count(status=status)
+    limit = min(limit, 500)  # 防止超大查询
+    tasks = task_manager.get_tasks(status=status, limit=limit, offset=offset, query=query)
+    total = task_manager.get_task_count(status=status, query=query)
     return TaskListResponse(total=total, tasks=tasks)
 
 
@@ -538,13 +543,19 @@ async def update_subtitle(task_id: str, request: Request):
     # 保存到数据库
     task_manager.store.update_subtitle_content(task_id, srt_content)
 
+    # 获取原始字幕和注释（用于重写完整文件）
+    sub_data = task_manager.store.get_subtitle(task_id)
+    original_srt = sub_data.get("original_srt", "") if sub_data else ""
+    annotation_content = sub_data.get("annotation_content", "") if sub_data else ""
+
     # 重写磁盘文件
-    from .subtitle_writer import SubtitleWriter
     writer = task_manager.writer
     subtitle_path = writer.write_subtitle(
         video_path=task.media_path,
         subtitle_content=srt_content,
         target_lang=task.target_lang,
+        original_srt=original_srt,
+        annotation_content=annotation_content,
     )
 
     return APIResponse(
@@ -681,16 +692,26 @@ async def batch_retry(req: BatchRequest):
     return APIResponse(success=True, message=f"已重试 {affected} 个任务", data={"affected": affected})
 
 
+@app.post("/api/task/{task_id}/cancel", tags=["任务管理"])
+async def cancel_single_task(task_id: str):
+    """取消单个活跃任务（支持所有非终态）"""
+    task = task_manager.get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    success = await task_manager.cancel_task(task_id)
+    if not success:
+        raise HTTPException(status_code=400, detail="任务已结束，无法取消")
+    return APIResponse(success=True, message="任务已取消")
+
+
 @app.post("/api/tasks/batch/cancel", tags=["批量操作"])
 async def batch_cancel(req: BatchRequest):
-    """批量取消 pending 任务"""
+    """批量取消活跃任务"""
     if not req.task_ids:
         raise HTTPException(status_code=400, detail="task_ids 不能为空")
     affected = 0
     for tid in req.task_ids:
-        task = task_manager.get_task(tid)
-        if task and task.status == TaskStatus.PENDING:
-            task_manager.store.update_status(tid, TaskStatus.CANCELLED)
+        if await task_manager.cancel_task(tid):
             affected += 1
     return APIResponse(success=True, message=f"已取消 {affected} 个任务", data={"affected": affected})
 
@@ -823,10 +844,11 @@ async def generic_webhook(request: Request):
     if not config.webhook.enabled:
         raise HTTPException(status_code=403, detail="Webhook 已禁用")
 
-    # Token 认证
+    # Token 认证（恒定时间比较防时序攻击）
     if config.webhook.token:
+        import hmac
         token = request.headers.get("X-SSUBB-Token", "")
-        if token != config.webhook.token:
+        if not hmac.compare_digest(token, config.webhook.token):
             raise HTTPException(status_code=401, detail="认证失败")
 
     # 解析请求体
@@ -1020,27 +1042,45 @@ async def toggle_automation(enabled: bool = True):
 @app.get("/api/media/list", tags=["媒体库"])
 async def list_media(
     filter_type: str = "all",
+    query: str = "",
     page: int = 1,
     page_size: int = 50,
+    refresh: bool = False,
 ):
-    """获取媒体资源列表，含字幕状态"""
-    from pathlib import Path
-    from shared.constants import VIDEO_EXTENSIONS, SUBTITLE_EXTENSIONS
+    """获取媒体资源列表，含字幕状态
 
-    cfg = load_config()
-    scan_paths = cfg.automation.scan_paths if cfg.automation else []
+    结果缓存 60 秒，避免每次请求全量扫描文件系统。
+    传 refresh=true 可强制刷新缓存。
+    """
+    global _media_cache
+
+    scan_paths = config.automation.scan_paths if config.automation else []
 
     if not scan_paths:
         return {"items": [], "total": 0, "scan_paths": []}
 
-    items = []
-    for scan_dir in scan_paths:
-        scan_dir_path = Path(scan_dir)
-        if not scan_dir_path.is_dir():
-            continue
-        _collect_media_recursive(scan_dir_path, items, config.automation.scan_recursive)
+    # 缓存检查：60 秒内复用上次扫描结果
+    now = _time.time()
+    if not refresh and _media_cache["items"] is not None and (now - _media_cache["ts"]) < 60:
+        all_items = _media_cache["items"]
+    else:
+        from pathlib import Path
+        all_items = []
+        for scan_dir in scan_paths:
+            scan_dir_path = Path(scan_dir)
+            if not scan_dir_path.is_dir():
+                continue
+            _collect_media_recursive(scan_dir_path, all_items, config.automation.scan_recursive, scan_paths)
+        _media_cache = {"items": all_items, "ts": now}
 
-    # 过滤
+    # 搜索过滤（在缓存数据上操作，不触发文件系统扫描）
+    if query:
+        q = query.lower()
+        items = [i for i in all_items if q in i["stem"].lower() or q in i["name"].lower()]
+    else:
+        items = all_items
+
+    # 字幕状态过滤
     if filter_type == "missing":
         items = [i for i in items if not i["has_chinese_sub"]]
     elif filter_type == "has_sub":
@@ -1059,9 +1099,71 @@ async def list_media(
     }
 
 
-def _collect_media_recursive(directory: Path, items: list, recursive: bool = True):
+# 海报文件名和扩展名
+_POSTER_NAMES = {"poster", "folder", "cover", "thumb"}
+_POSTER_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
+
+# 蓝光目录名，跳过以避免 m2ts 淹没
+_BDMV_DIRS = {"bdmv", "stream", "certificate", "playlist", "clipinf"}
+
+
+def _find_poster(video_path: Path, scan_paths: list[str]) -> Optional[str]:
+    """查找视频对应的海报文件（刮削生成的 poster.jpg 等）"""
+    # 检查同目录和上级目录
+    search_dirs = [video_path.parent]
+    # 如果在 Season 目录内，也检查上级（剧集级别）
+    if video_path.parent.parent:
+        search_dirs.append(video_path.parent.parent)
+
+    for d in search_dirs:
+        try:
+            for f in d.iterdir():
+                if f.is_file() and f.stem.lower() in _POSTER_NAMES and f.suffix.lower() in _POSTER_EXTS:
+                    # 验证路径在 scan_paths 内（安全检查）
+                    f_str = str(f.resolve())
+                    for sp in scan_paths:
+                        if f_str.startswith(str(Path(sp).resolve())):
+                            return f_str
+        except (PermissionError, OSError):
+            pass
+    return None
+
+
+@app.get("/api/media/poster", tags=["媒体库"])
+async def get_media_poster(path: str):
+    """返回海报图片文件"""
+    from pathlib import Path
+    from fastapi.responses import FileResponse
+
+    scan_paths = config.automation.scan_paths if config.automation else []
+
+    # 安全校验：路径必须在 scan_paths 内
+    resolved = str(Path(path).resolve())
+    allowed = False
+    for sp in scan_paths:
+        if resolved.startswith(str(Path(sp).resolve())):
+            allowed = True
+            break
+    if not allowed:
+        raise HTTPException(status_code=403, detail="路径不在允许的扫描目录内")
+
+    file_path = Path(path)
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail="文件不存在")
+
+    media_types = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
+    media_type = media_types.get(file_path.suffix.lower(), "image/jpeg")
+    return FileResponse(
+        str(file_path), media_type=media_type,
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
+def _collect_media_recursive(directory: Path, items: list, recursive: bool = True, scan_paths: list = None):
     """递归收集媒体文件及字幕状态"""
     from shared.constants import VIDEO_EXTENSIONS, SUBTITLE_EXTENSIONS
+
+    MIN_FILE_SIZE = 50 * 1024 * 1024  # 50MB — 跳过预告片/样片
 
     try:
         for entry in os.scandir(directory):
@@ -1070,12 +1172,24 @@ def _collect_media_recursive(directory: Path, items: list, recursive: bool = Tru
                     continue
                 if entry.name.lower() in {"subtitles", "subs", "extras", "featurettes"}:
                     continue
-                _collect_media_recursive(Path(entry.path), items, recursive)
+                # 跳过蓝光目录结构，避免 m2ts 淹没列表
+                if entry.name.lower() in _BDMV_DIRS:
+                    continue
+                _collect_media_recursive(Path(entry.path), items, recursive, scan_paths)
 
             elif entry.is_file():
                 suffix = Path(entry.name).suffix.lower()
                 if suffix not in VIDEO_EXTENSIONS:
                     continue
+
+                # 最小文件大小过滤（跳过预告片/样片）
+                try:
+                    stat = entry.stat()
+                    if stat.st_size < MIN_FILE_SIZE:
+                        continue
+                    size_mb = round(stat.st_size / (1024 * 1024), 1)
+                except OSError:
+                    size_mb = 0
 
                 video_path = Path(entry.path)
                 stem = video_path.stem
@@ -1102,11 +1216,8 @@ def _collect_media_recursive(directory: Path, items: list, recursive: bool = Tru
                                 "lang": lang,
                             })
 
-                try:
-                    stat = entry.stat()
-                    size_mb = round(stat.st_size / (1024 * 1024), 1)
-                except OSError:
-                    size_mb = 0
+                # 查找海报
+                poster_path = _find_poster(video_path, scan_paths or [])
 
                 items.append({
                     "path": str(video_path),
@@ -1117,6 +1228,7 @@ def _collect_media_recursive(directory: Path, items: list, recursive: bool = Tru
                     "subtitles": subtitle_files,
                     "has_chinese_sub": has_chinese,
                     "parent": str(video_path.parent),
+                    "poster_url": f"/api/media/poster?path={_quote(poster_path)}" if poster_path else None,
                 })
     except PermissionError:
         pass
@@ -1144,6 +1256,20 @@ async def list_workers():
     return {"workers": workers_data}
 
 
+@app.get("/api/workers/{worker_url:path}/config", tags=["Worker 管理"])
+async def get_worker_config(worker_url: str):
+    """获取指定 Worker 的运行配置"""
+    if not task_manager or not hasattr(task_manager, 'registry'):
+        raise HTTPException(status_code=404, detail="Worker 管理未初始化")
+    client = task_manager.registry.get_client_by_url(worker_url)
+    if not client:
+        raise HTTPException(status_code=404, detail="Worker 不存在")
+    worker_config = await client.get_config()
+    if worker_config is None:
+        raise HTTPException(status_code=502, detail="Worker 无法连接")
+    return worker_config
+
+
 @app.post("/api/workers/{worker_url}/toggle", tags=["Worker 管理"])
 async def toggle_worker(worker_url: str, request: Request):
     """启用/禁用指定 Worker 节点"""
@@ -1164,8 +1290,9 @@ async def toggle_worker(worker_url: str, request: Request):
         raise HTTPException(status_code=404, detail="Worker not found")
 
     save_config(cfg_dict)
-    config = load_config()
-    _init_services()
+    async with _config_lock:
+        config = load_config()
+        _init_services()
 
     return APIResponse(
         success=True,
@@ -1206,8 +1333,9 @@ async def register_discovered_worker(request: Request):
 
     cfg_dict = config.model_dump()
     save_config(cfg_dict)
-    config = load_config()
-    _init_services()
+    async with _config_lock:
+        config = load_config()
+        _init_services()
 
     return APIResponse(success=True, message=f"Worker {url} 已注册")
 
@@ -1392,6 +1520,12 @@ async def get_config():
     return cfg
 
 
+@app.get("/api/config/token", tags=["配置"])
+async def get_worker_token():
+    """获取 Worker 回调令牌原文（需要 API Token 认证）"""
+    return {"worker_token": config.security.worker_token or ""}
+
+
 @app.put("/api/config", tags=["配置"])
 async def update_config(req: ConfigUpdateRequest):
     """更新配置并热重载 (带并发锁)"""
@@ -1439,8 +1573,9 @@ async def update_config(req: ConfigUpdateRequest):
             cfg_dict.setdefault("transcribe", {}).update(req.transcribe)
 
         save_config(cfg_dict)
-        config = load_config()
-        _init_services()
+        async with _config_lock:
+            config = load_config()
+            _init_services()
 
         # 推送全局配置到在线 Worker
         global_config = {}
@@ -1461,7 +1596,12 @@ async def update_config(req: ConfigUpdateRequest):
 @app.get("/api/whisper/models", tags=["配置"])
 async def list_whisper_models():
     """列出 Whisper 模型及本地状态"""
-    import shutil
+    global _whisper_cache
+    import time as _time
+    now = _time.time()
+    if _whisper_cache["data"] is not None and (now - _whisper_cache["ts"]) < 120:
+        return _whisper_cache["data"]
+
     models = [
         {"id": "tiny", "name": "Tiny", "size_mb": 75, "vram_mb": 100, "speed": "极快", "quality": "低"},
         {"id": "base", "name": "Base", "size_mb": 142, "vram_mb": 200, "speed": "很快", "quality": "一般"},
@@ -1471,7 +1611,6 @@ async def list_whisper_models():
         {"id": "large-v3-turbo", "name": "Large V3 Turbo", "size_mb": 1500, "vram_mb": 1500, "speed": "较快", "quality": "接近最佳"},
     ]
 
-    # 检查本地缓存目录
     cache_dirs = [
         Path.home() / ".cache" / "huggingface" / "hub",
         Path.home() / ".cache" / "whisper",
@@ -1484,10 +1623,8 @@ async def list_whisper_models():
         for cache_dir in cache_dirs:
             if not cache_dir.exists():
                 continue
-            # 检查 faster-whisper 模型目录
             for item in cache_dir.iterdir():
                 if item.is_dir() and m["id"] in item.name.lower():
-                    # 检查是否有模型文件
                     if any(item.rglob("*.bin")) or any(item.rglob("model.safetensors")):
                         m["downloaded"] = True
                         m["local_path"] = str(item)
@@ -1495,7 +1632,9 @@ async def list_whisper_models():
             if m["downloaded"]:
                 break
 
-    return {"models": models}
+    result = {"models": models}
+    _whisper_cache = {"data": result, "ts": now}
+    return result
 
 
 @app.post("/api/llm/test", tags=["配置"])
@@ -1660,10 +1799,11 @@ async def apply_setup(req: SetupRequest):
     
     # 保存并重新加载
     save_config(cfg)
-    config = load_config()
-    
-    # 启动核心服务
-    _init_services()
+    async with _config_lock:
+        config = load_config()
+
+        # 启动核心服务
+        _init_services()
     SETUP_REQUIRED = False
     
     return {"code": 0, "msg": "配置已保存，系统已热启动！刷新页面即可"}

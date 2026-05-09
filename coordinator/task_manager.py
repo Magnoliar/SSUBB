@@ -39,6 +39,7 @@ class TaskManager:
         self.config = config
         self.registry = worker_registry
         self.store = TaskStore(config.db_path)
+        self._stats_cache = {"data": None, "ts": 0}  # 5 秒 TTL
         self.checker = SubtitleChecker(
             min_coverage=config.checker.min_coverage,
             min_density=config.checker.min_density,
@@ -110,6 +111,29 @@ class TaskManager:
 
         _safe_background_task(self._process_task(task_id), f"retry-{task_id}")
         return self.store.get_task(task_id)
+
+    async def cancel_task(self, task_id: str) -> bool:
+        """取消活跃任务（支持所有非终态）"""
+        task = self.store.get_task(task_id)
+        if task is None:
+            return False
+        if task.status in TaskStatus.TERMINAL:
+            return False
+
+        # 更新状态为已取消
+        self.store.update_status(task_id, TaskStatus.CANCELLED)
+        logger.info(f"[{task_id}] 任务已取消 (原状态: {task.status})")
+
+        # 如果在 Worker 阶段，通知 Worker 停止执行
+        if task.worker_id and task.status in TaskStatus.WORKER_STAGES:
+            client = self.registry.get_client_by_url(task.worker_id)
+            if client:
+                try:
+                    await client.cancel_task(task_id)
+                except Exception as e:
+                    logger.warning(f"[{task_id}] 通知 Worker 取消失败: {e}")
+
+        return True
 
     # =========================================================================
     # 任务处理流程
@@ -403,6 +427,11 @@ class TaskManager:
         task = self.store.get_task(task_id)
         if task is None:
             logger.warning(f"收到未知任务结果: {task_id}")
+            return False
+
+        # 已终结的任务不接受结果覆盖（防止 CANCELLED → COMPLETED 竞态）
+        if task.status in TaskStatus.TERMINAL:
+            logger.info(f"[{task_id}] 任务已终结 ({task.status})，忽略 Worker 回调")
             return False
 
         if result.status == "completed" and result.subtitle_srt:
@@ -776,11 +805,16 @@ class TaskManager:
     def get_task(self, task_id: str) -> Optional[TaskInfo]:
         return self.store.get_task(task_id)
 
-    def get_tasks(self, status: Optional[str] = None, limit: int = 50, offset: int = 0) -> list[TaskInfo]:
-        return self.store.get_tasks(status=status, limit=limit, offset=offset)
+    def get_tasks(self, status: Optional[str] = None, limit: int = 50, offset: int = 0, query: Optional[str] = None) -> list[TaskInfo]:
+        return self.store.get_tasks(status=status, limit=limit, offset=offset, query=query)
 
-    def get_task_count(self, status: Optional[str] = None) -> int:
-        return self.store.count_tasks(status=status)
+    def get_task_count(self, status: Optional[str] = None, query: Optional[str] = None) -> int:
+        return self.store.count_tasks(status=status, query=query)
 
     def get_stats(self) -> dict:
-        return self.store.count_by_status()
+        now = time.time()
+        if self._stats_cache["data"] is not None and (now - self._stats_cache["ts"]) < 5:
+            return self._stats_cache["data"]
+        data = self.store.count_by_status()
+        self._stats_cache = {"data": data, "ts": now}
+        return data

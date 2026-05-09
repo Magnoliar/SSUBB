@@ -102,6 +102,9 @@ class TrayManager(QObject):
     def hide(self):
         self._tray.hide()
 
+    def show_message(self, title: str, message: str):
+        self._tray.showMessage(title, message, QSystemTrayIcon.MessageIcon.Information, 3000)
+
     def update_status(self, status):
         self._status = status
         if status == "running":

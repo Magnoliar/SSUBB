@@ -20,6 +20,12 @@ COPY coordinator/ /app/coordinator/
 # 数据目录（config.yaml 通过 volume 挂载 ./data/config.yaml）
 RUN mkdir -p /app/data
 
+# 非 root 用户
+RUN groupadd -r ssubb && useradd -r -g ssubb -d /app -s /sbin/nologin ssubb
+RUN chown -R ssubb:ssubb /app
+
+USER ssubb
+
 EXPOSE 8787
 
 CMD ["python", "-m", "uvicorn", "coordinator.main:app", "--host", "0.0.0.0", "--port", "8787"]

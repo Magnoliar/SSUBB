@@ -54,7 +54,7 @@ class SubtitleChecker:
             return True, f"未找到 {target_lang} 字幕"
 
         # 质量检查
-        is_valid, reason = self.check_quality(subtitle_path, video_duration)
+        is_valid, reason = self.check_quality(subtitle_path, video_duration, target_lang)
         if not is_valid:
             return True, f"字幕质量不合格: {reason}"
 
@@ -96,6 +96,7 @@ class SubtitleChecker:
         self,
         subtitle_path: str,
         video_duration: Optional[float] = None,
+        target_lang: str = "zh",
     ) -> tuple[bool, str]:
         """检查字幕文件质量
 
@@ -134,8 +135,12 @@ class SubtitleChecker:
             return False, "字幕文件为空"
 
         # 2. 条目数量检查
-        if len(subs) < 5:
-            return False, f"字幕条目过少 ({len(subs)} 条)"
+        if video_duration and video_duration > 0:
+            min_subs = max(1, int(video_duration / 10))
+        else:
+            min_subs = 5
+        if len(subs) < min_subs:
+            return False, f"字幕条目过少 ({len(subs)} 条, 最少 {min_subs} 条)"
 
         # 3. 时长覆盖率检查
         if video_duration and video_duration > 0:
@@ -158,14 +163,13 @@ class SubtitleChecker:
             if max_gap > 300:  # 超过 5 分钟的空白
                 return False, f"字幕存在 {max_gap:.0f}s 空白段，可能不完整"
 
-        # 6. 语言内容检查 (简易: 检测 CJK 字符占比)
+        # 6. 语言内容检查
         if self.check_language:
             all_text = " ".join(s["text"] for s in subs)
             if all_text:
-                cjk_count = sum(1 for c in all_text if self._is_cjk(c))
-                cjk_ratio = cjk_count / max(len(all_text), 1)
-                if cjk_ratio < 0.1:  # 中文字幕应有至少 10% CJK 字符
-                    return False, f"CJK 字符占比 {cjk_ratio:.0%}，可能非中文字幕"
+                lang_ok, lang_reason = self._check_language_content(all_text, target_lang)
+                if not lang_ok:
+                    return False, lang_reason
 
         return True, "字幕正常"
 
@@ -388,9 +392,35 @@ class SubtitleChecker:
             end = int(h2) * 3600 + int(m2) * 60 + int(s2) + int(ms2) / 1000
             text = " ".join(lines[text_start:]).strip()
 
-            subs.append({"start": start, "end": end, "text": text})
+            if text:  # 跳过空文本
+                subs.append({"start": start, "end": end, "text": text})
 
         return subs
+
+    @staticmethod
+    def _check_language_content(text: str, target_lang: str) -> tuple[bool, str]:
+        """Validate subtitle text matches the expected target language."""
+        if target_lang == "zh":
+            cjk_count = sum(1 for c in text if SubtitleChecker._is_cjk(c))
+            ratio = cjk_count / max(len(text), 1)
+            if ratio < 0.1:
+                return False, f"CJK 字符占比 {ratio:.0%}，可能非中文字幕"
+        elif target_lang == "ja":
+            jp_count = sum(1 for c in text if SubtitleChecker._is_cjk(c) or '぀' <= c <= 'ゟ' or '゠' <= c <= 'ヿ')
+            ratio = jp_count / max(len(text), 1)
+            if ratio < 0.1:
+                return False, f"日文字符占比 {ratio:.0%}，可能非日文字幕"
+        elif target_lang == "ko":
+            ko_count = sum(1 for c in text if '가' <= c <= '힯' or 'ᄀ' <= c <= 'ᇿ' or '㄰' <= c <= '㆏')
+            ratio = ko_count / max(len(text), 1)
+            if ratio < 0.1:
+                return False, f"韩文字符占比 {ratio:.0%}，可能非韩文字幕"
+        else:
+            alpha_count = sum(1 for c in text if c.isalpha() and ord(c) < 0x0250)
+            ratio = alpha_count / max(len(text), 1)
+            if ratio < 0.3:
+                return False, f"拉丁字母占比 {ratio:.0%}，可能非 {target_lang} 字幕"
+        return True, ""
 
     @staticmethod
     def _is_cjk(char: str) -> bool:

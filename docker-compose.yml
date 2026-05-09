@@ -7,8 +7,8 @@ services:
     restart: unless-stopped
     working_dir: /app
     ports:
-      - "8787:8787"
-      - "8789:8789/udp"  # 局域网自动发现 (V0.7)
+      - "3787:8787"
+      - "3789:8789/udp" # 局域网自动发现 (V0.7)
     environment:
       TZ: Asia/Shanghai
       # Optional environment overrides:
@@ -23,13 +23,12 @@ services:
       # Media library mounts.
       # IMPORTANT: the in-container path must match the media path submitted
       # to Coordinator by MoviePilot / Emby / manual tasks.
-      - /volume1/video:/volume1/video
-      - /volume1/media:/volume1/media
+      - ${MEDIA_PATH:?MEDIA_PATH must be set}:/downloads
     # 使用 host 网络可以获得最佳的自动发现体验（可选）
     # network_mode: host
     network_mode: bridge
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8787/api/health')"]
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8787/api/health')" ]
       interval: 30s
       timeout: 5s
       retries: 3

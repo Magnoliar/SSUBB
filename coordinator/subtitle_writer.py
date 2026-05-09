@@ -5,8 +5,10 @@
 """
 
 import logging
+import os
 import re
 import shutil
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -111,7 +113,7 @@ class SubtitleWriter:
 
         # 写入字幕
         try:
-            subtitle_path.write_text(final_content, encoding="utf-8")
+            self._atomic_write(subtitle_path, final_content)
             logger.info(f"字幕已写入: {subtitle_path.name} ({mode}/{fmt})")
         except Exception as e:
             logger.exception(f"写入字幕失败: {e}")
@@ -121,7 +123,7 @@ class SubtitleWriter:
         if annotation_content and fmt == "ass":
             annotated_path = video.parent / f"{video.stem}.{lang3}.annotated.ssubb.ass"
             try:
-                annotated_path.write_text(annotation_content, encoding="utf-8")
+                self._atomic_write(annotated_path, annotation_content)
                 logger.info(f"注释字幕已写入: {annotated_path.name}")
             except Exception as e:
                 logger.warning(f"写入注释字幕失败（不影响主流程）: {e}")
@@ -267,6 +269,18 @@ class SubtitleWriter:
     # =========================================================================
     # SRT 解析工具
     # =========================================================================
+
+    @staticmethod
+    def _atomic_write(path: Path, content: str):
+        dir_name = str(path.parent)
+        fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(content)
+            os.replace(tmp_path, str(path))
+        except BaseException:
+            os.unlink(tmp_path)
+            raise
 
     @staticmethod
     def _parse_srt_entries(srt_content: str) -> list[dict]:

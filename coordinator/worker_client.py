@@ -44,10 +44,10 @@ class WorkerClient:
             return {"X-Worker-Token": self.worker_token}
         return {}
 
-    def _get_client(self, timeout: float = STATUS_TIMEOUT) -> httpx.AsyncClient:
-        """获取或创建共享 httpx 客户端"""
+    def _get_client(self) -> httpx.AsyncClient:
+        """获取或创建共享 httpx 客户端（默认 30s，per-request timeout 覆盖）"""
         if self._http is None or self._http.is_closed:
-            self._http = httpx.AsyncClient(timeout=timeout)
+            self._http = httpx.AsyncClient(timeout=30)
         return self._http
 
     async def close(self):
@@ -86,7 +86,7 @@ class WorkerClient:
 
         logger.info(f"[{task_id}] 开始分块上传 (大小: {file_size/1024/1024:.1f}MB, 块数: {total_chunks})")
 
-        client = self._get_client(timeout=60.0)
+        client = self._get_client()
         # 1. 查询已上传分块 (断点续传)
         received_chunks = []
         try:
@@ -126,6 +126,7 @@ class WorkerClient:
                             f"{self.base_url}/api/task/upload_chunk",
                             headers=headers,
                             content=chunk_data,
+                            timeout=UPLOAD_TIMEOUT,
                         )
                         if upload_res.status_code == 200:
                             uploaded_success = True
@@ -147,8 +148,8 @@ class WorkerClient:
     async def get_status(self) -> Optional[WorkerHeartbeat]:
         """查询 Worker 状态"""
         try:
-            client = self._get_client(STATUS_TIMEOUT)
-            response = await client.get(f"{self.worker_url}/api/status")
+            client = self._get_client()
+            response = await client.get(f"{self.worker_url}/api/status", timeout=STATUS_TIMEOUT)
             if response.status_code == 200:
                 return WorkerHeartbeat(**response.json())
         except Exception as e:
@@ -160,13 +161,25 @@ class WorkerClient:
         status = await self.get_status()
         return status is not None
 
+    async def get_config(self) -> Optional[dict]:
+        """获取 Worker 运行配置"""
+        try:
+            client = self._get_client()
+            response = await client.get(f"{self.worker_url}/api/config", timeout=STATUS_TIMEOUT)
+            if response.status_code == 200:
+                return response.json()
+        except Exception as e:
+            logger.debug(f"Worker 配置查询失败: {e}")
+        return None
+
     async def cancel_task(self, task_id: str) -> bool:
         """取消 Worker 上的任务"""
         try:
-            client = self._get_client(STATUS_TIMEOUT)
+            client = self._get_client()
             response = await client.delete(
                 f"{self.worker_url}/api/task/{task_id}",
                 headers=self._auth_headers(),
+                timeout=STATUS_TIMEOUT,
             )
             return response.status_code == 200
         except Exception as e:
@@ -176,8 +189,8 @@ class WorkerClient:
     async def get_llm_health(self) -> list[dict]:
         """代理请求 Worker 的 /api/llm/health"""
         try:
-            client = self._get_client(STATUS_TIMEOUT)
-            response = await client.get(f"{self.worker_url}/api/llm/health")
+            client = self._get_client()
+            response = await client.get(f"{self.worker_url}/api/llm/health", timeout=STATUS_TIMEOUT)
             if response.status_code == 200:
                 return response.json()
         except Exception as e:
@@ -187,11 +200,12 @@ class WorkerClient:
     async def push_config(self, config_data: dict) -> bool:
         """推送配置更新到 Worker"""
         try:
-            client = self._get_client(STATUS_TIMEOUT)
+            client = self._get_client()
             response = await client.put(
                 f"{self.worker_url}/api/config",
                 json=config_data,
                 headers=self._auth_headers(),
+                timeout=STATUS_TIMEOUT,
             )
             return response.status_code == 200
         except Exception as e:
@@ -203,7 +217,7 @@ class WorkerClient:
     ) -> Optional[list[dict]]:
         """请求 Worker 对指定段落重新优化"""
         try:
-            client = self._get_client(120)
+            client = self._get_client()
             response = await client.post(
                 f"{self.worker_url}/api/task/reoptimize",
                 json={
@@ -211,6 +225,7 @@ class WorkerClient:
                     "segment_indices": segment_indices,
                 },
                 headers=self._auth_headers(),
+                timeout=120,
             )
             if response.status_code == 200:
                 data = response.json()

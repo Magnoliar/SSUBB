@@ -190,30 +190,41 @@ class TaskStore:
         status: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
+        query: Optional[str] = None,
     ) -> list[TaskInfo]:
         """查询任务列表"""
         conn = self._get_conn()
+        conditions = []
+        params = []
         if status:
-            rows = conn.execute(
-                "SELECT * FROM tasks WHERE status = ? ORDER BY priority ASC, created_at DESC LIMIT ? OFFSET ?",
-                (status, limit, offset)
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                "SELECT * FROM tasks ORDER BY priority ASC, created_at DESC LIMIT ? OFFSET ?",
-                (limit, offset)
-            ).fetchall()
+            conditions.append("status = ?")
+            params.append(status)
+        if query:
+            conditions.append("(media_title LIKE ? OR media_path LIKE ?)")
+            q = f"%{query}%"
+            params.extend([q, q])
+        where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
+        params.extend([limit, offset])
+        rows = conn.execute(
+            f"SELECT * FROM tasks{where} ORDER BY priority ASC, created_at DESC LIMIT ? OFFSET ?",
+            params
+        ).fetchall()
         return [self._row_to_task(r) for r in rows]
 
-    def count_tasks(self, status: Optional[str] = None) -> int:
+    def count_tasks(self, status: Optional[str] = None, query: Optional[str] = None) -> int:
         """统计任务总数"""
         conn = self._get_conn()
+        conditions = []
+        params = []
         if status:
-            row = conn.execute(
-                "SELECT COUNT(*) as cnt FROM tasks WHERE status = ?", (status,)
-            ).fetchone()
-        else:
-            row = conn.execute("SELECT COUNT(*) as cnt FROM tasks").fetchone()
+            conditions.append("status = ?")
+            params.append(status)
+        if query:
+            conditions.append("(media_title LIKE ? OR media_path LIKE ?)")
+            q = f"%{query}%"
+            params.extend([q, q])
+        where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
+        row = conn.execute(f"SELECT COUNT(*) as cnt FROM tasks{where}", params).fetchone()
         return row["cnt"] if row else 0
 
     def get_pending_tasks(self, limit: int = 10) -> list[TaskInfo]:
@@ -252,6 +263,8 @@ class TaskStore:
             vals.append(now)
 
         for key, val in extra_fields.items():
+            if key not in self._ALLOWED_FIELDS:
+                raise ValueError(f"Invalid field name: {key}")
             sets.append(f"{key} = ?")
             vals.append(val)
 
@@ -535,17 +548,17 @@ class TaskStore:
         now = datetime.now(timezone.utc).isoformat()
         placeholders = ",".join("?" for _ in task_ids)
         if error_msg:
-            conn.execute(
+            cursor = conn.execute(
                 f"UPDATE tasks SET status = ?, error_msg = ?, updated_at = ? WHERE id IN ({placeholders})",
                 [status, error_msg, now] + task_ids,
             )
         else:
-            conn.execute(
+            cursor = conn.execute(
                 f"UPDATE tasks SET status = ?, updated_at = ? WHERE id IN ({placeholders})",
                 [status, now] + task_ids,
             )
         conn.commit()
-        return conn.total_changes
+        return cursor.rowcount
 
     def batch_delete(self, task_ids: list[str]) -> int:
         """批量删除任务，返回受影响行数"""
@@ -553,11 +566,10 @@ class TaskStore:
             return 0
         conn = self._get_conn()
         placeholders = ",".join("?" for _ in task_ids)
-        conn.execute(
-            f"DELETE FROM tasks WHERE id IN ({placeholders})", task_ids
-        )
+        conn.execute(f"DELETE FROM task_subtitles WHERE task_id IN ({placeholders})", task_ids)
+        cursor = conn.execute(f"DELETE FROM tasks WHERE id IN ({placeholders})", task_ids)
         conn.commit()
-        return conn.total_changes
+        return cursor.rowcount
 
     def find_existing_task(self, media_path: str, target_lang: str) -> Optional[TaskInfo]:
         """查找相同媒体+语言的活跃任务 (去重)"""
@@ -600,7 +612,18 @@ class TaskStore:
     # Internal
     # =========================================================================
 
+    _ALLOWED_FIELDS = frozenset({
+        "media_path", "media_title", "media_type", "season", "episode",
+        "tmdb_id", "audio_path", "source_lang", "target_lang", "status",
+        "priority", "force_mode", "skip_reason", "callback_url",
+        "worker_id", "config_json", "result_json", "error_msg",
+        "error_code", "failed_stage", "stage_times_json", "retry_count",
+        "progress", "completed_at",
+    })
+
     def _update_field(self, task_id: str, field: str, value):
+        if field not in self._ALLOWED_FIELDS:
+            raise ValueError(f"Invalid field name: {field}")
         conn = self._get_conn()
         conn.execute(
             f"UPDATE tasks SET {field} = ?, updated_at = ? WHERE id = ?",

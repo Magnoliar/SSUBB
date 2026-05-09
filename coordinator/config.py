@@ -1,6 +1,7 @@
 """SSUBB Coordinator 配置管理"""
 
 import os
+import tempfile
 from pathlib import Path
 from typing import Optional
 
@@ -300,5 +301,12 @@ def save_config(config_data: dict, config_path: Optional[str] = None):
             
     full_data["coordinator"] = config_data
     
-    with open(config_path, "w", encoding="utf-8") as f:
-        yaml.safe_dump(full_data, f, allow_unicode=True, sort_keys=False)
+    dir_name = os.path.dirname(config_path)
+    fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            yaml.safe_dump(full_data, f, allow_unicode=True, sort_keys=False)
+        os.replace(tmp_path, config_path)
+    except BaseException:
+        os.unlink(tmp_path)
+        raise

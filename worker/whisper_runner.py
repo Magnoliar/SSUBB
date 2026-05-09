@@ -400,7 +400,7 @@ async def run_whisper(
         progress_callback: 进度回调 (progress_pct, message)
 
     Returns:
-        (srt_content, segment_count)
+        (srt_content, segment_count, detected_language)
 
     Raises:
         RuntimeError: 转写失败
@@ -439,6 +439,7 @@ async def run_whisper(
     is_finished = False
     error_lines: list[str] = []
     last_progress = 0
+    detected_language = ""
 
     try:
         # 实时读取 stdout
@@ -452,6 +453,10 @@ async def run_whisper(
                 if is_error:
                     error_lines.append(line)
                     logger.debug(f"[stderr] {line}")
+                    # 解析检测到的语言
+                    lang_match = re.search(r"Detected language:\s*(\w+)", line, re.IGNORECASE)
+                    if lang_match:
+                        detected_language = lang_match.group(1).lower()
                     continue
 
                 logger.debug(f"[whisper] {line}")
@@ -488,6 +493,7 @@ async def run_whisper(
 
     except asyncio.TimeoutError:
         process.kill()
+        await process.wait()
         raise RuntimeError(f"转写超时 ({timeout}s)")
 
     if not is_finished:
@@ -507,6 +513,6 @@ async def run_whisper(
     segments = SRTParser.parse(srt_content)
     segment_count = len(segments)
 
-    logger.info(f"转写完成: {segment_count} 段, 输出: {srt_path.name}")
+    logger.info(f"转写完成: {segment_count} 段, 语言={detected_language or 'unknown'}, 输出: {srt_path.name}")
 
-    return srt_content, segment_count
+    return srt_content, segment_count, detected_language
